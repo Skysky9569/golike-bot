@@ -1,0 +1,22 @@
+# ================================================================
+# LUẬT SIÊU BẢO MẬT GITHUB - CHỈ CHO PHÉP CÁC FILE CẦN THIẾT
+# ================================================================
+
+# 1. Chặn mặc định TẤT CẢ mọi file/thư mục (Bao gồm test, demo, log, token, legacy...)
+/*
+
+# 2. CHỈ MỞ KHOÁ (WHITELIST) ĐÚNG CÁC FILE CỐT LÕI DƯỚI ĐÂY:
+!/golikefb_sele.py
+!/FB_WEB_API_FIXED.py
+!/golike_core/
+!/README_GITHUB.md
+!/.gitignore
+
+# 3. Cho phép đệ quy nội dung bên trong thư mục golike_core
+!/golike_core/**
+
+# 4. Vẫn tiếp tục chặn các tệp tin rác biên dịch của Python nếu xuất hiện trong golike_core
+/golike_core/**/__pycache__/
+/golike_core/**/*.py[cod]
+/golike_core/**/*.enc
+/golike_core/**/*.json
