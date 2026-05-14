@@ -13,6 +13,8 @@
 !/main.py
 !/test_refactored.py
 !/tiktok_automation.py
+!/updater.py
+!/version.json
 !/.gitignore
 
 # 3. Cho phép đệ quy nội dung bên trong thư mục golike_core

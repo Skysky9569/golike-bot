@@ -12,77 +12,30 @@ import re
 from typing import Optional, Dict, Any, List
 
 # ============================================================================
-# PRE-FLIGHT BOOTLOADER: HỆ THỐNG TỰ ĐỘNG TẢI & KHÔI PHỤC FILE CỐT LÕI (SELF-HEALING)
+# 🚀 TỰ ĐỘNG TẢI UPDATER & ĐỒNG BỘ TOÀN HỆ THỐNG (PRE-FLIGHT BOOTSTRAP)
 # ============================================================================
 
-def heal_missing_files():
-    """Quét và tự động phục hồi toàn bộ các file bị thiếu từ Github trước khi bootup"""
-    github_raw_base = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/"
-    essential_files = [
-        "golikefb_sele.py",
-        "tiktok_automation.py",
-        "golike_core/__init__.py",
-        "golike_core/api_client.py",
-        "golike_core/config.py",
-        "golike_core/error_handling.py",
-        "golike_core/logging.py",
-        "golike_core/security.py",
-    ]
-    
+def bootstrap_updater():
+    """Tiền trạm: Đảm bảo file updater.py tồn tại, nếu thiếu tự kéo từ Github trước"""
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    missing_detected = False
-    
-    # Quét nhanh xem có file nào bị thiếu trong danh sách tối quan trọng hay không
-    for rel_path in essential_files:
-        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
-        if not os.path.exists(full_path):
-            missing_detected = True
-            break
-            
-    if not missing_detected:
-        return  # Tất cả file đầy đủ, cho qua để boot tiếp!
-        
-    # Kích hoạt chế độ cứu hộ hệ thống
-    print("\033[1;33m\n[🚨] PHÁT HIỆN HỆ THỐNG BỊ THIẾU CÁC TỆP TIN CỐT LÕI! \033[0m")
-    print("\033[1;36m[*] Đang khởi động quy trình Tự Phục Hồi (Self-Healing Ecosystem)... \033[0m")
-    print("\033[1;36m[*] Tiến hành kết nối và tải lại khẩn cấp từ Github Server...\n\033[0m")
-    
-    need_restart = False
-    
-    for rel_path in essential_files:
-        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
-        if not os.path.exists(full_path):
-            print(f"👉 Đang khôi phục: \033[1;37m{rel_path}\033[0m ... ", end="", flush=True)
-            
-            # Tạo thư mục cha nếu thư mục module bị thiếu (ví dụ golike_core/)
-            parent_dir = os.path.dirname(full_path)
-            if not os.path.exists(parent_dir):
-                os.makedirs(parent_dir, exist_ok=True)
-                
-            # Tải dữ liệu file
-            url = f"{github_raw_base}{rel_path}"
-            try:
-                r = requests.get(url, timeout=20)
-                if r.status_code == 200:
-                    with open(full_path, "w", encoding="utf-8") as f:
-                        f.write(r.text)
-                    print("\033[1;32m[OK - THÀNH CÔNG]\033[0m")
-                    need_restart = True
-                else:
-                    print(f"\033[1;31m[THẤT BẠI - LỖI HTTP {r.status_code}]\033[0m")
-            except Exception as e:
-                print(f"\033[1;31m[LỖI KẾT NỐI: {e}]\033[0m")
-                
-    if need_restart:
-        print("\033[1;36m\n══════════════════════════════════════════════════════════════\033[0m")
-        print("\033[1;32m[✅] HỆ THỐNG ĐÃ ĐƯỢC KHÔI PHỤC ĐẦY ĐỦ & HOÀN HẢO 100%!\033[0m")
-        print("\033[1;33m[💡] Vui lòng gõ lại lệnh \033[1;37m`python main.py`\033[1;33m để bắt đầu chạy tool!\033[0m")
-        print("\033[1;36m══════════════════════════════════════════════════════════════\n\033[0m")
-        sys.exit(0)
+    updater_path = os.path.join(base_dir, "updater.py")
+    if not os.path.exists(updater_path):
+        print("\033[1;36m[*] Đang khởi tạo bộ nạp cứu hộ (Bootloader)... \033[0m")
+        try:
+            import urllib.request
+            url = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/updater.py"
+            with urllib.request.urlopen(url, timeout=20) as response:
+                if response.status == 200:
+                    with open(updater_path, "w", encoding="utf-8") as f:
+                        f.write(response.read().decode('utf-8'))
+            print("\033[1;32m[✓] Khởi tạo Updater thành công!\033[0m")
+        except Exception as e:
+            print(f"\033[1;31m[🚨] Lỗi tải bộ cứu hộ: {e}\033[0m")
 
-# Chạy hệ thống tự phục hồi ngay lập tức trước khi import bất kỳ module phụ trợ nào!
 try:
-    heal_missing_files()
+    bootstrap_updater()
+    import updater
+    updater.ensure_system_complete()
 except Exception:
     pass
 
@@ -124,12 +77,21 @@ except ImportError:
 # SYSTEM VERSION & CONFIG
 # ============================================================================
 
-CURRENT_VERSION = "1.5.4"
+def _load_version() -> str:
+    """Đọc phiên bản từ version.json, fallback hardcoded nếu file lỗi/thiếu"""
+    try:
+        import json as _json
+        _vfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
+        with open(_vfile, "r", encoding="utf-8") as _f:
+            return _json.load(_f).get("version", "1.5.4")
+    except Exception:
+        return "1.5.4"
+
+CURRENT_VERSION = _load_version()
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/main.py"
 
 ADB_PATH = CONFIG.adb_path
 ADB_CONFIG_FILE = "adb_config.json"
-
 
 def load_adb_config() -> Dict[str, Any]:
     """Đọc cấu hình ADB
@@ -633,74 +595,23 @@ def input_int(prompt: str, color: str = "green", minval: int = 1) -> int:
         int: Số nguyên người dùng nhập
     """
     while True:
-        value = input(colored(prompt, color)).strip()
-        if value.isdigit() and int(value) >= minval:
-            return int(value)
-        print(colored(f"Vui lòng nhập số nguyên >= {minval}!", "red"))
-
-
-_CACHED_IP = None
-
-def get_public_ip() -> str:
-    """Lấy địa chỉ IP công cộng thật của máy (được cache)"""
-    global _CACHED_IP
-    if _CACHED_IP is not None:
-        return _CACHED_IP
-    
-    urls = ["https://api.ipify.org", "https://ifconfig.me/ip", "https://icanhazip.com"]
-    for url in urls:
         try:
-            r = requests.get(url, timeout=1.5)
-            if r.status_code == 200:
-                _CACHED_IP = r.text.strip()
-                return _CACHED_IP
-        except Exception:
-            continue
-            
-    try:
-        import socket
-        _CACHED_IP = socket.gethostbyname(socket.gethostname())
-        return _CACHED_IP
-    except Exception:
-        pass
-        
-    _CACHED_IP = "Chưa xác định"
-    return _CACHED_IP
+            val = int(input(colored(prompt, color)).strip())
+            if val >= minval:
+                return val
+            print(colored(f"Giá trị phải >= {minval}!", "red"))
+        except ValueError:
+            print(colored("Vui lòng nhập số nguyên!", "red"))
 
 
 def check_for_updates():
-    """Kiểm tra và tự động cập nhật file main.py từ Github"""
-    # Đảm bảo ANSI color hoạt động trên Windows Terminal cũ
-    if sys.platform == 'win32':
-        os.system('color')
-        
-    print(colored(f"[*] Đang kiểm tra cập nhật hệ thống (Phiên bản: v{CURRENT_VERSION})...", "cyan"))
+    """Ủy thác toàn bộ quy trình kiểm tra cập nhật sang Module updater.py"""
     try:
-        r = requests.get(UPDATE_URL, timeout=10)
-        if r.status_code == 200:
-            server_code = r.text
-            import re
-            match = re.search(r'CURRENT_VERSION\s*=\s*["\']([^"\']+)["\']', server_code)
-            if match:
-                latest_ver = match.group(1)
-                if latest_ver != CURRENT_VERSION:
-                    print(colored(f"\n[🔥] PHÁT HIỆN PHIÊN BẢN MỚI HƠN: v{latest_ver}!", "yellow", bold=True))
-                    chon = input(colored("👉 Bạn có muốn tự động tải và ghi đè cập nhật? (y/n, Enter là có): ", "green")).strip().lower()
-                    if chon in ['y', 'yes', '']:
-                        print(colored("[*] Đang cài đặt phiên bản mới...", "cyan"))
-                        file_path = os.path.abspath(__file__)
-                        with open(file_path, "w", encoding="utf-8") as f:
-                            f.write(server_code)
-                        print(colored("[✅] Cập nhật thành công! Vui lòng gõ lại `python main.py` để áp dụng.", "green", bold=True))
-                        sys.exit(0)
-                    else:
-                        print(colored(f"[*] Đã bỏ qua. Tiếp tục chạy phiên bản hiện tại v{CURRENT_VERSION}.", "white"))
-                else:
-                    print(colored("[✓] Tool đã ở phiên bản mới nhất.", "green"))
-            
-
+        import updater
+        updater.run_version_check(CURRENT_VERSION)
     except Exception:
-        print(colored("[!] Không kết nối được Github Server để kiểm tra cập nhật (bỏ qua).", "yellow"))
+        print(colored("[!] Hệ thống Updater gặp lỗi kỹ thuật, bỏ qua bước check version.", "yellow"))
+
 
 
 def banner():
