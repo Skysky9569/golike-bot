@@ -46,7 +46,7 @@ def cleanup():
 atexit.register(cleanup)
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.2.0" # Nâng cấp v1.2.0: Tuần tự Captcha + Vá lỗi Clicks!
+CURRENT_VERSION = "1.2.1" # Nâng cấp v1.2.1: Lựa chọn Cập nhật + Captcha Tuần Tự!
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
@@ -61,11 +61,16 @@ def kiem_tra_cap_nhat():
                 latest_ver = match.group(1)
                 if latest_ver != CURRENT_VERSION:
                     print(f"\n[🔥] PHÁT HIỆN PHIÊN BẢN MỚI v{latest_ver}!")
-                    print("[*] Đang tự động tải về và ghi đè cập nhật...")
-                    with open(__file__, "w", encoding="utf-8") as f:
-                        f.write(server_code)
-                    print("[✅] Cập nhật thành công! Vui lòng bật lại tool để áp dụng.")
-                    sys.exit(0)
+                    # HỎI Ý KIẾN NGƯỜI DÙNG TRƯỚC KHI UPDATE
+                    chon = input("👉 Bạn có muốn tải và cài đặt bản cập nhật này không? (y/n, Enter là có): ").strip().lower()
+                    if chon in ['y', 'yes', '']:
+                        print("[*] Đang tải về và ghi đè cập nhật...")
+                        with open(__file__, "w", encoding="utf-8") as f:
+                            f.write(server_code)
+                        print("[✅] Cập nhật thành công! Vui lòng bật lại tool để áp dụng.")
+                        sys.exit(0)
+                    else:
+                        print("[*] Bạn đã chọn bỏ qua cập nhật. Chạy phiên bản hiện tại.")
                 else:
                     print("[✓] Đang chạy phiên bản mới nhất.")
     except Exception:
@@ -227,7 +232,6 @@ def run_single_mode():
         
         input("\n👉 Vui lòng tự giải Captcha trên màn hình trình duyệt (nếu có).\nSau khi giải xong, ấn phím [ENTER] tại đây để tiếp tục...")
         
-        # Sử dụng JS Click cho ổn định tuyệt đối
         nhiemvu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
         driver.execute_script("arguments[0].click();", nhiemvu)
         
@@ -434,7 +438,6 @@ def setup_bot_profile(profile_data, idx):
         print(f"❌ Cấu hình [{p_name}] thiếu thông tin quan trọng. Bỏ qua!")
         return None, None
 
-    # Khởi tạo API FB
     try:
         Fb = FB_API(fb_cookie)
         kq = Fb.login()
@@ -446,7 +449,6 @@ def setup_bot_profile(profile_data, idx):
         print(f"❌ Lỗi API cho [{p_name}]: {e}")
         return None, None
 
-    # Bật Trình duyệt
     print(f"[*] Đang bật trình duyệt Chrome cho [{p_name}]...")
     options = Options()
     options.add_argument("--lang=en-US")
@@ -459,7 +461,6 @@ def setup_bot_profile(profile_data, idx):
     with drivers_lock:
         active_drivers.append(driver)
         
-    # Sắp xếp Layout
     w, h = 450, 750
     px = 20 + (idx * 470)
     py = 30
@@ -481,11 +482,9 @@ def setup_bot_profile(profile_data, idx):
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input').send_keys(gl_pass)
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button').click()
         
-        # CHẶN LẠI ĐỂ GIẢI CAPTCHA CHO TỪNG LUỒNG
         print(f"\n🔑 [BƯỚC BẮT BUỘC] Hãy nhìn vào màn hình trình duyệt của [{p_name}].")
         input("Vui lòng tự giải Captcha trên đó. Khi đã vào được màn hình chính, quay lại đây ấn [ENTER]...")
         
-        # Click Nhiệm vụ (Dùng JS Click cực mượt)
         nhiemvu = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
         driver.execute_script("arguments[0].click();", nhiemvu)
         
@@ -499,7 +498,6 @@ def setup_bot_profile(profile_data, idx):
             driver.execute_script("arguments[0].click();", ok_btn)
         except: pass
         
-        # Mở bảng Chọn tài khoản
         doiacc = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account")))
         driver.execute_script("arguments[0].click();", doiacc)
         sleep(2.5)
@@ -594,7 +592,6 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 driver.switch_to.window(orig_w)
                 sleep(1)
                 
-                # API
                 j_t = map_job_type(j_raw)
                 uid = getidpost(fb_url)
                 ok = False
@@ -608,7 +605,6 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                         log_thread(p_name, f"-> API Kết quả: {ok}")
                     except: pass
                 
-                # SUBMIT
                 need_skip = not ok
                 sleep(3.5)
                 if ok:
@@ -699,10 +695,7 @@ def run_parallel_mode():
 
     print(f"\n🚀 PHÁT HIỆN {len(profiles)} TÀI KHOẢN ĐĂNG KÝ CHẠY SONG SONG!")
     
-    # DANH SÁCH ĐỂ LƯU CÁC DRIVER ĐÃ LOGGED IN SẴN SÀNG CHẠY
     ready_tasks = []
-    
-    # CHẠY PHẦN SETUP TUẦN TỰ ĐỂ GIẢI QUYẾT CAPTCHA TỪNG ACC MỘT CỰC KỲ DỄ DÀNG
     print("\n--- BẮT ĐẦU QUÁ TRÌNH THIẾT LẬP & GIẢI CAPTCHA LẦN LƯỢT ---")
     for idx, profile in enumerate(profiles):
         drv, fb_api = setup_bot_profile(profile, idx)
@@ -719,7 +712,6 @@ def run_parallel_mode():
     print(f"🔥 TẤT CẢ ĐÃ SẴN SÀNG! Kích hoạt cày song song cho {len(ready_tasks)} tài khoản...")
     print("*"*60 + "\n")
 
-    # KHỞI CHẠY CÁC LUỒNG BACKGROUND ĐỂ CHẠY VÒNG LẶP JOB SONG SONG
     threads = []
     for drv, fb_api, profile, idx in ready_tasks:
         t = threading.Thread(target=run_bot_loop, args=(drv, fb_api, profile, idx))
