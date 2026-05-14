@@ -46,7 +46,7 @@ def cleanup():
 atexit.register(cleanup)
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.2.2" # Nâng cấp v1.2.2: Cày ngay lập tức + Fix lỗi bỏ qua Job!
+CURRENT_VERSION = "1.3.0" # Nâng cấp v1.3.0: Tự động hồi phục khi GoLike lỗi danh sách Job!
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
@@ -287,10 +287,41 @@ def run_single_mode():
                     try:
                         WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.card-primary.mb-3")))
                     except TimeoutException:
+                        # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
+                        try:
+                            popup = driver.find_element(By.ID, "swal2-content")
+                            if popup.is_displayed():
+                                txt = popup.text
+                                if "danh sách Job" in txt or "Lỗi" in txt or "không tải được" in txt.lower():
+                                    print(f"\n⚠️ PHÁT HIỆN GOLIKE LỖI TẢI JOB: [{txt}]")
+                                    # Đóng popup
+                                    try:
+                                        ok_pop = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                        driver.execute_script("arguments[0].click();", ok_pop)
+                                    except: pass
+                                    sleep(2)
+                                    
+                                    # Thực hiện Reset: Ấn lại Nhiệm vụ -> Facebook và chờ 30s nguội
+                                    print("🔄 Đang thực hiện làm mới trang: Quay lại Nhiệm vụ -> Facebook...")
+                                    try:
+                                        nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+                                        driver.execute_script("arguments[0].click();", nv)
+                                        sleep(3.5)
+                                        
+                                        fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+                                        driver.execute_script("arguments[0].click();", fb_btn)
+                                    except Exception as err:
+                                        print(f"❌ Lỗi thao tác Reset: {err}")
+                                    
+                                    print("⏳ Nghỉ ngơi 30 giây trước khi thử quét tiếp...")
+                                    sleep(30)
+                                    continue
+                        except: pass
+
                         print("Không thấy Job nào. Đang ấn Tải lại...")
                         try:
                             reload_btn = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
-                            reload_btn.click()
+                            driver.execute_script("arguments[0].click();", reload_btn)
                             sleep(12)
                         except: pass
                         continue
@@ -561,9 +592,39 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 try:
                     WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.card-primary.mb-3")))
                 except TimeoutException:
+                    # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
+                    try:
+                        popup = driver.find_element(By.ID, "swal2-content")
+                        if popup.is_displayed():
+                            txt = popup.text
+                            if "danh sách Job" in txt or "Lỗi" in txt or "không tải được" in txt.lower():
+                                log_thread(p_name, f"⚠️ GOLIKE BÁO LỖI TẢI JOB: [{txt}]")
+                                try:
+                                    ok_pop = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                    driver.execute_script("arguments[0].click();", ok_pop)
+                                except: pass
+                                sleep(2)
+                                
+                                log_thread(p_name, "🔄 Tự động Reset trang: Quay lại Nhiệm vụ -> Facebook...")
+                                try:
+                                    nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+                                    driver.execute_script("arguments[0].click();", nv)
+                                    sleep(3.5)
+                                    
+                                    fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+                                    driver.execute_script("arguments[0].click();", fb_btn)
+                                except Exception as err:
+                                    log_thread(p_name, f"❌ Lỗi khi Reset: {err}")
+                                
+                                log_thread(p_name, "⏳ Bắt đầu nghỉ ngơi 30 giây nguội máy...")
+                                sleep(30)
+                                continue
+                    except: pass
+
+                    log_thread(p_name, "Không thấy Job nào. Đang ấn Tải lại...")
                     try:
                         reload = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
-                        reload.click()
+                        driver.execute_script("arguments[0].click();", reload)
                         sleep(12)
                     except: pass
                     continue
