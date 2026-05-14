@@ -10,6 +10,8 @@
 !/FB_WEB_API_FIXED.py
 !/golike_core/
 !/README_GITHUB.md
+!/main.py
+!/test_refactored.py
 !/.gitignore
 
 # 3. Cho phép đệ quy nội dung bên trong thư mục golike_core
