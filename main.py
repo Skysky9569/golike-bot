@@ -48,7 +48,7 @@ except ImportError:
 # SYSTEM VERSION & CONFIG
 # ============================================================================
 
-CURRENT_VERSION = "1.5.0"
+CURRENT_VERSION = "1.5.1"
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/main.py"
 
 ADB_PATH = CONFIG.adb_path
