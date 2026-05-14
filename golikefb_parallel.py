@@ -92,6 +92,7 @@ def run_bot_profile(profile_data, idx):
     gl_pass = profile_data.get("golike_password", "")
     fb_cookie = profile_data.get("facebook_cookie", "")
     target_fb = profile_data.get("target_fb_name", "")
+    target_uid = profile_data.get("target_fb_uid", "")
 
     log(p_name, "Khởi chạy luồng.")
     
@@ -205,14 +206,24 @@ def run_bot_profile(profile_data, idx):
         accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
         acc_selected = False
         
-        log(p_name, f"Tìm thấy {len(accounts)} tài khoản liên kết. Đang so khớp với: '{target_fb}'")
+        search_desc = f"UID: '{target_uid}'" if target_uid else f"Tên: '{target_fb}'"
+        log(p_name, f"Tìm thấy {len(accounts)} tài khoản liên kết. Đang so khớp {search_desc}...")
         
         for acc in accounts:
             try:
                 name = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
-                if target_fb.lower() in name.lower():
+                acc_uid = acc.get_attribute("id") or ""
+                
+                # Khớp theo UID (nếu có) HOẶC Khớp theo tên
+                is_match = False
+                if target_uid and str(target_uid).strip() == str(acc_uid).strip():
+                    is_match = True
+                elif target_fb and target_fb.lower().strip() in name.lower().strip():
+                    is_match = True
+                
+                if is_match:
                     acc.click()
-                    log(p_name, f"✅ Đã chọn thành công tài khoản: {name}")
+                    log(p_name, f"🚀 ✅ ĐANG CHẠY ACC: {name} | UID: {acc_uid}")
                     acc_selected = True
                     break
             except:
@@ -417,14 +428,16 @@ def main():
                 "golike_username": "Tài_Khoản_GoLike_1",
                 "golike_password": "Mật_Khẩu_GoLike_1",
                 "facebook_cookie": "Paste_Cookie_FB_1_Vào_Đây",
-                "target_fb_name": "Tên Nick FB Cần Chọn (Ví dụ: Trần Duy)"
+                "target_fb_uid": "61554835667156",
+                "target_fb_name": "Tên Dự Phòng Nếu Không Có UID (Ví dụ: Trần Duy)"
             },
             {
                 "profile_name": "Acc Facebook 2",
                 "golike_username": "Tài_Khoản_GoLike_2",
                 "golike_password": "Mật_Khẩu_GoLike_2",
                 "facebook_cookie": "Paste_Cookie_FB_2_Vào_Đây",
-                "target_fb_name": "Tên Nick FB 2 (Ví dụ: Trần Kiên)"
+                "target_fb_uid": "100093602988096",
+                "target_fb_name": "Tên Dự Phòng 2 (Ví dụ: Trần Kiên)"
             }
         ]
         with open(config_path, 'w', encoding='utf-8') as f:
