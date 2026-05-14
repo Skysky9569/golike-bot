@@ -453,8 +453,8 @@ try:
             need_skip = not success
             
             # Chờ thêm 2-3s trước khi bấm báo cáo để Golike/Facebook kịp đồng bộ hệ thống ngầm
-            print("Đang chờ 2.5s để hệ thống đồng bộ trước khi xác nhận...")
-            sleep(2.5)
+            print("Đang chờ 3.5s để hệ thống đồng bộ trước khi xác nhận...")
+            sleep(3.5)
             
             if success:
                 print("Đang ấn Hoàn thành...")
@@ -542,12 +542,12 @@ try:
                     print("Không tìm thấy nút Báo lỗi hoặc quá trình báo lỗi thất bại:", e)
             
             # Đợi 5 giây trước khi thực hiện job tiếp theo
-            print("Đợi 5s trước khi tìm job tiếp theo...")
-            sleep(5)
+            print("Đợi 10s trước khi tìm job tiếp theo...")
+            sleep(10)
             
         except Exception as e:
-            print(f"Lỗi trong quá trình chạy (sẽ thử lại sau 3s): {e}")
-            sleep(3)
+            print(f"Lỗi trong quá trình chạy (sẽ thử lại sau 5s): {e}")
+            sleep(5)
 
 except KeyboardInterrupt:
     print("\n[!] Đã nhận lệnh dừng (Ctrl+C). Đang thoát...")
