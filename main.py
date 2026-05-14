@@ -475,6 +475,35 @@ def input_int(prompt: str, color: str = "green", minval: int = 1) -> int:
         print(colored(f"Vui lòng nhập số nguyên >= {minval}!", "red"))
 
 
+_CACHED_IP = None
+
+def get_public_ip() -> str:
+    """Lấy địa chỉ IP công cộng thật của máy (được cache)"""
+    global _CACHED_IP
+    if _CACHED_IP is not None:
+        return _CACHED_IP
+    
+    urls = ["https://api.ipify.org", "https://ifconfig.me/ip", "https://icanhazip.com"]
+    for url in urls:
+        try:
+            r = requests.get(url, timeout=1.5)
+            if r.status_code == 200:
+                _CACHED_IP = r.text.strip()
+                return _CACHED_IP
+        except Exception:
+            continue
+            
+    try:
+        import socket
+        _CACHED_IP = socket.gethostbyname(socket.gethostname())
+        return _CACHED_IP
+    except Exception:
+        pass
+        
+    _CACHED_IP = "Chưa xác định"
+    return _CACHED_IP
+
+
 def check_for_updates():
     """Kiểm tra và tự động cập nhật file main.py từ Github"""
     # Đảm bảo ANSI color hoạt động trên Windows Terminal cũ
@@ -528,7 +557,7 @@ def banner():
 def menu() -> None:
     """Menu chính"""
     banner()
-    print(colored("🆔 Địa chỉ Ip  : 🚨DDOM DOMDMD M🚨", "white"))
+    print(colored(f"🆔 Địa chỉ Ip  : 🚨 {get_public_ip()} 🚨", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
     print(colored("🥇 Nhập 1 để vào Tool TikTok", "white"))
     print(colored("📱 Nhập 2 để vào Tool Facebook (API)", "cyan"))
@@ -694,7 +723,7 @@ def tiktok_menu(auth_token: str) -> None:
         return
 
     # Hiển thị danh sách acc
-    print(colored("🚨 Địa chỉ Ip  : 👀192.168.1.1👀", "white"))
+    print(colored(f"🚨 Địa chỉ Ip  : 👀{get_public_ip()}👀", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
     print(colored("🆔 Danh sách acc Tik Tok :", "yellow"))
     print(colored("════════════════════════════════════════════════", "white"))
@@ -770,7 +799,7 @@ def tiktok_menu(auth_token: str) -> None:
 
     while True:
         if checkdoiacc >= doiacc:
-            print(colored("🚨 Địa chỉ Ip  : 👀192.168.1.1👀", "white"))
+            print(colored(f"🚨 Địa chỉ Ip  : 👀{get_public_ip()}👀", "white"))
             print(colored("════════════════════════════════════════════════", "white"))
             print(colored("🆔 Danh sách acc Tik Tok :", "yellow"))
             print(colored("════════════════════════════════════════════════", "white"))
