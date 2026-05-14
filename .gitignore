@@ -12,6 +12,7 @@
 !/README_GITHUB.md
 !/main.py
 !/test_refactored.py
+!/tiktok_automation.py
 !/.gitignore
 
 # 3. Cho phép đệ quy nội dung bên trong thư mục golike_core
