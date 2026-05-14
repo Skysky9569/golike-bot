@@ -23,6 +23,17 @@ try:
 except ImportError:
     UI_AUTOMATION_AVAILABLE = False
     logger.warning("tiktok_automation module không khả dụng. UI automation sẽ bị tắt.")
+# ----------------------------------------------------------------------------
+# TỰ ĐỘNG CẤU HÌNH ĐƯỜNG DẪN HỆ THỐNG CHO ADB
+# Đảm bảo uiautomator2 và các thư viện phụ luôn tìm thấy file adb.exe cục bộ
+# ----------------------------------------------------------------------------
+local_adb_dir = os.path.join(os.getcwd(), "ADB")
+if os.path.exists(local_adb_dir):
+    os.environ["PATH"] = local_adb_dir + os.pathsep + os.environ["PATH"]
+
+default_workspace_adb = r"D:\pythonadb\ADB"
+if os.path.exists(default_workspace_adb) and default_workspace_adb not in os.environ["PATH"]:
+    os.environ["PATH"] = default_workspace_adb + os.pathsep + os.environ["PATH"]
 
 # Thiết lập timezone Việt Nam
 try:
@@ -665,46 +676,72 @@ def tiktok_menu(auth_token: str) -> None:
 
     # Load ADB config
     adb_config = load_adb_config()
-    # Thiết lập cấu hình ADB tương tác
-    print(colored("════════════════════════════════════════════════", "white"))
-    print(colored("📱 Cấu hình Kết nối Thiết bị:", "cyan"))
-    print(colored("1. Mở link qua ADB (Tự động trên PC/Giả lập/Điện thoại)", "white"))
-    print(colored("2. Mở link qua Termux (Dùng trên Android)", "white"))
-    print(colored("3. Mở link thủ công (Hiện link tự click)", "white"))
-    print(colored("════════════════════════════════════════════════", "white"))
+    saved_open_method = adb_config.get("open_method")
+    saved_device = adb_config.get("current_device")
 
-    while True:
-        conn_choice = input(colored("👉 Chọn phương thức kết nối (1-3): ", "green")).strip()
-        if conn_choice == "1":
-            open_method = "adb"
-            break
-        elif conn_choice == "2":
-            open_method = "termux"
-            break
-        elif conn_choice == "3":
-            open_method = "manual"
-            break
-        else:
-            print(colored("⚠️ Lựa chọn không hợp lệ, hãy thử lại!", "yellow"))
-
+    open_method = "adb"  # Giá trị mặc định
     current_device = None
     adb_manager = None
 
-    if open_method == "adb":
-        # Tự khởi tạo ADBManager (tự động phát hiện đường dẫn local adb.exe)
-        adb_manager = ADBManager() 
-        current_device = adb_manager.select_device()
-        if not current_device:
-            print(colored("⚠️ Không tìm thấy hoặc chưa chọn thiết bị ADB! Tiếp tục với thiết bị mặc định...", "yellow"))
-        else:
-            # Lưu cấu hình thiết bị
+    # 1. Thử tái sử dụng cấu hình cũ để tăng tốc trải nghiệm
+    use_saved = False
+    if saved_open_method == "adb" and saved_device:
+        print(colored(f"\n[💡] Phát hiện thiết bị ADB đã chọn trước đó: {saved_device}", "cyan"))
+        chon_saved = input(colored("👉 Bạn muốn tiếp tục chạy và Auto Click trên thiết bị này? (y/n, Enter là Có): ", "green")).strip().lower()
+        if chon_saved in ["y", "yes", ""]:
+            use_saved = True
+            open_method = "adb"
+            current_device = saved_device
+            adb_manager = ADBManager()
+            adb_manager.selected_device = current_device  # Gán thiết bị đã lưu
+            logger.info(f"Tái sử dụng thiết bị ADB đã lưu: {current_device}")
+    elif saved_open_method in ["termux", "manual"]:
+        method_desc = "Termux" if saved_open_method == "termux" else "Chế độ Thủ công (Bạn tự Click bằng tay)"
+        print(colored(f"\n[💡] Phương thức mở link trước đó: {method_desc}", "cyan"))
+        chon_saved = input(colored("👉 Bạn muốn tiếp tục giữ nguyên phương thức này? (y/n, Enter là Có): ", "green")).strip().lower()
+        if chon_saved in ["y", "yes", ""]:
+            use_saved = True
+            open_method = saved_open_method
+            logger.info(f"Tái sử dụng phương thức: {open_method}")
+
+    # 2. Nếu không dùng lại cấu hình cũ, tiến hành thiết lập mới rõ ràng
+    if not use_saved:
+        print(colored("════════════════════════════════════════════════", "white"))
+        print(colored("📱 Cấu hình Kết nối & Auto Click:", "cyan", bold=True))
+        print(colored("   [1] ⭐ Chạy TỰ ĐỘNG: Mở Link & Tự Auto Click (Dùng ADB cho PC/Giả lập)", "white"))
+        print(colored("   [2] 📱 Chạy qua Termux: Tự động mở link trên Android (Không Auto Click)", "cyan"))
+        print(colored("   [3] ✍️  Chạy Thủ Công: Chỉ hiện Link, bạn TỰ CLICK BẰNG TAY trên điện thoại", "white"))
+        print(colored("════════════════════════════════════════════════", "white"))
+
+        while True:
+            conn_choice = input(colored("👉 Chọn phương thức kết nối (1-3, Mặc định 1): ", "green")).strip()
+            if conn_choice in ["1", ""]:
+                open_method = "adb"
+                break
+            elif conn_choice == "2":
+                open_method = "termux"
+                break
+            elif conn_choice == "3":
+                open_method = "manual"
+                break
+            else:
+                print(colored("⚠️ Lựa chọn không hợp lệ, hãy thử lại!", "yellow"))
+
+        if open_method == "adb":
+            # Tự khởi tạo ADBManager và cho phép chọn thiết bị
+            adb_manager = ADBManager() 
+            current_device = adb_manager.select_device()
+            if not current_device:
+                print(colored("⚠️ Chưa chọn được thiết bị cụ thể! Hệ thống sẽ cố kết nối đến ADB mặc định...", "yellow"))
+            
+            # Lưu lại cấu hình để dùng nhanh lần sau
             adb_config["open_method"] = "adb"
             adb_config["current_device"] = current_device
             save_adb_config(adb_config)
-    else:
-        adb_config["open_method"] = open_method
-        adb_config["current_device"] = None
-        save_adb_config(adb_config)
+        else:
+            adb_config["open_method"] = open_method
+            adb_config["current_device"] = None
+            save_adb_config(adb_config)
 
     # Lấy danh sách acc
     api_client = APIClient(base_url=CONFIG.api_base_url, timeout=CONFIG.api_timeout)
