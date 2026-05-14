@@ -93,6 +93,23 @@ UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/main.
 ADB_PATH = CONFIG.adb_path
 ADB_CONFIG_FILE = "adb_config.json"
 
+def get_public_ip() -> str:
+    """Lấy địa chỉ IP công cộng hiện tại"""
+    try:
+        response = requests.get("https://api.ipify.org", timeout=5)
+        if response.status_code == 200:
+            return response.text.strip()
+    except Exception:
+        pass
+    try:
+        response = requests.get("https://ifconfig.me/ip", timeout=5)
+        if response.status_code == 200:
+            return response.text.strip()
+    except Exception:
+        pass
+    return "Không xác định"
+
+
 def load_adb_config() -> Dict[str, Any]:
     """Đọc cấu hình ADB
 
