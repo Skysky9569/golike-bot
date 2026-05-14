@@ -83,9 +83,9 @@ def _load_version() -> str:
         import json as _json
         _vfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
         with open(_vfile, "r", encoding="utf-8") as _f:
-            return _json.load(_f).get("version", "1.5.4")
+            return _json.load(_f).get("version", "1.5.5")
     except Exception:
-        return "1.5.4"
+        return "1.5.5"
 
 CURRENT_VERSION = _load_version()
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/main.py"

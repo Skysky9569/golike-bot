@@ -1,5 +1,5 @@
 {
-    "version": "1.5.4",
+    "version": "1.5.5",
     "release_date": "2026-05-14",
     "changelog": "Thêm hệ thống kiểm tra phiên bản tự động từ file version.json"
 }
