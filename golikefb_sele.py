@@ -213,7 +213,16 @@ def get_golike_credentials():
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get("username", ""), data.get("password", "")
+            
+            saved_user = data.get("username", "")
+            print(f"\n📁 Tìm thấy thông tin tài khoản GoLike: {saved_user}")
+            
+            choice = input("Dùng tài khoản GoLike đã lưu? (y/n): ").strip().lower()
+            if choice in ['y', 'yes', '']:
+                print("✅ Đang tải tài khoản GoLike...")
+                return saved_user, data.get("password", "")
+            else:
+                print("🔄 Bạn đã chọn thay đổi tài khoản GoLike.")
         except Exception:
             pass
             
@@ -457,11 +466,11 @@ try:
                     print("Đã click Hoàn thành!")
                     
                     # Chậm lại 1.5s để popup hiện rõ text (tránh quét quá nhanh khi nó chưa render xong)
-                    sleep(3)
+                    sleep(4)
                     
                     # Chờ thông báo hiện lên
                     try:
-                        popup_title = WebDriverWait(driver, 5).until(
+                        popup_title = WebDriverWait(driver, 20).until(
                             EC.visibility_of_element_located((By.ID, "swal2-title"))
                         ).text
                         popup_content = driver.find_element(By.ID, "swal2-content").text
@@ -469,7 +478,7 @@ try:
                         print(f"=> Thông báo từ GoLike: [{popup_title}] {popup_content}")
                         
                         # Click OK để đóng popup
-                        ok_btn = WebDriverWait(driver, 3).until(
+                        ok_btn = WebDriverWait(driver, 5).until(
                             EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled"))
                         )
                         ok_btn.click()
