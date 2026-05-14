@@ -7,6 +7,7 @@
 
 # 2. CHỈ MỞ KHOÁ (WHITELIST) ĐÚNG CÁC FILE CỐT LÕI DƯỚI ĐÂY:
 !/golikefb_sele.py
+!/golikefb_parallel.py
 !/FB_WEB_API_FIXED.py
 !/golike_core/
 !/README_GITHUB.md
