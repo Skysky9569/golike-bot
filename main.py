@@ -48,7 +48,7 @@ except ImportError:
 # SYSTEM VERSION & CONFIG
 # ============================================================================
 
-CURRENT_VERSION = "1.5.1"
+CURRENT_VERSION = "1.5.2"
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/main.py"
 
 ADB_PATH = CONFIG.adb_path
@@ -252,6 +252,15 @@ class ADBManager:
                 timeout=10
             )
             output = result.stdout.strip().splitlines()
+            
+            # Phát hiện thiết bị chưa được cấp quyền (unauthorized)
+            unauthorized_devices = [line.split()[0] for line in output[1:] if line.strip() and "unauthorized" in line]
+            if unauthorized_devices:
+                print(colored("\n⚠️  CẢNH BÁO: THIẾT BỊ CHƯA ĐƯỢC ỦY QUYỀN (UNAUTHORIZED)! ⚠️", "red", attrs=["bold"]))
+                for ud in unauthorized_devices:
+                    print(colored(f"👉 ID: {ud} -> Hãy MỞ ĐIỆN THOẠI lên và bấm 'CHO PHÉP GỠ LỖI USB' (Allow USB Debugging)!", "yellow", bold=True))
+                print(colored("═════════════════════════════════════════════════════════════════", "red"))
+
             devices = [line.split()[0] for line in output[1:] if line.strip() and "device" in line]
             return devices
         except (FileNotFoundError, subprocess.TimeoutExpired) as e:
@@ -1071,8 +1080,10 @@ def tiktok_menu(auth_token: str) -> None:
         try:
             ui_automator = TikTokUIAutomator(device_id=current_device)
             logger.info("UI Automation đã sẵn sàng")
+            print(colored("🤖 [Hệ Thống] Đã kích hoạt thành công Module Auto Click!", "green", bold=True))
         except Exception as e:
             logger.warning(f"Không thể tạo UI automator: {e}")
+            print(colored(f"⚠️ Không thể khởi động UI automator: {e}", "yellow"))
             ui_automator = None
 
     while True:
@@ -1202,9 +1213,9 @@ def tiktok_menu(auth_token: str) -> None:
                 logger.info(f"UI automation {job_type}: {ui_message}")
 
                 if ui_success:
-                    print(colored(f"✅ UI automation thành công: {ui_message}", "green"), end="\r")
+                    print(colored(f"✅ UI automation thành công: {ui_message}", "green"))
                 else:
-                    print(colored(f"⚠️ UI automation: {ui_message}", "yellow"), end="\r")
+                    print(colored(f"⚠️ UI automation cảnh báo: {ui_message}", "yellow"))
 
             # Đợi theo delay đã cấu hình
             for t in range(delay, -1, -1):
