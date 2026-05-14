@@ -48,7 +48,7 @@ except ImportError:
 # SYSTEM VERSION & CONFIG
 # ============================================================================
 
-CURRENT_VERSION = "1.5.2"
+CURRENT_VERSION = "1.5.3"
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/main.py"
 
 ADB_PATH = CONFIG.adb_path
@@ -621,6 +621,26 @@ def check_for_updates():
                         print(colored(f"[*] Đã bỏ qua. Tiếp tục chạy phiên bản hiện tại v{CURRENT_VERSION}.", "white"))
                 else:
                     print(colored("[✓] Tool đã ở phiên bản mới nhất.", "green"))
+            
+            # [✨ NÂNG CẤP] Tự động hồi phục File Phụ trợ nếu bị thiếu (Self-Healing Ecosystem)
+            core_dir = os.path.dirname(os.path.abspath(__file__))
+            helper_file = os.path.join(core_dir, "tiktok_automation.py")
+            if not os.path.exists(helper_file):
+                print(colored("\n[🔥] Phát hiện máy THIẾU file phụ trợ: tiktok_automation.py!", "yellow", bold=True))
+                print(colored("[*] Đang tự động tiến hành tải file từ Github để hồi phục Auto Click...", "cyan"))
+                helper_url = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/tiktok_automation.py"
+                try:
+                    hr = requests.get(helper_url, timeout=15)
+                    if hr.status_code == 200:
+                        with open(helper_file, "w", encoding="utf-8") as hf:
+                            hf.write(hr.text)
+                        print(colored("[✅] Đã tự động khôi phục hoàn hảo file tiktok_automation.py!", "green", bold=True))
+                        print(colored("[!] Hệ thống cần nạp lại thư viện. Hãy gõ lại lệnh `python main.py`!", "cyan", bold=True))
+                        sys.exit(0)
+                    else:
+                        print(colored(f"[❌] Tải thất bại (Lỗi Server {hr.status_code}). Vui lòng báo AD.", "red"))
+                except Exception as he:
+                    print(colored(f"[❌] Lỗi kết nối khi tải file cứu trợ: {he}", "red"))
     except Exception:
         print(colored("[!] Không kết nối được Github Server để kiểm tra cập nhật (bỏ qua).", "yellow"))
 
