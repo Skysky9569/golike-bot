@@ -46,7 +46,7 @@ def cleanup():
 atexit.register(cleanup)
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.3.1" # Nâng cấp v1.3.1: Vá lỗi CSS selector nhận diện Job mới!
+CURRENT_VERSION = "1.4.0" # Nâng cấp v1.4.0: Tự động Reset cứng sau 10 lần hụt Job!
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
@@ -281,11 +281,13 @@ def run_single_mode():
             sleep(3)
             
             # VÒNG LẶP CHẠY CHÍNH
+            failed_load_count = 0 # Bộ đếm số lần không tìm thấy Job liên tiếp
             while True:
                 try:
                     print("\n================== TÌM JOB MỚI ==================")
                     try:
                         WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                        failed_load_count = 0 # Khởi động lại đếm khi tìm thấy Job thành công
                     except TimeoutException:
                         # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
                         try:
@@ -315,10 +317,30 @@ def run_single_mode():
                                     
                                     print("⏳ Nghỉ ngơi 30 giây trước khi thử quét tiếp...")
                                     sleep(30)
+                                    failed_load_count = 0 # Reset đếm
                                     continue
                         except: pass
 
-                        print("Không thấy Job nào. Đang ấn Tải lại...")
+                        failed_load_count += 1
+                        # Kiểm tra nếu quá 10 lần hụt Job
+                        if failed_load_count >= 10:
+                            print(f"\n🚨 CẢNH BÁO: Đã hụt Job {failed_load_count} lần liên tiếp! Thực hiện Tự Động Reset trang...")
+                            failed_load_count = 0 # Khởi tạo lại
+                            try:
+                                # Quay lại menu Nhiệm vụ
+                                nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+                                driver.execute_script("arguments[0].click();", nv)
+                                sleep(3.5)
+                                # Click lại Facebook để tải lại trang Job sạch sẽ
+                                fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+                                driver.execute_script("arguments[0].click();", fb_btn)
+                                print("✅ Đã làm mới xong trang. Đang nghỉ 30 giây nguội hệ thống...")
+                            except Exception as e:
+                                print(f"❌ Lỗi trong lúc tự động Reset: {e}")
+                            sleep(30)
+                            continue
+
+                        print(f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
                         try:
                             reload_btn = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
                             driver.execute_script("arguments[0].click();", reload_btn)
@@ -585,12 +607,14 @@ def run_bot_loop(driver, Fb, profile_data, idx):
     p_name = profile_data.get("profile_name", f"Acc-{idx}")
     
     log_thread(p_name, "🔥 BẮT ĐẦU CHẠY TỰ ĐỘNG!")
+    failed_load_count = 0 # Thêm đếm số lần hụt Job liên tiếp
     try:
         while True:
             try:
                 log_thread(p_name, "=== QUÉT JOB ===")
                 try:
                     WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                    failed_load_count = 0 # Đã thấy Job, reset bộ đếm
                 except TimeoutException:
                     # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
                     try:
@@ -617,11 +641,28 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                     log_thread(p_name, f"❌ Lỗi khi Reset: {err}")
                                 
                                 log_thread(p_name, "⏳ Bắt đầu nghỉ ngơi 30 giây nguội máy...")
+                                failed_load_count = 0 # Reset bộ đếm
                                 sleep(30)
                                 continue
                     except: pass
 
-                    log_thread(p_name, "Không thấy Job nào. Đang ấn Tải lại...")
+                    failed_load_count += 1
+                    if failed_load_count >= 10:
+                        log_thread(p_name, f"🚨 ĐÃ HỤT JOB {failed_load_count} LẦN! Thực hiện Tự động Reset trang Nhiệm vụ -> Facebook...")
+                        failed_load_count = 0
+                        try:
+                            nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+                            driver.execute_script("arguments[0].click();", nv)
+                            sleep(3.5)
+                            fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+                            driver.execute_script("arguments[0].click();", fb_btn)
+                            log_thread(p_name, "✅ Reset trang xong. Đang chờ 30s nguội hệ thống...")
+                        except Exception as e:
+                            log_thread(p_name, f"❌ Lỗi khi tự động Reset: {e}")
+                        sleep(30)
+                        continue
+
+                    log_thread(p_name, f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
                     try:
                         reload = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
                         driver.execute_script("arguments[0].click();", reload)
