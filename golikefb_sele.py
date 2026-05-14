@@ -46,7 +46,7 @@ def cleanup():
 atexit.register(cleanup)
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.2.1" # Nâng cấp v1.2.1: Lựa chọn Cập nhật + Captcha Tuần Tự!
+CURRENT_VERSION = "1.2.2" # Nâng cấp v1.2.2: Cày ngay lập tức + Fix lỗi bỏ qua Job!
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
@@ -93,12 +93,7 @@ def map_job_type(job_text):
     return "unknown"
 
 def getidpost(lk: str):
-    import re
-    m = re.search(r'facebook\.com/(?:profile\.php\?id=)?(\d+)', lk)
-    if m: return m.group(1)
-    m = re.search(r'fbid=(\d+)', lk)
-    if m: return m.group(1)
-        
+    # Thử dùng TraoDoiSub API trước vì nó quy đổi cực kỳ chuẩn cho mọi loại link post/profile/video...
     headers = {
         'accept': '*/*',
         'content-type': 'application/x-www-form-urlencoded',
@@ -111,9 +106,23 @@ def getidpost(lk: str):
         js = response.json()
         if "success" in js:
             uid = js.get('post_id', '') or js.get('id', '')
-            return str(uid) if uid else "0"
+            if uid: return str(uid)
     except Exception:
         pass
+        
+    # Dự phòng bằng Regex nếu API bên thứ 3 gặp sự cố
+    import re
+    m = re.search(r'profile\.php\?id=(\d+)', lk)
+    if m: return m.group(1)
+    
+    m = re.search(r'fbid=(\d+)', lk)
+    if m: return m.group(1)
+    
+    # Chỉ lấy UID dạng facebook.com/123 khi không có posts/videos/photos để tránh nhận nhầm ID tác giả
+    if "/posts/" not in lk and "/videos/" not in lk and "/photos/" not in lk:
+        m = re.search(r'facebook\.com/(\d+)', lk)
+        if m: return m.group(1)
+        
     return "0"
 
 # ================================================================
@@ -598,12 +607,24 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 if uid and uid != "0":
                     sleep(1.5)
                     try:
-                        if j_t == "follow": ok = Fb.FOLLOW(uid).get("success", False)
-                        elif j_t == "lik_page": ok = Fb.LIKE_PAGE(uid).get("success", False)
+                        if j_t == "follow":
+                            res = Fb.FOLLOW(uid)
+                            ok = res.get("success", False)
+                            log_thread(p_name, f"API Follow: {res}")
+                        elif j_t == "lik_page":
+                            res = Fb.LIKE_PAGE(uid)
+                            ok = res.get("success", False)
+                            log_thread(p_name, f"API LikePage: {res}")
                         elif j_t in ["like", "love", "haha", "wow", "sad", "angry"]:
-                            ok = Fb.REACTION(j_t.upper(), uid).get("success", False)
-                        log_thread(p_name, f"-> API Kết quả: {ok}")
-                    except: pass
+                            res = Fb.REACTION(j_t.upper(), uid)
+                            ok = res.get("success", False)
+                            log_thread(p_name, f"API Reaction ({j_t}): {res}")
+                        else:
+                            log_thread(p_name, f"⚠️ Loại tương tác chưa hỗ trợ: {j_t}")
+                    except Exception as api_e:
+                        log_thread(p_name, f"❌ Lỗi API tương tác: {api_e}")
+                else:
+                    log_thread(p_name, f"⚠️ Không trích xuất được UID từ Link: {fb_url}")
                 
                 need_skip = not ok
                 sleep(3.5)
@@ -695,29 +716,27 @@ def run_parallel_mode():
 
     print(f"\n🚀 PHÁT HIỆN {len(profiles)} TÀI KHOẢN ĐĂNG KÝ CHẠY SONG SONG!")
     
-    ready_tasks = []
+    threads = []
     print("\n--- BẮT ĐẦU QUÁ TRÌNH THIẾT LẬP & GIẢI CAPTCHA LẦN LƯỢT ---")
     for idx, profile in enumerate(profiles):
         drv, fb_api = setup_bot_profile(profile, idx)
         if drv and fb_api:
-            ready_tasks.append((drv, fb_api, profile, idx))
+            # KÍCH HOẠT LUỒNG CHẠY NGAY LẬP TỨC! CHẠY NGAY KHI ENTER XONG KHÔNG CẦN CHỜ!
+            t = threading.Thread(target=run_bot_loop, args=(drv, fb_api, profile, idx))
+            t.daemon = True
+            t.start()
+            threads.append(t)
+            print(f"🚀 [LUỒNG PHỤ] Đã kích hoạt chạy ngầm thành công cho [{profile.get('profile_name')}].")
         else:
             print(f"⚠️ Không thể khởi tạo Acc [{profile.get('profile_name', idx)}]. Bỏ qua luồng này.")
 
-    if not ready_tasks:
+    if not threads:
         print("\n❌ Không có tài khoản nào thiết lập thành công. Thoát!")
         return
 
     print(f"\n" + "*"*60)
-    print(f"🔥 TẤT CẢ ĐÃ SẴN SÀNG! Kích hoạt cày song song cho {len(ready_tasks)} tài khoản...")
+    print(f"🔥 TẤT CẢ CÁC LUỒNG ĐANG HOẠT ĐỘNG! Đang theo dõi tiến trình chạy...")
     print("*"*60 + "\n")
-
-    threads = []
-    for drv, fb_api, profile, idx in ready_tasks:
-        t = threading.Thread(target=run_bot_loop, args=(drv, fb_api, profile, idx))
-        t.daemon = True
-        threads.append(t)
-        t.start()
     
     try:
         while any(t.is_alive() for t in threads):
