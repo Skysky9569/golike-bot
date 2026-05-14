@@ -46,7 +46,7 @@ def cleanup():
 atexit.register(cleanup)
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.3.0" # Nâng cấp v1.3.0: Tự động hồi phục khi GoLike lỗi danh sách Job!
+CURRENT_VERSION = "1.3.1" # Nâng cấp v1.3.1: Vá lỗi CSS selector nhận diện Job mới!
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
@@ -285,7 +285,7 @@ def run_single_mode():
                 try:
                     print("\n================== TÌM JOB MỚI ==================")
                     try:
-                        WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.card-primary.mb-3")))
+                        WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
                     except TimeoutException:
                         # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
                         try:
@@ -326,7 +326,7 @@ def run_single_mode():
                         except: pass
                         continue
 
-                    jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.card-primary.mb-3")
+                    jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")
                     if not jobs: continue
                     first_job = jobs[0]
                     
@@ -336,7 +336,7 @@ def run_single_mode():
                         print(f"[*] Phát hiện Job: ID {job_id} | Loại: {job_type_raw}")
                     except: job_type_raw = ""
                     
-                    first_job.click()
+                    driver.execute_script("arguments[0].click();", first_job)
                     sleep(1.5)
                     
                     orig_window = driver.current_window_handle
@@ -590,7 +590,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
             try:
                 log_thread(p_name, "=== QUÉT JOB ===")
                 try:
-                    WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.card-primary.mb-3")))
+                    WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
                 except TimeoutException:
                     # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
                     try:
@@ -629,7 +629,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     except: pass
                     continue
 
-                jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.card-primary.mb-3")
+                jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")
                 if not jobs: continue
                 first_j = jobs[0]
                 
@@ -639,7 +639,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     log_thread(p_name, f"Có Job: ID {j_id} | {j_raw}")
                 except: j_raw = ""
                 
-                first_j.click()
+                driver.execute_script("arguments[0].click();", first_j)
                 sleep(1.5)
                 
                 orig_w = driver.current_window_handle
