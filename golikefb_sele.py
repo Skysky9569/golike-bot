@@ -34,16 +34,49 @@ drivers_lock = threading.Lock()
 
 def cleanup():
     print("\n[!] Đang dọn dẹp và tắt hoàn toàn trình duyệt (tránh chạy nền)...")
+    
+    # 1. Duyệt qua danh sách driver đang chạy để đóng nhẹ nhàng giải phóng RAM
     with drivers_lock:
         for drv in active_drivers:
             try:
                 drv.quit()
             except:
                 pass
+        active_drivers.clear()
+
+    # 2. Dọn dẹp cứng các tiến trình cứng đầu trên Windows
     if sys.platform == 'win32':
+        import subprocess
+        try:
+            # Dùng PowerShell quét và tắt THẬT SẠCH các chrome.exe tự động do Selenium bật 
+            # (Dựa vào cổng remote-debugging-port) -> Đảm bảo TUYỆT ĐỐI KHÔNG TẮT NHẦM Chrome cá nhân của bạn!
+            ps_cmd = (
+                "Get-WmiObject Win32_Process -Filter \"Name = 'chrome.exe'\" | "
+                "Where-Object { $_.CommandLine -like '*--remote-debugging-port*' } | "
+                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+            )
+            subprocess.run(["powershell", "-Command", ps_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+            
+        # Tắt driver
         os.system("taskkill /f /im chromedriver.exe /T >nul 2>&1")
 
+def handle_exit_signal(signum, frame):
+    print("\n[🛑] Đã nhận lệnh dừng Tool (Ctrl+C). Tiến hành thu dọn tài nguyên...")
+    cleanup()
+    sys.exit(1)
+
+# Đăng ký dọn dẹp khi tắt tool thông thường
 atexit.register(cleanup)
+
+# Đăng ký dọn dẹp cưỡng bức khi ấn Ctrl+C hoặc bị đóng đột ngột
+import signal
+try:
+    signal.signal(signal.SIGINT, handle_exit_signal)
+    signal.signal(signal.SIGTERM, handle_exit_signal)
+except ValueError:
+    pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
 CURRENT_VERSION = "1.4.0" # Nâng cấp v1.4.0: Tự động Reset cứng sau 10 lần hụt Job!
