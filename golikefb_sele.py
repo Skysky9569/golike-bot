@@ -46,7 +46,7 @@ def cleanup():
 atexit.register(cleanup)
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.1.0" # Nâng cấp lên v1.1.0: Tích hợp đa luồng song song!
+CURRENT_VERSION = "1.2.0" # Nâng cấp v1.2.0: Tuần tự Captcha + Vá lỗi Clicks!
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
@@ -195,9 +195,8 @@ def run_single_mode():
     print("\nĐang khởi động Chrome...", flush=True)
     options = Options()
     options.add_argument("--lang=en-US")
-    options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
+    options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
     options.add_argument("--no-sandbox")
     options.add_argument("user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
@@ -228,24 +227,25 @@ def run_single_mode():
         
         input("\n👉 Vui lòng tự giải Captcha trên màn hình trình duyệt (nếu có).\nSau khi giải xong, ấn phím [ENTER] tại đây để tiếp tục...")
         
-        nhiemvu = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')
-        nhiemvu.click()
+        # Sử dụng JS Click cho ổn định tuyệt đối
+        nhiemvu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+        driver.execute_script("arguments[0].click();", nhiemvu)
         
-        fb_btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
-        fb_btn.click()
+        fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+        driver.execute_script("arguments[0].click();", fb_btn)
         sleep(3)
 
         try:
             tb = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.CLASS_NAME, 'swal2-title')))
             print(f"Thông báo từ GoLike: {tb.text}")
             ok_btn = driver.find_element(By.CSS_SELECTOR, '.swal2-confirm.swal2-styled')
-            ok_btn.click()
+            driver.execute_script("arguments[0].click();", ok_btn)
         except TimeoutException:
             pass
 
         try:
             doiacc = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account")))
-            doiacc.click()
+            driver.execute_script("arguments[0].click();", doiacc)
             sleep(2)
             
             accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
@@ -263,7 +263,7 @@ def run_single_mode():
             
             chon_acc = int(input("👉 Nhập số để chọn nick chạy: "))
             selected_node, name_run, uid_run = valid_accounts[chon_acc-1]
-            selected_node.click()
+            driver.execute_script("arguments[0].click();", selected_node)
             print(f"🚀 ✅ ĐANG CHẠY ACC: {name_run} | UID: {uid_run}")
             sleep(3)
             
@@ -362,7 +362,7 @@ def run_single_mode():
                                 c_p = driver.find_element(By.ID, "swal2-content").text
                                 print(f"GoLike báo: [{t_p}] {c_p}")
                                 ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                                ok_c.click()
+                                driver.execute_script("arguments[0].click();", ok_c)
                                 if "lỗi" in t_p.lower() or "thất bại" in t_p.lower() or "lỗi" in c_p.lower() or "thất bại" in c_p.lower():
                                     need_skip = True
                             except: pass
@@ -417,7 +417,8 @@ def log_thread(profile_name, message):
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}] [{profile_name}] {message}")
 
-def run_bot_profile(profile_data, idx):
+# PHASE 1: CÀI ĐẶT VÀ GIẢI CAPTCHA TUẦN TỰ TRÊN LUỒNG CHÍNH
+def setup_bot_profile(profile_data, idx):
     p_name = profile_data.get("profile_name", f"Acc-{idx}")
     gl_user = profile_data.get("golike_username", "")
     gl_pass = profile_data.get("golike_password", "")
@@ -425,24 +426,28 @@ def run_bot_profile(profile_data, idx):
     target_fb = profile_data.get("target_fb_name", "")
     target_uid = profile_data.get("target_fb_uid", "")
 
-    log_thread(p_name, "Đang khởi chạy luồng...")
+    print(f"\n" + "="*60)
+    print(f"🔷 KHỞI TẠO TÀI KHOẢN CHẠY SONG SONG: [{p_name}]")
+    print("="*60)
+    
     if not gl_user or not gl_pass or not fb_cookie:
-        log_thread(p_name, "❌ Cấu hình thiếu thông tin. Dừng!")
-        return
+        print(f"❌ Cấu hình [{p_name}] thiếu thông tin quan trọng. Bỏ qua!")
+        return None, None
 
-    # FB API
+    # Khởi tạo API FB
     try:
         Fb = FB_API(fb_cookie)
         kq = Fb.login()
         if isinstance(kq, dict) and 'err' in kq:
-            log_thread(p_name, f"❌ Cookie FB sai: {kq['err']}. Dừng!")
-            return
-        log_thread(p_name, f"✅ FB API đã kết nối (UID: {Fb.session.user_id})")
+            print(f"❌ Cookie FB của [{p_name}] bị sai hoặc hết hạn: {kq['err']}")
+            return None, None
+        print(f"✅ FB API Kết nối thành công (UID: {Fb.session.user_id})")
     except Exception as e:
-        log_thread(p_name, f"❌ Lỗi khởi tạo FB API: {e}")
-        return
+        print(f"❌ Lỗi API cho [{p_name}]: {e}")
+        return None, None
 
-    # Chrome
+    # Bật Trình duyệt
+    print(f"[*] Đang bật trình duyệt Chrome cho [{p_name}]...")
     options = Options()
     options.add_argument("--lang=en-US")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -454,7 +459,7 @@ def run_bot_profile(profile_data, idx):
     with drivers_lock:
         active_drivers.append(driver)
         
-    # Layout cửa sổ thông minh
+    # Sắp xếp Layout
     w, h = 450, 750
     px = 20 + (idx * 470)
     py = 30
@@ -470,35 +475,37 @@ def run_bot_profile(profile_data, idx):
 
     try:
         driver.get("https://app.golike.net/login")
+        sleep(2)
         
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input').send_keys(gl_user)
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input').send_keys(gl_pass)
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button').click()
         
-        log_thread(p_name, "🔑 Đang đợi bạn giải Captcha trong 120s trên trình duyệt...")
+        # CHẶN LẠI ĐỂ GIẢI CAPTCHA CHO TỪNG LUỒNG
+        print(f"\n🔑 [BƯỚC BẮT BUỘC] Hãy nhìn vào màn hình trình duyệt của [{p_name}].")
+        input("Vui lòng tự giải Captcha trên đó. Khi đã vào được màn hình chính, quay lại đây ấn [ENTER]...")
         
-        nhiemvu = WebDriverWait(driver, 120).until(EC.presence_of_element_located((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
-        log_thread(p_name, "✅ Đăng nhập GoLike thành công!")
-        nhiemvu.click()
+        # Click Nhiệm vụ (Dùng JS Click cực mượt)
+        nhiemvu = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+        driver.execute_script("arguments[0].click();", nhiemvu)
         
         fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
-        fb_btn.click()
+        driver.execute_script("arguments[0].click();", fb_btn)
         sleep(3)
         
         try:
             tb = WebDriverWait(driver, 4).until(EC.element_to_be_clickable((By.CLASS_NAME, 'swal2-title')))
-            driver.find_element(By.CSS_SELECTOR, '.swal2-confirm.swal2-styled').click()
+            ok_btn = driver.find_element(By.CSS_SELECTOR, '.swal2-confirm.swal2-styled')
+            driver.execute_script("arguments[0].click();", ok_btn)
         except: pass
         
-        # Chọn nick
+        # Mở bảng Chọn tài khoản
         doiacc = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account")))
-        doiacc.click()
+        driver.execute_script("arguments[0].click();", doiacc)
         sleep(2.5)
         
         accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
         selected = False
-        search_desc = f"UID '{target_uid}'" if target_uid else f"Tên '{target_fb}'"
-        log_thread(p_name, f"Đang so khớp {search_desc}...")
         
         for acc in accounts:
             try:
@@ -510,20 +517,37 @@ def run_bot_profile(profile_data, idx):
                 elif target_fb and target_fb.lower().strip() in nm.lower().strip(): is_match = True
                 
                 if is_match:
-                    acc.click()
-                    log_thread(p_name, f"🚀 ✅ ĐANG CHẠY ACC: {nm} | UID: {uid_acc}")
+                    driver.execute_script("arguments[0].click();", acc)
+                    print(f"🚀 [OK] ĐÃ CHỌN XONG ACC: {nm} | UID: {uid_acc}")
                     selected = True
                     break
             except: pass
             
         if not selected:
-            log_thread(p_name, "⚠️ Không khớp cấu hình. Chọn mặc định acc đầu tiên!")
-            if len(accounts) > 0: accounts[0].click()
-            else: return
+            print(f"⚠️ Cảnh báo: Không tìm thấy UID/Tên khớp cho [{p_name}]. Chọn nick đầu tiên!")
+            if len(accounts) > 0: 
+                driver.execute_script("arguments[0].click();", accounts[0])
+            else: 
+                print("❌ Không tìm thấy nick FB nào liên kết!")
+                return None, None
             
         sleep(3)
+        print(f"✅ Đã thiết lập thành công tài khoản [{p_name}]!")
+        return driver, Fb
         
-        # VÒNG LẶP JOB ĐA LUỒNG
+    except Exception as e:
+        print(f"❌ Lỗi trong quá trình Setup tài khoản [{p_name}]: {e}")
+        try: driver.quit()
+        except: pass
+        return None, None
+
+
+# PHASE 2: VÒNG LẶP CHẠY SONG SONG (DÀNH CHO LUỒNG PHỤ)
+def run_bot_loop(driver, Fb, profile_data, idx):
+    p_name = profile_data.get("profile_name", f"Acc-{idx}")
+    
+    log_thread(p_name, "🔥 BẮT ĐẦU CHẠY TỰ ĐỘNG!")
+    try:
         while True:
             try:
                 log_thread(p_name, "=== QUÉT JOB ===")
@@ -537,7 +561,10 @@ def run_bot_profile(profile_data, idx):
                     except: pass
                     continue
 
-                first_j = driver.find_elements(By.CSS_SELECTOR, "div.card.card-primary.mb-3")[0]
+                jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.card-primary.mb-3")
+                if not jobs: continue
+                first_j = jobs[0]
+                
                 try:
                     j_id = first_j.find_element(By.CSS_SELECTOR, "h6.font-id b").text
                     j_raw = first_j.find_element(By.CSS_SELECTOR, "span.block-text-2").text
@@ -585,37 +612,41 @@ def run_bot_profile(profile_data, idx):
                 need_skip = not ok
                 sleep(3.5)
                 if ok:
-                            try:
-                                ht = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
-                                driver.execute_script("arguments[0].click();", ht)
-                                sleep(4)
-                                try:
-                                    tp = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
-                                    cp = driver.find_element(By.ID, "swal2-content").text
-                                    log_thread(p_name, f"GoLike: [{tp}] {cp}")
-                                    driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled").click()
-                                    if "lỗi" in tp.lower() or "thất bại" in tp.lower() or "lỗi" in cp.lower() or "thất bại" in cp.lower():
-                                        need_skip = True
-                                    else: need_skip = False
-                                except: pass
-                            except: need_skip = True
+                    try:
+                        ht = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
+                        driver.execute_script("arguments[0].click();", ht)
+                        sleep(4)
+                        try:
+                            tp = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
+                            cp = driver.find_element(By.ID, "swal2-content").text
+                            log_thread(p_name, f"GoLike: [{tp}] {cp}")
+                            ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                            driver.execute_script("arguments[0].click();", ok_c)
+                            if "lỗi" in tp.lower() or "thất bại" in tp.lower() or "lỗi" in cp.lower() or "thất bại" in cp.lower():
+                                need_skip = True
+                            else: need_skip = False
+                        except: pass
+                    except: need_skip = True
+                    
                 if need_skip:
-                            try:
-                                bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')]")))
-                                driver.execute_script("arguments[0].click();", bl)
-                                sleep(1.5)
-                                ldo = "Báo cáo hoàn thành thất bại"
-                                if not uid or uid == "0": ldo = "Không tìm thấy bài viết"
-                                c_ldo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{ldo}')]/ancestor::div[contains(@class, 'row')]")
-                                driver.execute_script("arguments[0].click();", c_ldo)
-                                sleep(1)
-                                gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
-                                driver.execute_script("arguments[0].click();", gui)
-                                sleep(1.5)
-                                try: driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled").click()
-                                except: pass
-                                log_thread(p_name, "-> Đã báo lỗi job.")
-                            except: pass
+                    try:
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')]")))
+                        driver.execute_script("arguments[0].click();", bl)
+                        sleep(1.5)
+                        ldo = "Báo cáo hoàn thành thất bại"
+                        if not uid or uid == "0": ldo = "Không tìm thấy bài viết"
+                        c_ldo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{ldo}')]/ancestor::div[contains(@class, 'row')]")
+                        driver.execute_script("arguments[0].click();", c_ldo)
+                        sleep(1)
+                        gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
+                        driver.execute_script("arguments[0].click();", gui)
+                        sleep(1.5)
+                        try:
+                            o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                            driver.execute_script("arguments[0].click();", o_b)
+                        except: pass
+                        log_thread(p_name, "-> Đã báo lỗi job.")
+                    except: pass
                 
                 log_thread(p_name, "Nghỉ 10 giây...")
                 sleep(10)
@@ -667,13 +698,34 @@ def run_parallel_mode():
         return
 
     print(f"\n🚀 PHÁT HIỆN {len(profiles)} TÀI KHOẢN ĐĂNG KÝ CHẠY SONG SONG!")
-    threads = []
+    
+    # DANH SÁCH ĐỂ LƯU CÁC DRIVER ĐÃ LOGGED IN SẴN SÀNG CHẠY
+    ready_tasks = []
+    
+    # CHẠY PHẦN SETUP TUẦN TỰ ĐỂ GIẢI QUYẾT CAPTCHA TỪNG ACC MỘT CỰC KỲ DỄ DÀNG
+    print("\n--- BẮT ĐẦU QUÁ TRÌNH THIẾT LẬP & GIẢI CAPTCHA LẦN LƯỢT ---")
     for idx, profile in enumerate(profiles):
-        t = threading.Thread(target=run_bot_profile, args=(profile, idx))
+        drv, fb_api = setup_bot_profile(profile, idx)
+        if drv and fb_api:
+            ready_tasks.append((drv, fb_api, profile, idx))
+        else:
+            print(f"⚠️ Không thể khởi tạo Acc [{profile.get('profile_name', idx)}]. Bỏ qua luồng này.")
+
+    if not ready_tasks:
+        print("\n❌ Không có tài khoản nào thiết lập thành công. Thoát!")
+        return
+
+    print(f"\n" + "*"*60)
+    print(f"🔥 TẤT CẢ ĐÃ SẴN SÀNG! Kích hoạt cày song song cho {len(ready_tasks)} tài khoản...")
+    print("*"*60 + "\n")
+
+    # KHỞI CHẠY CÁC LUỒNG BACKGROUND ĐỂ CHẠY VÒNG LẶP JOB SONG SONG
+    threads = []
+    for drv, fb_api, profile, idx in ready_tasks:
+        t = threading.Thread(target=run_bot_loop, args=(drv, fb_api, profile, idx))
         t.daemon = True
         threads.append(t)
         t.start()
-        sleep(5) # Cách nhau 5s bật Chrome tránh quá tải RAM ban đầu
     
     try:
         while any(t.is_alive() for t in threads):
