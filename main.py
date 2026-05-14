@@ -543,7 +543,7 @@ def banner():
     banner_text = f"""
 {colored(':))', 'yellow')}
 {colored('════════════════════════════════════════════════', 'white')}
-{colored('👑 Tool  Đóm Remake: 💀 Golike 💀 v' + CURRENT_VERSION, 'cyan', bold=True)}
+{colored('👑 Tool By Đóme: >😘 Golike 💕 v' + CURRENT_VERSION, 'cyan', bold=True)}
 {colored('════════════════════════════════════════════════', 'white')}
 {colored('⚠️ Lưu ý    : 🌟Tool Sử Dụng Cho Android/Pc🌟', 'white')}
 {colored('🔐 Bảo mật  : Credential đã mã hóa, Input validated', 'green')}
@@ -559,15 +559,17 @@ def menu() -> None:
     banner()
     print(colored(f"🆔 Địa chỉ Ip  : 🚨 {get_public_ip()} 🚨", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
-    print(colored("🥇 Nhập 1 để vào Tool TikTok", "white"))
-    print(colored("📱 Nhập 2 để vào Tool Facebook (API)", "cyan"))
-    print(colored("🔥 Nhập 8 để vào Tool Facebook (Selenium)", "yellow"))
-    print(colored("🥈 Nhập 3 Để Xóa Authorization Hiện Tại", "red"))
-    print(colored("⚙️  Nhập 4 để xem cấu hình bảo mật", "green"))
-    print(colored("📊 Nhập 5 để xem Logs", "cyan"))
-    print(colored("🧪 Nhập 6 để chạy Tests", "magenta"))
-    print(colored("🔧 Nhập 7 để Debug Mode", "blue"))
-    print(colored("🔙 Nhập 0 để Thoát", "white"))
+    print(colored("⚡ CHỨC NĂNG CHÍNH:", "cyan", bold=True))
+    print(colored("   [1] 🥇 Vào Tool TikTok (Auto ADB)", "white"))
+    print(colored("   [2] 📱 Vào Tool Facebook (API)", "cyan"))
+    print(colored("   [3] 🔥 Vào Tool Facebook (Selenium)", "yellow"))
+    print(colored("\n🛠️  HỆ THỐNG & CẤU HÌNH:", "cyan", bold=True))
+    print(colored("   [4] 🥈 Xóa Authorization Hiện Tại", "red"))
+    print(colored("   [5] ⚙️  Xem Cấu Hình Bảo Mật", "green"))
+    print(colored("   [6] 📊 Xem Hệ Thống Logs", "cyan"))
+    print(colored("   [7] 🧪 Chạy Bộ Thử Nghiệm (Tests)", "magenta"))
+    print(colored("   [8] 🔧 Bật/Tắt Debug Mode", "blue"))
+    print(colored("   [0] 🔙 Thoát Chương Trình", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
 
 
@@ -1230,6 +1232,9 @@ def main() -> None:
             print(colored("👋 Tạm biệt!", "green"))
             break
         elif choose == "3":
+            # Facebook Selenium
+            run_facebook_selenium_bot()
+        elif choose == "4":
             if cred_manager.clear_auth():
                 # Xóa cả Facebook cookie
                 cookie_file = "facebook_cookie.enc"
@@ -1242,16 +1247,16 @@ def main() -> None:
             else:
                 print(colored(f"[!] Không thể xóa credential!", "red"))
             continue
-        elif choose == "4":
+        elif choose == "5":
             show_security_config()
             continue
-        elif choose == "5":
+        elif choose == "6":
             show_logs()
             continue
-        elif choose == "6":
+        elif choose == "7":
             run_tests()
             continue
-        elif choose == "7":
+        elif choose == "8":
             toggle_debug_mode()
             continue
         elif choose == "1":
@@ -1290,9 +1295,6 @@ def main() -> None:
                         print(colored("❌ Lỗi lưu token!", "red"))
                         auth = ""
             facebook_menu(auth)
-        elif choose == "8":
-            # Facebook Selenium
-            run_facebook_selenium_bot()
         else:
             print(colored("❌ Lựa chọn không hợp lệ!", "red"))
 
