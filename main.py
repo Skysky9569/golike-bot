@@ -10,6 +10,82 @@ import subprocess
 import requests
 import re
 from typing import Optional, Dict, Any, List
+
+# ============================================================================
+# PRE-FLIGHT BOOTLOADER: HỆ THỐNG TỰ ĐỘNG TẢI & KHÔI PHỤC FILE CỐT LÕI (SELF-HEALING)
+# ============================================================================
+
+def heal_missing_files():
+    """Quét và tự động phục hồi toàn bộ các file bị thiếu từ Github trước khi bootup"""
+    github_raw_base = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/"
+    essential_files = [
+        "golikefb_sele.py",
+        "tiktok_automation.py",
+        "golike_core/__init__.py",
+        "golike_core/api_client.py",
+        "golike_core/config.py",
+        "golike_core/error_handling.py",
+        "golike_core/logging.py",
+        "golike_core/security.py",
+    ]
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    missing_detected = False
+    
+    # Quét nhanh xem có file nào bị thiếu trong danh sách tối quan trọng hay không
+    for rel_path in essential_files:
+        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
+        if not os.path.exists(full_path):
+            missing_detected = True
+            break
+            
+    if not missing_detected:
+        return  # Tất cả file đầy đủ, cho qua để boot tiếp!
+        
+    # Kích hoạt chế độ cứu hộ hệ thống
+    print("\033[1;33m\n[🚨] PHÁT HIỆN HỆ THỐNG BỊ THIẾU CÁC TỆP TIN CỐT LÕI! \033[0m")
+    print("\033[1;36m[*] Đang khởi động quy trình Tự Phục Hồi (Self-Healing Ecosystem)... \033[0m")
+    print("\033[1;36m[*] Tiến hành kết nối và tải lại khẩn cấp từ Github Server...\n\033[0m")
+    
+    need_restart = False
+    
+    for rel_path in essential_files:
+        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
+        if not os.path.exists(full_path):
+            print(f"👉 Đang khôi phục: \033[1;37m{rel_path}\033[0m ... ", end="", flush=True)
+            
+            # Tạo thư mục cha nếu thư mục module bị thiếu (ví dụ golike_core/)
+            parent_dir = os.path.dirname(full_path)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
+                
+            # Tải dữ liệu file
+            url = f"{github_raw_base}{rel_path}"
+            try:
+                r = requests.get(url, timeout=20)
+                if r.status_code == 200:
+                    with open(full_path, "w", encoding="utf-8") as f:
+                        f.write(r.text)
+                    print("\033[1;32m[OK - THÀNH CÔNG]\033[0m")
+                    need_restart = True
+                else:
+                    print(f"\033[1;31m[THẤT BẠI - LỖI HTTP {r.status_code}]\033[0m")
+            except Exception as e:
+                print(f"\033[1;31m[LỖI KẾT NỐI: {e}]\033[0m")
+                
+    if need_restart:
+        print("\033[1;36m\n══════════════════════════════════════════════════════════════\033[0m")
+        print("\033[1;32m[✅] HỆ THỐNG ĐÃ ĐƯỢC KHÔI PHỤC ĐẦY ĐỦ & HOÀN HẢO 100%!\033[0m")
+        print("\033[1;33m[💡] Vui lòng gõ lại lệnh \033[1;37m`python main.py`\033[1;33m để bắt đầu chạy tool!\033[0m")
+        print("\033[1;36m══════════════════════════════════════════════════════════════\n\033[0m")
+        sys.exit(0)
+
+# Chạy hệ thống tự phục hồi ngay lập tức trước khi import bất kỳ module phụ trợ nào!
+try:
+    heal_missing_files()
+except Exception:
+    pass
+
 from abc import ABC, abstractmethod
 from datetime import datetime
 from golike_core.security import CredentialManager, InputValidator
@@ -48,7 +124,7 @@ except ImportError:
 # SYSTEM VERSION & CONFIG
 # ============================================================================
 
-CURRENT_VERSION = "1.5.3"
+CURRENT_VERSION = "1.5.4"
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/main.py"
 
 ADB_PATH = CONFIG.adb_path
@@ -622,25 +698,7 @@ def check_for_updates():
                 else:
                     print(colored("[✓] Tool đã ở phiên bản mới nhất.", "green"))
             
-            # [✨ NÂNG CẤP] Tự động hồi phục File Phụ trợ nếu bị thiếu (Self-Healing Ecosystem)
-            core_dir = os.path.dirname(os.path.abspath(__file__))
-            helper_file = os.path.join(core_dir, "tiktok_automation.py")
-            if not os.path.exists(helper_file):
-                print(colored("\n[🔥] Phát hiện máy THIẾU file phụ trợ: tiktok_automation.py!", "yellow", bold=True))
-                print(colored("[*] Đang tự động tiến hành tải file từ Github để hồi phục Auto Click...", "cyan"))
-                helper_url = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/tiktok_automation.py"
-                try:
-                    hr = requests.get(helper_url, timeout=15)
-                    if hr.status_code == 200:
-                        with open(helper_file, "w", encoding="utf-8") as hf:
-                            hf.write(hr.text)
-                        print(colored("[✅] Đã tự động khôi phục hoàn hảo file tiktok_automation.py!", "green", bold=True))
-                        print(colored("[!] Hệ thống cần nạp lại thư viện. Hãy gõ lại lệnh `python main.py`!", "cyan", bold=True))
-                        sys.exit(0)
-                    else:
-                        print(colored(f"[❌] Tải thất bại (Lỗi Server {hr.status_code}). Vui lòng báo AD.", "red"))
-                except Exception as he:
-                    print(colored(f"[❌] Lỗi kết nối khi tải file cứu trợ: {he}", "red"))
+
     except Exception:
         print(colored("[!] Không kết nối được Github Server để kiểm tra cập nhật (bỏ qua).", "yellow"))
 
