@@ -965,10 +965,11 @@ def tiktok_menu(auth_token: str) -> None:
         print(colored("   [1] ⭐ Chạy TỰ ĐỘNG: Mở Link & Tự Auto Click (Dùng ADB cho PC/Giả lập)", "white"))
         print(colored("   [2] 📱 Chạy qua Termux: Tự động mở link trên Android (Không Auto Click)", "cyan"))
         print(colored("   [3] ✍️  Chạy Thủ Công: Chỉ hiện Link, bạn TỰ CLICK BẰNG TAY trên điện thoại", "white"))
+        print(colored("   [4] 👤 Nhập UID TikTok thủ công để Follow (tự động vào profile + click)", "yellow"))
         print(colored("════════════════════════════════════════════════", "white"))
 
         while True:
-            conn_choice = input(colored("👉 Chọn phương thức kết nối (1-3, Mặc định 1): ", "green")).strip()
+            conn_choice = input(colored("👉 Chọn phương thức kết nối (1-4, Mặc định 1): ", "green")).strip()
             if conn_choice in ["1", ""]:
                 open_method = "adb"
                 break
@@ -977,6 +978,9 @@ def tiktok_menu(auth_token: str) -> None:
                 break
             elif conn_choice == "3":
                 open_method = "manual"
+            elif conn_choice == "4":
+                # Special option for manual UID follow
+                open_method = "manual_uid"
                 break
             else:
                 print(colored("⚠️ Lựa chọn không hợp lệ, hãy thử lại!", "yellow"))
@@ -1052,11 +1056,25 @@ def tiktok_menu(auth_token: str) -> None:
         print(colored("♦️ ✈ Nhập 1 : Chỉ nhận nhiệm vụ Follow", "yellow"))
         print(colored("🔥 ✈ Nhập 2 : Chỉ nhận nhiệm vụ like", "yellow"))
         print(colored("💥 ✈ Nhập 12 : Kết hợp cả Like và Follow", "yellow"))
+        print(colored("👤 Nhập 3 : Nhập UID TikTok thủ công để Follow", "yellow"))
         print(colored("════════════════════════════════════════════════", "white"))
         chedo = input(colored("✅ Chọn lựa chọn: ", "cyan")).strip()
-        if chedo in {"1", "2", "12"}:
+        if chedo in {"1", "2", "12", "3"}:
             break
-    lam = ["follow"] if chedo == "1" else ["like"] if chedo == "2" else ["follow", "like"]
+    if chedo == "1":
+        lam = ["follow"]
+    elif chedo == "2":
+        lam = ["like"]
+    elif chedo == "12":
+        lam = ["follow", "like"]
+    elif chedo == "3":
+        # Special mode: Manual UID follow
+        lam = None  # Đánh dấu đây là chế độ đặc biệt
+    else:
+        lam = ["follow"]  # Mặc định
+
+    # Kiểm tra chế độ nhập UID thủ công
+    manual_uid_mode = (lam is None)
 
     # Bắt đầu vòng lặp làm job
     dem = tong = checkdoiacc = 0
@@ -1112,55 +1130,130 @@ def tiktok_menu(auth_token: str) -> None:
                 print(colored("⚠️ Acc này chưa được thêm vào golike or id sai", "red"))
                 continue
 
-        # Nhận job
-        print(colored("🔎 Đang Tìm Nhiệm vụ:>        ", "pink"), end="\r")
-        try:
-            nhanjob = api_client.get(f'/api/advertising/publishers/tiktok/jobs?account_id={account_id}&data=null')
-        except Exception as e:
-            logger.error(f"Lỗi lấy job: {e}")
-            time.sleep(10)
-            continue
+        # Nhận job hoặc xử lý manual UID follow
+        if manual_uid_mode:
+            # Chế độ nhập UID TikTok thủ công để Follow
+            print(colored("════════════════════════════════════════════════", "white"))
+            idacc = input(colored("👤 Nhập UID TikTok cần follow (hoặc 'q' để quay lại chọn acc): ", "green")).strip()
+            idacc = validator.sanitize_string(idacc, 50)
 
-        if not nhanjob or not nhanjob.get("data"):
-            time.sleep(10)
-            continue
+            if idacc.lower() == 'q':
+                print(colored("👋 Thoát chế độ nhập UID thủ công, quay lại chọn acc...", "cyan"))
+                break  # Thoát khỏi vòng lặp làm job, quay lại menu acc selection
 
-        # Check job trùng
-        if prev_job and prev_job.get("data", {}).get("link") == nhanjob.get("data", {}).get("link") and prev_job.get("data", {}).get("type") == nhanjob.get("data", {}).get("type"):
-            print(colored("🏚️ Job trùng với job trước đó - Bỏ qua!", "red"), end="\r")
-            logger.warning("Job trùng lặp, bỏ qua")
-            time.sleep(2)
-            if nhanjob.get("data"):
-                try:
-                    api_client.post('/api/report/send', {
-                        "description": "Báo cáo hoàn thành thất bại",
-                        "users_advertising_id": nhanjob["data"].get("id"),
-                        "type": "ads",
-                        "provider": "tiktok",
-                        "fb_id": account_id,
-                        "error_type": 6
-                    })
-                    api_client.post('/api/advertising/publishers/tiktok/skip-jobs', {
-                        "ads_id": nhanjob["data"].get("id"),
-                        "object_id": nhanjob["data"].get("object_id"),
-                        "account_id": account_id,
-                        "type": nhanjob["data"].get("type")
-                    })
-                except Exception as e:
-                    logger.error(f"Lỗi báo cáo job trùng: {e}")
-            continue
-        prev_job = nhanjob
+            if not idacc:
+                print(colored("⚠️ UID không được để trống!", "yellow"))
+                continue
 
-        if nhanjob.get("status") == 200:
-            job_data = nhanjob["data"]
-            ads_id = job_data.get("id")
-            link = job_data.get("link")
-            object_id = job_data.get("object_id")
-            job_type = job_data.get("type")
-            if not link:
-                print(colored("🗑️ Job die - Không có link!", "red"), end="\r")
-                logger.warning("Job không có link, bỏ qua")
+            # Xây dựng link profile TikTok
+            link = f"https://www.tiktok.com/@{idacc}"
+            job_type = "follow"
+            ads_id = f"manual_{idacc}_{int(time.time())}"  # Fake ID for logging
+            object_id = idacc
+
+            # Bỏ qua các check trùng lặp, invalid job type vì đây là manual input
+            prev_job = None  # Reset để tránh bị bỏ qua vì job trùng
+        else:
+            # Chế độ bình thường: nhận job từ API
+            print(colored("🔎 Đang Tìm Nhiệm vụ:>        ", "pink"), end="\r")
+            try:
+                nhanjob = api_client.get(f'/api/advertising/publishers/tiktok/jobs?account_id={account_id}&data=null')
+            except Exception as e:
+                logger.error(f"Lỗi lấy job: {e}")
+                time.sleep(10)
+                continue
+
+            if not nhanjob or not nhanjob.get("data"):
+                time.sleep(10)
+                continue
+
+        # Nhận job hoặc xử lý manual UID follow
+        if manual_uid_mode:
+            # Chế độ nhập UID TikTok thủ công để Follow
+            print(colored("════════════════════════════════════════════════", "white"))
+            idacc = input(colored("👤 Nhập UID TikTok cần follow (hoặc 'q' để quay lại chọn acc): ", "green")).strip()
+            idacc = validator.sanitize_string(idacc, 50)
+
+            if idacc.lower() == 'q':
+                print(colored("👋 Thoát chế độ nhập UID thủ công, quay lại chọn acc...", "cyan"))
+                break  # Thoát khỏi vòng lặp làm job, quay lại menu acc selection
+
+            if not idacc:
+                print(colored("⚠️ UID không được để trống!", "yellow"))
+                continue
+
+            # Xây dựng link profile TikTok
+            link = f"https://www.tiktok.com/@{idacc}"
+            job_type = "follow"
+            ads_id = f"manual_{idacc}_{int(time.time())}"  # Fake ID for logging
+            object_id = idacc
+
+            # Bỏ qua các check trùng lặp, invalid job type vì đây là manual input
+            prev_job = None  # Reset để tránh bị bỏ qua vì job trùng
+            # We have a job to process
+            process_job_flag = True
+        else:
+            # Chế độ bình thường: nhận job từ API
+            print(colored("🔎 Đang Tìm Nhiệm vụ:>        ", "pink"), end="\r")
+            try:
+                nhanjob = api_client.get(f'/api/advertising/publishers/tiktok/jobs?account_id={account_id}&data=null')
+            except Exception as e:
+                logger.error(f"Lỗi lấy job: {e}")
+                time.sleep(10)
+                continue
+
+            if not nhanjob or not nhanjob.get("data"):
+                time.sleep(10)
+                continue
+
+            # Check job trùng
+            if prev_job and prev_job.get("data", {}).get("link") == nhanjob.get("data", {}).get("link") and prev_job.get("data", {}).get("type") == nhanjob.get("data", {}).get("type"):
+                print(colored("🏚️ Job trùng với job trước đó - Bỏ qua!", "red"), end="\r")
+                logger.warning("Job trùng lặp, bỏ qua")
                 time.sleep(2)
+                if nhanjob.get("data"):
+                    try:
+                        api_client.post('/api/report/send', {
+                            "description": "Báo cáo hoàn thành thất bại",
+                            "users_advertising_id": nhanjob["data"].get("id"),
+                            "type": "ads",
+                            "provider": "tiktok",
+                            "fb_id": account_id,
+                            "error_type": 6
+                        })
+                        api_client.post('/api/advertising/publishers/tiktok/skip-jobs', {
+                            "ads_id": nhanjob["data"].get("id"),
+                            "object_id": nhanjob["data"].get("object_id"),
+                            "account_id": account_id,
+                            "type": nhanjob["data"].get("type")
+                        })
+                    except Exception as e:
+                        logger.error(f"Lỗi báo cáo job trùng: {e}")
+                continue
+            prev_job = nhanjob
+
+            if nhanjob.get("status") == 200:
+                job_data = nhanjob["data"]
+                ads_id = job_data.get("id")
+                link = job_data.get("link")
+                object_id = job_data.get("object_id")
+                job_type = job_data.get("type")
+                process_job_flag = True
+            else:
+                time.sleep(10)
+                process_job_flag = False
+
+        # Xử lý job (cùng cho cả hai chế độ)
+        if not process_job_flag:
+            continue
+
+        # Kiểm tra link trống (chỉ áp dụng cho job từ API, nhưng giữ cho an toàn)
+        if not link:
+            print(colored("🗑️ Job die - Không có link!", "red"), end="\r")
+            logger.warning("Job không có link, bỏ qua")
+            time.sleep(2)
+            # Chỉ báo cáo khi là job từ API
+            if not manual_uid_mode:
                 try:
                     api_client.post('/api/report/send', {
                         "description": "Báo cáo hoàn thành thất bại",
@@ -1178,8 +1271,89 @@ def tiktok_menu(auth_token: str) -> None:
                     })
                 except Exception as e:
                     logger.error(f"Lỗi báo cáo job die: {e}")
-                continue
-            if job_type not in lam:
+            continue
+
+        # Kiểm tra loại job (chỉ áp dụng cho job từ API)
+        if not manual_uid_mode and job_type not in lam:
+            try:
+                api_client.post('/api/report/send', {
+                    "description": "Báo cáo hoàn thành thất bại",
+                    "users_advertising_id": ads_id,
+                    "type": "ads",
+                    "provider": "tiktok",
+                    "fb_id": account_id,
+                    "error_type": 6
+                })
+                api_client.post('/api/advertising/publishers/tiktok/skip-jobs', {
+                    "ads_id": ads_id,
+                    "object_id": object_id,
+                    "account_id": account_id,
+                    "type": job_type
+                })
+            except Exception as e:
+                logger.error(f"Lỗi báo cáo job không hợp lệ: {e}")
+            print(colored(f"❌ Đã bỏ qua job {job_type}!", "yellow"), end="\r")
+            time.sleep(1)
+            continue
+
+        # Mở link theo phương thức đã chọn
+        logger.info(f"Mở link job {job_type}: {link[:50]}...")
+        opened = job_processor.process(Job(ads_id, link, job_type, object_id))
+
+        if not opened and open_method == "adb":
+            print(colored(f"❌ Không thể mở bằng ADB", "red"), end="\r")
+            print(colored(f"🔗 Link: {link}", "yellow"))
+            print(colored("   Vui lòng mở thủ công...", "cyan"))
+
+        # UI Automation: Tìm và click nút Follow/Like
+        ui_success = False
+        ui_message = ""
+        if ui_automator and job_type in ["follow", "like"]:
+            print(colored(f"🤖 Đang thực hiện UI automation cho {job_type}...", "cyan"), end="\r")
+            ui_success, ui_message = ui_automator.process_job(job_type)
+            logger.info(f"UI automation {job_type}: {ui_message}")
+
+            if ui_success:
+                print(colored(f"✅ UI automation thành công: {ui_message}", "green"))
+            else:
+                print(colored(f"⚠️ UI automation cảnh báo: {ui_message}", "yellow"))
+
+        # Đợi theo delay đã cấu hình
+        for t in range(delay, -1, -1):
+            print(colored(f"⏰ Đợi {t} giây ...", "cyan"), end="\r")
+            time.sleep(1)
+
+        # Nhận tiền và báo cáo (chỉ áp dụng cho job từ API)
+        if not manual_uid_mode:
+            ok = False
+            for lan in range(1, 3 if lannhan == "y" else 2):
+                try:
+                    logger.info(f"Đang nhận tiền lần {lan} cho job {job_type} (ads_id: {ads_id})...")
+                    nhantien = api_client.post('/api/advertising/publishers/tiktok/complete-jobs', {
+                        "ads_id": ads_id,
+                        "account_id": account_id,
+                        "async": True,
+                        "data": None
+                    })
+                    if nhantien.get("status") == 200:
+                        ok = True
+                        dem += 1
+                        tien = nhantien["data"].get("prices", 0)
+                        tong += tien
+                        now = datetime.now(tz).strftime("%H:%M:%S") if tz else time.strftime("%H:%M:%S")
+                        print(colored(f"| {dem} | {now} | success | {nhantien['data'].get('type', '')} | Ẩn ID | +{tien} | {tong}", "green", bold=True))
+                        logger.info(f"Job hoàn thành: {nhantien['data'].get('type')}, +{tien} xu")
+                        checkdoiacc = 0
+                        break
+                    elif lan == 1:
+                        print(colored("⚠️ Lần 1 thất bại - Đang thử lần 2...", "yellow"), end="\r")
+                except Exception as e:
+                    logger.error(f"Lỗi nhận tiền lần {lan}: {e}")
+                    if lan == 1:
+                        print(colored("⚠️ Lần 1 thất bại - Đang thử lần 2...", "yellow"), end="\r")
+
+            if not ok:
+                print(colored("❌ Nhận tiền thất bại 2 lần - Đã skip job", "red", bold=True))
                 try:
                     api_client.post('/api/report/send', {
                         "description": "Báo cáo hoàn thành thất bại",
@@ -1196,10 +1370,18 @@ def tiktok_menu(auth_token: str) -> None:
                         "type": job_type
                     })
                 except Exception as e:
-                    logger.error(f"Lỗi báo cáo job không hợp lệ: {e}")
-                print(colored(f"❌ Đã bỏ qua job {job_type}!", "yellow"), end="\r")
+                    logger.error(f"Lỗi báo cáo job fail: {e}")
                 time.sleep(1)
-                continue
+                checkdoiacc += 1
+        else:
+            # Chế độ manual UID follow: không nhận tiền qua API
+            # Tuy nhiên, chúng ta có thể log kết quả thành công nếu cần
+            # Yêu cầu ban đầu là không cần report completion về API
+            if ui_success:
+                # Optional: log successful manual follow
+                logger.info(f"Manual follow succeeded for UID {idacc}")
+            else:
+                logger.warning(f"Manual follow failed for UID {idacc}")
 
             # Mở link theo phương thức đã chọn
             logger.info(f"Mở link job {job_type}: {link[:50]}...")
@@ -1279,8 +1461,6 @@ def tiktok_menu(auth_token: str) -> None:
                     logger.error(f"Lỗi báo cáo job fail: {e}")
                 time.sleep(1)
                 checkdoiacc += 1
-        else:
-            time.sleep(10)
 
 
 def facebook_menu(auth_token: str) -> None:
