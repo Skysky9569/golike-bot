@@ -104,7 +104,7 @@ except ValueError:
     pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.6.0" # Nâng cấp v1.6.0: Kiểm tra tính năng quản lý session Chrome đa luồng - Chỉ tắt driver của luồng bị lỗi, không ảnh hưởng session khác
+CURRENT_VERSION = "1.6.1" # Nang cap v1.6.1: Tu dong tai file con thieu tu GitHub khi khoi dong
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():

@@ -821,7 +821,7 @@ def banner():
 {colored('════════════════════════════════════════════════', 'white')}
 {colored('⚠️ Lưu ý    : 🌟Tool Sử Dụng Cho Android/Pc🌟', 'white')}
 {colored('🔐 Bảo mật  : Credential đã mã hóa, Input validated', 'green')}
-{colored('🔄 Cập nhật : Tự động kiểm tra bản mới từ Github', 'green')}
+{colored('🔄 Cập nhật : Tự động kiểm tra và tải file còn thiếu từ GitHub', 'green')}
 {colored('🏗️  Code Org  : Cấu trúc Modular chuyên nghiệp', 'green')}
 {colored('════════════════════════════════════════════════', 'white')}
 """
