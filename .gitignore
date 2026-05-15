@@ -26,3 +26,6 @@
 /golike_core/**/*.py[cod]
 /golike_core/**/*.enc
 /golike_core/**/*.json
+
+# 5. Đảm bảo tất cả các file credential được mã hóa (.enc) luôn bị bỏ qua
+*.enc
