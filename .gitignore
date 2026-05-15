@@ -1,34 +1,28 @@
 # ================================================================
-# LUẬT SIÊU BẢO MẬT GITHUB - CHỈ CHO PHÉP CÁC FILE CẦN THIẾT
+# LUẬT SIÊU BẢO MẬT GITHUB - CHỈ CHẶN NHỮNG GÌ CẦN CHẶN
 # ================================================================
 
-# 1. Chặn mặc định TẤT CẢ mọi file/thư mục (Bao gồm test, demo, log, token, legacy...)
-/*
-
-# 2. CHỈ MỞ KHOÁ (WHITELIST) ĐÚNG CÁC FILE CỐT LÕI DƯỚI ĐÂY:
-!/golikefb_sele.py
-!/FB_WEB_API_FIXED.py
-!/golike_core/
-!/README_GITHUB.md
-!/main.py
-!/tiktok_automation.py
-!/updater.py
-!/version.json
-!/.gitignore
-
-# 3. Cho phép đệ quy nội dung bên trong thư mục golike_core
-!/golike_core/**
-!/ADB/
-
-# 4. Vẫn tiếp tục chặn các tệp tin rác biên dịch của Python nếu xuất hiện trong golike_core
-/golike_core/**/__pycache__/
-/golike_core/**/*.py[cod]
-/golike_core/**/*.enc
-/golike_core/**/*.json
-
-# 5. Đảm bảo tất cả các file credential được mã hóa (.enc) luôn bị bỏ qua
+# === CHẶN FILE RÁC ===
 *.enc
-
-# 6. Chặn các file log
 *.log
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# === IGNORE THƯ MỤC KHÔNG CẦN ===
+tests/
+demo/
+demo_ios/
 logs/
+.git/
+
+# === FILE ĐẶC BIỆT CẦN UNTRACK (không xóa local, chỉ untrack) ===
+demo_config.json
+testing_demo.py
+golike_token.enc
