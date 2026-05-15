@@ -15,6 +15,168 @@ from typing import Optional, Dict, Any, List
 # 🚀 TỰ ĐỘNG TẢI UPDATER & ĐỒNG BỘ TOÀN HỆ THỐNG (PRE-FLIGHT BOOTSTRAP)
 # ============================================================================
 
+# Cấu hình GitHub repository
+GITHUB_REPO = "skysky9569/golike-bot"
+GITHUB_BRANCH = "main"
+GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
+
+# Danh sách file cần thiết (từ GitHub raw content)
+REQUIRED_FILES = {
+    "updater.py": f"{GITHUB_RAW_URL}/updater.py",
+    "golikefb_sele.py": f"{GITHUB_RAW_URL}/golikefb_sele.py",
+    "FB_WEB_API_FIXED.py": f"{GITHUB_RAW_URL}/FB_WEB_API_FIXED.py",
+    "main.py": f"{GITHUB_RAW_URL}/main.py",
+    "tiktok_automation.py": f"{GITHUB_RAW_URL}/tiktok_automation.py",
+    "version.json": f"{GITHUB_RAW_URL}/version.json",
+    "README_GITHUB.md": f"{GITHUB_RAW_URL}/README_GITHUB.md",
+}
+
+# Danh sách thư mục cần thiết (từ GitHub API)
+REQUIRED_DIRS = {
+    "golike_core": f"{GITHUB_API_URL}/golike_core",
+    "golike_facebook": f"{GITHUB_API_URL}/golike_facebook",
+    "ADB": f"{GITHUB_API_URL}/ADB",
+}
+
+def download_file(url: str, local_path: str, max_retries: int = 3) -> bool:
+    """Tải file từ URL với retry logic
+
+    Args:
+        url: URL của file trên GitHub
+        local_path: Đường dẫn lưu local
+        max_retries: Số lần thử lại khi lỗi
+
+    Returns:
+        bool: True nếu thành công, False nếu thất bại
+    """
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.get(url, timeout=30)
+            if response.status_code == 200:
+                # Tạo thư mục cha nếu chưa có
+                parent_dir = os.path.dirname(local_path)
+                if parent_dir and not os.path.exists(parent_dir):
+                    os.makedirs(parent_dir, exist_ok=True)
+
+                with open(local_path, "w", encoding="utf-8") as f:
+                    f.write(response.text)
+                return True
+            else:
+                print(f"  ⚠️ Lần {attempt}: HTTP {response.status_code}")
+        except requests.RequestException as e:
+            print(f"  ⚠️ Lần {attempt}/{max_retries}: {type(e).__name__}")
+
+        if attempt < max_retries:
+            print(f"  ⏳ Thử lại sau 2 giây...")
+            time.sleep(2)
+
+    return False
+
+def download_directory(github_api_url: str, local_dir: str, max_retries: int = 3) -> tuple:
+    """Tải toàn bộ thư mục từ GitHub
+
+    Args:
+        github_api_url: GitHub API URL cho thư mục
+        local_dir: Thư mục lưu local
+        max_retries: Số lần thử lại
+
+    Returns:
+        tuple: (success_count, fail_count)
+    """
+    success_count = 0
+    fail_count = 0
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.get(github_api_url, timeout=30)
+            if response.status_code == 200:
+                items = response.json()
+
+                # Tạo thư mục local nếu chưa có
+                if not os.path.exists(local_dir):
+                    os.makedirs(local_dir, exist_ok=True)
+
+                for item in items:
+                    item_name = item['name']
+                    item_path = os.path.join(local_dir, item_name)
+
+                    # Bỏ qua __pycache__
+                    if '__pycache__' in item_name or item_name.endswith('.pyc'):
+                        continue
+
+                    if item['type'] == 'file':
+                        # Tải file bằng download_url
+                        file_url = item.get('download_url')
+                        if file_url:
+                            if download_file(file_url, item_path, max_retries=2):
+                                success_count += 1
+                                print(f"    ✓ {item_name}")
+                            else:
+                                fail_count += 1
+                                print(f"    ✗ {item_name}")
+                    elif item['type'] == 'dir':
+                        # Đệ quy cho thư mục con
+                        sub_success, sub_fail = download_directory(item['url'], item_path, max_retries)
+                        success_count += sub_success
+                        fail_count += sub_fail
+
+                return success_count, fail_count
+            else:
+                print(f"  ⚠️ Lần {attempt}: HTTP {response.status_code}")
+        except requests.RequestException as e:
+            print(f"  ⚠️ Lần {attempt}/{max_retries}: {type(e).__name__}")
+
+        if attempt < max_retries:
+            print(f"  ⏳ Thử lại sau 2 giây...")
+            time.sleep(2)
+
+    return success_count, fail_count
+
+def check_and_download_missing_files() -> bool:
+    """Kiểm tra và tải các file/thư mục còn thiếu
+
+    Returns:
+        bool: True nếu có file được tải, False nếu không
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    downloaded_something = False
+
+    print("\033[1;36m[*] Kiểm tra file cần thiết...\033[0m")
+
+    # 1. Kiểm tra files
+    print("\033[1;33m📁 Đang kiểm tra file...\033[0m")
+    for filename, url in REQUIRED_FILES.items():
+        local_path = os.path.join(base_dir, filename)
+        if not os.path.exists(local_path):
+            print(f"  \033[1;31m✗ Thiếu: {filename} \033[0m→ Đang tải...")
+            if download_file(url, local_path):
+                print(f"    \033[1;32m✓ Đã tải: {filename}\033[0m")
+                downloaded_something = True
+            else:
+                print(f"    \033[1;31m✗ LỖI: Không thể tải {filename}\033[0m")
+                return False
+        else:
+            print(f"  \033[1;32m✓ {filename}\033[0m")
+
+    # 2. Kiểm tra directories
+    print("\033[1;33m📂 Đang kiểm tra thư mục...\033[0m")
+    for dirname, api_url in REQUIRED_DIRS.items():
+        local_dir = os.path.join(base_dir, dirname)
+        if not os.path.exists(local_dir):
+            print(f"  \033[1;31m✗ Thiếu: {dirname}/ \033[0m→ Đang tải...")
+            print(f"    \033[1;36m⟶ Tải nội dung {dirname}/\033[0m")
+            success, fail = download_directory(api_url, local_dir)
+            print(f"    \033[1;32m✓ Hoàn tất: {success} file\033[0m" + (f", \033[1;31m{fail} lỗi\033[0m" if fail else ""))
+            if success > 0:
+                downloaded_something = True
+            if fail > 0:
+                print(f"\033[1;33m  ⚠️ Một số file trong {dirname} không tải được\033[0m")
+        else:
+            print(f"  \033[1;32m✓ {dirname}/\033[0m")
+
+    return downloaded_something
+
 def bootstrap_updater():
     """Tiền trạm: Đảm bảo file updater.py tồn tại, nếu thiếu tự kéo từ Github trước"""
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -32,12 +194,30 @@ def bootstrap_updater():
         except Exception as e:
             print(f"\033[1;31m[🚨] Lỗi tải bộ cứu hộ: {e}\033[0m")
 
+# Chạy bootstrap và kiểm tra file cần thiết
 try:
     bootstrap_updater()
+
+    # Kiểm tra và tải file còn thiếu
+    has_downloads = check_and_download_missing_files()
+
+    if has_downloads:
+        print("\033[1;33m" + "="*60 + "\033[0m")
+        print("\033[1;33m⚠️  ĐÃ CÓ FILE ĐƯỢC CẬP NHẬT/THÊM MỚI!\033[0m")
+        print("\033[1;33m" + "="*60 + "\033[0m")
+        print("\033[1;36m📌 Vui lòng KHỞI ĐỘNG LẠI tool để áp dụng thay đổi:\033[0m")
+        print("\033[1;36m   cd {}\033[0m".format(os.path.dirname(os.path.abspath(__file__))))
+        print("\033[1;36m   python main.py\033[0m")
+        print("\033[1;33m" + "="*60 + "\033[0m")
+        input("\n\033[1;37m👉 Nhấn ENTER để thoát...\033[0m")
+        sys.exit(0)
+
+    # Chỉ import updater sau khi đã đảm bảo tất cả files tồn tại
     import updater
     updater.ensure_system_complete()
-except Exception:
-    pass
+except Exception as e:
+    print(f"\033[1;31m[🚨] Lỗi trong quá trình khởi tạo: {e}\033[0m")
+    # Tiếp tục để user có thể nhập lại nếu có vấn đề
 
 from abc import ABC, abstractmethod
 from datetime import datetime
