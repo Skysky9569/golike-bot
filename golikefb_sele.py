@@ -18,9 +18,34 @@ from time import sleep
 import atexit
 import threading
 
+# ======== ĐẢM BẢO SCRIPT DIRECTORY TRONG PYTHON PATH ========
+# Lấy đường dẫn tuyệt đối của file đang chạy (golikefb_sele.py)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
 # ======== NHẬP API VÀ LIÊN KẾT CỦA BỘ TOOL ========
-from FB_WEB_API_FIXED import FB_API
-from golike_core.security import CredentialManager
+try:
+    from FB_WEB_API_FIXED import FB_API
+except ImportError as e:
+    print(f"[LỖI NGHIÊM TRỌNG] Không tìm thấy module: FB_WEB_API_FIXED.py")
+    print(f"  - Script đang chạy từ: {SCRIPT_DIR}")
+    print(f"  - Vui lòng đảm bảo file FB_WEB_API_FIXED.py nằm trong cùng thư mục với golikefb_sele.py")
+    print(f"  - Chi tiết lỗi: {e}")
+    sys.exit(1)
+
+try:
+    from golike_core.security import CredentialManager
+except ImportError:
+    print("[CẢNH BÁO] Không tìm thấy golike_core.security, tool có thể không hoạt động đầy đủ")
+    # Tạo placeholder để script không bị crash
+    class CredentialManager:
+        def __init__(self, key=None):
+            pass
+        def _encrypt(self, data):
+            return data
+        def _decrypt(self, encrypted):
+            return encrypted
 from curl_cffi import requests as cffi_requests
 
 # Fix encoding cho Windows console
