@@ -19,6 +19,7 @@
 
 # 3. Cho phép đệ quy nội dung bên trong thư mục golike_core
 !/golike_core/**
+!/ADB/
 
 # 4. Vẫn tiếp tục chặn các tệp tin rác biên dịch của Python nếu xuất hiện trong golike_core
 /golike_core/**/__pycache__/
