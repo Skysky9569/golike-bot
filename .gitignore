@@ -28,3 +28,7 @@
 
 # 5. Đảm bảo tất cả các file credential được mã hóa (.enc) luôn bị bỏ qua
 *.enc
+
+# 6. Chặn các file log
+*.log
+logs/
