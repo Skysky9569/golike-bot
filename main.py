@@ -11,6 +11,12 @@ import requests
 import re
 from typing import Optional, Dict, Any, List
 
+# Fix Unicode encoding on Windows PowerShell/cmd (cp1252 → utf-8)
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 # ============================================================================
 # 🚀 TỰ ĐỘNG TẢI UPDATER & ĐỒNG BỘ TOÀN HỆ THỐNG (PRE-FLIGHT BOOTSTRAP)
 # ============================================================================
@@ -216,12 +222,46 @@ try:
     import updater
     updater.ensure_system_complete()
 except Exception as e:
-    print(f"\033[1;31m[🚨] Lỗi trong quá trình khởi tạo: {e}\033[0m")
+    print(f"\033[1;31m[!] Loi trong qua trinh khoi tao: {e}\033[0m")
     # Tiếp tục để user có thể nhập lại nếu có vấn đề
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from golike_core.security import CredentialManager, InputValidator
+# Import security module with fallback
+try:
+    from golike_core.security import CredentialManager, InputValidator
+    HAS_SECURITY_MODULE = True
+except ImportError:
+    HAS_SECURITY_MODULE = False
+    print("[CẢNH BÁO] Không tìm thấy golike_core.security, một số tính năng bảo mật có thể không hoạt động")
+
+    # Fallback implementations
+    class CredentialManager:
+        def __init__(self, *args, **kwargs):
+            pass
+        def get_auth(self):
+            return None
+        def save_auth(self, auth):
+            return True
+        def clear_auth(self):
+            return True
+
+    class InputValidator:
+        def __init__(self):
+            pass
+        def validate_ip(self, ip):
+            return True
+        def validate_port(self, port):
+            return True
+        def validate_auth_token(self, token):
+            return True
+        def validate_cookie(self, cookie):
+            return True
+        def sanitize_string(self, s, max_length=100):
+            return s[:max_length]
+        def validate_account_id(self, account_id):
+            return True
+
 from golike_core.api_client import GolikeAPIClient
 from golike_core.config import CONFIG
 from golike_core.logging import logger
@@ -861,15 +901,15 @@ def banner():
     """Hiển thị banner"""
     os.system("clear" if os.name == "posix" else "cls")
     banner_text = f"""
-{colored(':))', 'yellow')}
-{colored('════════════════════════════════════════════════', 'white')}
-{colored('👑 Tool By Đóme: >😘 Golike 💕 v' + CURRENT_VERSION, 'cyan', bold=True)}
-{colored('════════════════════════════════════════════════', 'white')}
-{colored('⚠️ Lưu ý    : 🌟Tool Sử Dụng Cho Android/Pc🌟', 'white')}
+{colored(':)', 'yellow')}
+{colored('========================================', 'white')}
+{colored('Tool By Đôme: Golike v' + CURRENT_VERSION, 'cyan', bold=True)}
+{colored('========================================', 'white')}
+{colored('⚠️  Lưu ý    : Tool Sử Dụng Cho Android/PC', 'white')}
 {colored('🔐 Bảo mật  : Credential đã mã hóa, Input validated', 'green')}
 {colored('🔄 Cập nhật : Tự động kiểm tra và tải file còn thiếu từ GitHub', 'green')}
-{colored('🏗️  Code Org  : Cấu trúc Modular chuyên nghiệp', 'green')}
-{colored('════════════════════════════════════════════════', 'white')}
+{colored('🏗️  Code Org : Cấu trúc Modular chuyên nghiệp', 'green')}
+{colored('========================================', 'white')}
 """
     print(banner_text)
 

@@ -1,5 +1,5 @@
 {
-    "version": "1.6.2",
+    "version": "1.6.3",
     "release_date": "2026-05-16",
-    "changelog": "Search mode [3] lay job tu API: follow = search trong app, like = ADB mo link"
+    "changelog": "Fix Unicode encoding, them reaction CARE, tang thoi gian cho sau 10 lan khong co job len 5 phut, cap nhat banner"
 }

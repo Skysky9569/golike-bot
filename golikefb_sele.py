@@ -147,6 +147,7 @@ def map_job_type(job_text):
     if "wow" in job_text: return "wow"
     if "sad" in job_text or "buồn" in job_text: return "sad"
     if "angry" in job_text or "phẫn nộ" in job_text: return "angry"
+    if "care" in job_text or "thương thương" in job_text: return "care"
     if "like" in job_text: return "like"
     return "unknown"
 
@@ -392,10 +393,10 @@ def run_single_mode():
                                 # Click lại Facebook để tải lại trang Job sạch sẽ
                                 fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                 driver.execute_script("arguments[0].click();", fb_btn)
-                                print("✅ Đã làm mới xong trang. Đang nghỉ 30 giây nguội hệ thống...")
+                                print("✅ Đã làm mới xong trang. Đang nghỉ 5 phút nguội hệ thống...")
                             except Exception as e:
                                 print(f"❌ Lỗi trong lúc tự động Reset: {e}")
-                            sleep(30)
+                            sleep(300)
                             continue
 
                         print(f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
@@ -458,7 +459,7 @@ def run_single_mode():
                                 res = Fb.LIKE_PAGE(uid)
                                 print(f"API Like Page: {res}")
                                 success = res.get("success", False)
-                            elif j_type in ["like", "love", "haha", "wow", "sad", "angry"]:
+                            elif j_type in ["like", "love", "haha", "wow", "sad", "angry", "care"]:
                                 reaction = j_type.upper()
                                 res = Fb.REACTION(reaction, uid)
                                 print(f"API Reaction ({reaction}): {res}")
@@ -714,10 +715,10 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                             sleep(3.5)
                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                             driver.execute_script("arguments[0].click();", fb_btn)
-                            log_thread(p_name, "✅ Reset trang xong. Đang chờ 30s nguội hệ thống...")
+                            log_thread(p_name, "✅ Reset trang xong. Đang chờ 5 phút nguội hệ thống...")
                         except Exception as e:
                             log_thread(p_name, f"❌ Lỗi khi tự động Reset: {e}")
-                        sleep(30)
+                        sleep(300)
                         continue
 
                     log_thread(p_name, f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
@@ -775,7 +776,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                             res = Fb.LIKE_PAGE(uid)
                             ok = res.get("success", False)
                             log_thread(p_name, f"API LikePage: {res}")
-                        elif j_t in ["like", "love", "haha", "wow", "sad", "angry"]:
+                        elif j_t in ["like", "love", "haha", "wow", "sad", "angry", "care"]:
                             res = Fb.REACTION(j_t.upper(), uid)
                             ok = res.get("success", False)
                             log_thread(p_name, f"API Reaction ({j_t}): {res}")

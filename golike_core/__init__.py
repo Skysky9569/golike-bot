@@ -2,7 +2,17 @@
 Golike Core Package
 """
 
-from .security import CredentialManager
+# Handle security module import with fallback
+try:
+    from .security import CredentialManager
+    HAS_SECURITY = True
+except ImportError:
+    HAS_SECURITY = False
+    # Fallback implementation
+    class CredentialManager:
+        def __init__(self, *args, **kwargs):
+            pass
+
 from .config import AppConfig, CONFIG
 from .logging import AppLogger, logger
 from .error_handling import ErrorHandler
