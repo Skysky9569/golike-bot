@@ -1,5 +1,5 @@
 {
-    "version": "1.6.1",
-    "release_date": "2026-05-15",
-    "changelog": "Tu dong kiem tra va tai file con thieu tu GitHub khi khoi dong"
+    "version": "1.6.2",
+    "release_date": "2026-05-16",
+    "changelog": "Search mode [3] lay job tu API: follow = search trong app, like = ADB mo link"
 }

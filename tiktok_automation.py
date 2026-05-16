@@ -1,12 +1,13 @@
 """
 TikTok UI Automation Module
 
-Module này cung cấp class TikTokUIAutomator để tự động hóa các tác vụ UI trên TikTok:
-- Tìm và click nút Follow
-- Tìm và click nút Like
-- Verify trạng thái đã follow/like
+Module nay cung cap class TikTokUIAutomator de tu dong hoa cac tac vu UI tren TikTok:
+- Tim va click nut Follow
+- Tim va click nut Like
+- Verify trang thai da follow/like
+- Tim kiem user qua thanh search
 
-Sử dụng thư viện uiautomator2 để tương tác với UI.
+Su dung thu vien uiautomator2 de tuong tac voi UI.
 """
 
 import time
@@ -59,6 +60,30 @@ class TikTokUIAutomator:
         {"textMatches": ".*Người theo dõi.*"},
         {"text": "Followers"},
         {"text": "Người theo dõi"},
+    ]
+
+    # Selectors cho thanh search
+    SEARCH_ICON_SELECTORS = [
+        {"resourceId": "com.ss.android.ugc.trill:id/jhs"},
+        {"description": "Tìm kiếm"},
+        {"description": "Search"},
+    ]
+
+    SEARCH_INPUT_SELECTORS = [
+        {"resourceId": "com.ss.android.ugc.trill:id/h5p"},
+        {"className": "android.widget.EditText"},
+    ]
+
+    SEARCH_BUTTON_SELECTORS = [
+        {"resourceId": "com.ss.android.ugc.trill:id/zpp", "text": "Tìm kiếm"},
+        {"resourceId": "com.ss.android.ugc.trill:id/zpp"},
+    ]
+
+    USERS_TAB_SELECTORS = [
+        {"description": "Người dùng"},
+        {"text": "Người dùng"},
+        {"description": "Users"},
+        {"text": "Users"},
     ]
 
     # Selectors cho nút Like
@@ -428,3 +453,154 @@ class TikTokUIAutomator:
             return self.find_and_click_like()
         else:
             return False, f"Loại job không hợp lệ: {job_type}"
+
+    def search_user(self, username: str, timeout: float = 5.0, retry_count: int = 3) -> Tuple[bool, str]:
+        """Tim kiem user TikTok qua thanh search va vao profile
+
+        Flow:
+        1. Tap search icon tren main screen
+        2. Clear text + go username
+        3. Tap nut Tim kiem hoac Enter
+        4. Doi ket qua load
+        5. Tap tab Nguoi dung
+        6. Tap user dau tien
+        7. Doi profile load
+
+        Args:
+            username: TikTok username can tim (co hoac khong co @)
+            retry_count: So lan thu lai neu that bai
+
+        Returns:
+            Tuple[bool, str]: (success, message)
+        """
+        if not self._connected:
+            if not self.connect():
+                return False, "Không thể kết nối đến thiết bị"
+
+        clean_username = username.lstrip('@')
+
+        for attempt in range(1, retry_count + 1):
+            logger.info(f"Tim kiem user '{clean_username}' (lan {attempt}/{retry_count})...")
+
+            try:
+                # Buoc 1: Mo man hinh search
+                search_icon = self._find_element(self.SEARCH_ICON_SELECTORS, timeout=2.0)
+                if search_icon:
+                    self.click_element(search_icon)
+                    time.sleep(0.5)
+                else:
+                    # Co the da o man hinh search roi, thu tim search input truc tiep
+                    logger.debug("Khong tim thay search icon, thu tim search input truc tiep")
+
+                # Buoc 2: Tim o nhap search
+                search_input = self._find_element(self.SEARCH_INPUT_SELECTORS, timeout=2.0)
+                if not search_input:
+                    logger.warning(f"Khong tim thay o nhap search (lan {attempt})")
+                    if attempt < retry_count:
+                        time.sleep(1)
+                        continue
+                    return False, "Khong tim thay o nhap search"
+
+                # Clear text cu
+                self.click_element(search_input)
+                time.sleep(0.3)
+                try:
+                    self._u2(resourceId='com.ss.android.ugc.trill:id/h5p').clear_text()
+                except Exception:
+                    pass
+                time.sleep(0.3)
+
+                # Buoc 3: Go username
+                self._u2.send_keys(clean_username)
+                time.sleep(0.5)
+
+                # Buoc 4: Tap nut Tim kiem hoac Enter
+                search_btn = self._find_element(self.SEARCH_BUTTON_SELECTORS, timeout=1.0)
+                if search_btn:
+                    self.click_element(search_btn)
+                else:
+                    self._u2.press("enter")
+                time.sleep(2.0)
+
+                # Buoc 5: Tap tab Nguoi dung
+                users_tab = self._find_element(self.USERS_TAB_SELECTORS, timeout=timeout)
+                if not users_tab:
+                    logger.warning(f"Khong tim thay tab Nguoi dung (lan {attempt})")
+                    if attempt < retry_count:
+                        time.sleep(1)
+                        continue
+                    return False, "Khong tim thay tab Nguoi dung"
+
+                self.click_element(users_tab)
+                time.sleep(1.0)
+
+                # Buoc 6: Tap user dau tien trong danh sach
+                first_user_clicked = False
+                try:
+                    for el in self._u2(className='android.widget.Button', clickable=True):
+                        info = el.info
+                        bounds = info.get('bounds', {})
+                        top = bounds.get('top', 0)
+                        # User items nam duoi tabs (top > 279)
+                        if top > 279:
+                            cx = (bounds.get('left', 0) + bounds.get('right', 0)) // 2
+                            cy = (bounds.get('top', 0) + bounds.get('bottom', 0)) // 2
+                            # Bo qua nut Follow nho trong item
+                            if (bounds.get('right', 0) - bounds.get('left', 0)) > 500:
+                                self._u2.click(cx, cy)
+                                first_user_clicked = True
+                                logger.info(f"Da tap user dau tien tai ({cx}, {cy})")
+                                break
+                except Exception as e:
+                    logger.warning(f"Loi khi tim user dau tien: {e}")
+
+                if not first_user_clicked:
+                    # Fallback: tap vao toa do co dinh cua user dau tien
+                    try:
+                        self._u2.click(360, 380)
+                        first_user_clicked = True
+                        logger.info("Da tap user dau tien (fallback toa do co dinh)")
+                    except Exception as e:
+                        logger.warning(f"Loi fallback tap user: {e}")
+
+                if not first_user_clicked:
+                    logger.warning(f"Khong tim thay user nao trong ket qua (lan {attempt})")
+                    if attempt < retry_count:
+                        time.sleep(1)
+                        continue
+                    return False, "Khong tim thay user nao trong ket qua"
+
+                # Buoc 7: Doi profile load
+                time.sleep(2.0)
+                logger.info(f"Da vao profile user '{clean_username}' thanh cong")
+                return True, f"Da vao profile '{clean_username}'"
+
+            except Exception as e:
+                logger.error(f"Loi search_user (lan {attempt}): {e}")
+                if attempt < retry_count:
+                    time.sleep(1)
+                continue
+
+        return False, f"Tim kiem '{clean_username}' that bai sau {retry_count} lan thu"
+
+    def clear_search_text(self) -> bool:
+        """Xoa text trong o search ve trang thai trong
+
+        Returns:
+            bool: True neu xoa thanh cong
+        """
+        if not self._connected:
+            return False
+
+        try:
+            # Thu tap vao o search va clear
+            search_input = self._find_element(self.SEARCH_INPUT_SELECTORS, timeout=1.0)
+            if search_input:
+                self.click_element(search_input)
+                time.sleep(0.3)
+                self._u2.clear_text()
+                return True
+        except Exception as e:
+            logger.debug(f"Loi clear search text: {e}")
+
+        return False
