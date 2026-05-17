@@ -1,5 +1,5 @@
 {
-    "version": "1.6.4",
+    "version": "1.6.5",
     "release_date": "2026-05-17",
-    "changelog": "Remove cryptography dependency for Termux compatibility, use simple encryption method instead"
+    "changelog": "Fix AppLogger not defined error in error_handling.py, remove cryptography dependency for Termux compatibility"
 }

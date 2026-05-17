@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 from datetime import datetime
 from .logging import logger
+from .logging import AppLogger  # Import AppLogger to resolve the type hint issue
 
 
 class AppError(Exception):
