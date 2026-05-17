@@ -1,5 +1,5 @@
 {
-    "version": "1.6.3",
-    "release_date": "2026-05-16",
-    "changelog": "Fix Unicode encoding, them reaction CARE, tang thoi gian cho sau 10 lan khong co job len 5 phut, cap nhat banner"
+    "version": "1.6.4",
+    "release_date": "2026-05-17",
+    "changelog": "Remove cryptography dependency for Termux compatibility, use simple encryption method instead"
 }

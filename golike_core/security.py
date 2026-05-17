@@ -7,17 +7,12 @@ import base64
 import re
 from typing import Optional
 
-# Try to import cryptography modules, but provide fallback
-try:
-    from cryptography.fernet import Fernet
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    HAS_CRYPTO = True
-except ImportError:
-    HAS_CRYPTO = False
-    Fernet = None
-    hashes = None
-    PBKDF2HMAC = None
+# Removed cryptography dependency for Termux compatibility
+# Always use simple XOR encryption
+HAS_CRYPTO = False
+Fernet = None
+hashes = None
+PBKDF2HMAC = None
 
 
 class CredentialManager:
