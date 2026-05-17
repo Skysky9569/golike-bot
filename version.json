@@ -1,5 +1,5 @@
 {
-    "version": "1.6.6",
+    "version": "1.6.7",
     "release_date": "2026-05-17",
-    "changelog": "Fix AppLogger error and remove cryptography dependency - Successfully tested on Termux environment"
+    "changelog": "Add Termux-specific automation module for direct link opening and clicking functionality on Android device"
 }
