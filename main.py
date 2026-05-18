@@ -222,7 +222,7 @@ try:
     import updater
     updater.ensure_system_complete()
 except Exception as e:
-    print(f"\033[1;31m[!] Loi trong qua trinh khoi tao: {e}\033[0m")
+    print(f"\033[1;31m[!] Lỗi trong quá trình khởi tạo: {e}\033[0m")
     # Tiếp tục để user có thể nhập lại nếu có vấn đề
 
 from abc import ABC, abstractmethod
@@ -922,7 +922,7 @@ def menu() -> None:
     print(colored("⚡ CHỨC NĂNG CHÍNH:", "cyan", bold=True))
     print(colored("   [1] 🥇 Vào Tool TikTok (Auto ADB)", "white"))
     print(colored("   [2] 📱 Vào Tool Facebook (API)", "cyan"))
-    print(colored("   [3] 🔥 Vào Tool Facebook (Selenium)", "yellow"))
+    print(colored("   [3] 🔥 Vào Tool Facebook (Selenium - API + DOM Click)", "yellow"))
     print(colored("\n🛠️  HỆ THỐNG & CẤU HÌNH:", "cyan", bold=True))
     print(colored("   [4] 📶 Cài Đặt Kết Nối ADB WiFi/USB", "cyan"))
     print(colored("   [5] 🥈 Xóa Authorization Hiện Tại", "red"))
@@ -1939,11 +1939,13 @@ def facebook_menu(auth_token: str) -> None:
 
 
 def run_facebook_selenium_bot() -> None:
-    """Chạy tool GoLike Facebook Selenium (file độc lập)"""
+    """Chạy tool GoLike Facebook Selenium (ho tro API + DOM Click mode)"""
     print(colored("\n════════════════════════════════════════════════", "cyan"))
     print(colored("🚀 KHỞI ĐỘNG TOOL GOLIKE FACEBOOK SELENIUM", "yellow"))
     print(colored("════════════════════════════════════════════════", "cyan"))
-    print(colored("Tool Facebook Selenium đang khởi động trong cửa sổ mới...", "white"))
+    print(colored("Tool Facebook Selenium đang khởi động...", "white"))
+    print(colored("  - API mode: Dùng FB_WEB_API_FIXED.py goi Facebook API", "white"))
+    print(colored("  - DOM mode: Click truc tiep tren m.facebook.com qua Selenium", "white"))
     
     try:
         # Khởi chạy file golikefb_sele.py bằng trình thông dịch hiện tại

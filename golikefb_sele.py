@@ -48,6 +48,16 @@ except ImportError:
             return encrypted
 from curl_cffi import requests as cffi_requests
 
+# Import Selenium DOM bot (che do moi - tương tác trực tiếp Facebook)
+try:
+    from golike_facebook.selenium_fb import FacebookSeleniumBot
+    HAS_SELENIUM_DOM_BOT = True
+except ImportError as e:
+    HAS_SELENIUM_DOM_BOT = False
+    print(f"[CANH BAO] Khong the import golike_facebook.selenium_fb: {e}")
+    class FacebookSeleniumBot:
+        pass
+
 # Fix encoding cho Windows console
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
@@ -87,10 +97,35 @@ def cleanup():
         # Tắt driver
         os.system("taskkill /f /im chromedriver.exe /T >nul 2>&1")
 
+# Global flag để kiểm soát việc dừng tool
+STOP_FLAG = False
+
 def handle_exit_signal(signum, frame):
-    print("\n[🛑] Đã nhận lệnh dừng Tool (Ctrl+C). Tiến hành thu dọn tài nguyên...")
-    cleanup()
-    sys.exit(1)
+    """Xử lý Ctrl+C - tạm dừng tool nhưng chưa đóng selenium chrome"""
+    global STOP_FLAG
+
+    print("\n[🛑] Đã nhận Ctrl+C. Tạm dừng tool, trình duyệt Selenium vẫn đang mở...")
+    print("[💡] Gõ 'c' để TIẾP TỤC chạy (Resume).")
+    print("[💡] Gõ 'm' để VỀ MENU chính (Lưu ý: các Chrome đang mở sẽ vẫn giữ nguyên).")
+    print("[💡] Gõ 'exit' để THOÁT hoàn toàn và ĐÓNG tool.")
+
+    # Đợi user nhập lựa chọn
+    try:
+        user_input = input("👉 Lựa chọn (c/m/exit): ").strip().lower()
+        if user_input == 'exit':
+            print("[✅] Thoát chương trình...")
+            cleanup()
+            sys.exit(0)
+        elif user_input == 'c':
+            print("[✓] Đang tiếp tục tiến trình chạy...")
+            return None
+        else:
+            print("[✓] Đang trở về menu chính...")
+    except:
+        pass
+
+    STOP_FLAG = True
+    raise KeyboardInterrupt
 
 # Đăng ký dọn dẹp khi tắt tool thông thường
 atexit.register(cleanup)
@@ -137,10 +172,97 @@ def kiem_tra_cap_nhat():
 # Bật auto-update
 kiem_tra_cap_nhat()
 
+# ================= CẤU HÌNH DELAY =================
+CONFIG_DELAY = {}
+
+def load_delay_config(filepath: str = "config_golike_sele.json"):
+    """Load delay config từ file JSON"""
+    global CONFIG_DELAY
+
+    default_config = {
+        "delay_between_jobs": 10,
+        "delay_after_api_call": 3.5,
+        "delay_after_complete": 4,
+        "delay_after_report_error": 1.5,
+        "delay_on_job_hunt_retry": 12,
+        "delay_between_accounts": 60,
+        "timeout_driver_load": 10,
+        "timeout_wait_element": 8,
+        "sleep_on_reset": 30,
+        "sleep_on_cool_down": 300,
+        "delay_after_reset_click": 3.5,
+        "sleep_on_hunt_retry": 10,
+        "switch_server_minutes": 0
+    }
+
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                CONFIG_DELAY = json.load(f)
+            # Merge với default cho các key thiếu
+            for k, v in default_config.items():
+                if k not in CONFIG_DELAY:
+                    CONFIG_DELAY[k] = v
+            print(f"[✓] Đã load config từ {filepath}")
+            return
+        except Exception as e:
+            print(f"[!] Lỗi load config: {e} - Dùng默认")
+
+    CONFIG_DELAY = default_config
+    print(f"[!] Không tìm thấy config, dùng mặc định")
+
+def setup_delay_config():
+    """Menu setup delay lần đầu"""
+    config_path = os.path.join(SCRIPT_DIR, "config_golike_sele.json")
+
+    print("\n" + "="*60)
+    print("CẤU HÌNH DELAY CHO GOLIKE FACEBOOK SELENIUM")
+    print("="*60)
+    print(f"[File lưu tại: {os.path.abspath(config_path)}]\n")
+
+    key_names = {
+        "delay_between_jobs": "Delay giữa các job (giây)",
+        "delay_after_api_call": "Delay sau API call (giây)",
+        "delay_after_complete": "Delay sau khi nhấn Hoàn thành (giây)",
+        "delay_after_report_error": "Delay sau khi báo lỗi (giây)",
+        "delay_on_job_hunt_retry": "Delay khi tải lại job (giây)",
+        "delay_between_accounts": "Delay khi đổi acc (giây)",
+        "timeout_driver_load": "Timeout tải driver (giây)",
+        "timeout_wait_element": "Timeout chờ element (giây)",
+        "sleep_on_reset": "Sleep khi reset trang (giây)",
+        "sleep_on_cool_down": "Sleep khi nguội hệ thống (giây)",
+        "delay_after_reset_click": "Delay click khi reset (giây)",
+        "sleep_on_hunt_retry": "Sleep khi retry hunt job (giây)",
+        "switch_server_minutes": "Thời gian tự động đổi Server (phút, 0 để tắt)"
+    }
+
+    config = CONFIG_DELAY.copy() if CONFIG_DELAY else {}
+
+    for key, label in key_names.items():
+        default = config.get(key, 10)
+        user_input = input(f"{label} [mặc định: {default}]: ").strip()
+        if user_input:
+            try:
+                config[key] = float(user_input)
+            except ValueError:
+                print(f"[!] Giá trị không hợp lệ, giữ mặc định: {default}")
+
+    # Lưu file
+    try:
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        print(f"\n[✅] Đã lưu config vào {config_path}")
+    except Exception as e:
+        print(f"[!] Lỗi lưu config: {e}")
+
+    input("\nNhấn Enter để tiếp tục...")
+    load_delay_config(config_path)  # Reload config
+
 # ================= CHIA SẺ HÀM LOGIC CHUNG =================
 def map_job_type(job_text):
     job_text = job_text.lower()
     if "like cho fanpage" in job_text: return "lik_page"
+    if "like cho bài viết" in job_text or "like cho bài" in job_text: return "like"
     if "theo dõi" in job_text: return "follow"
     if "love" in job_text or "tim" in job_text: return "love"
     if "haha" in job_text: return "haha"
@@ -256,6 +378,8 @@ def get_golike_credentials():
     return username, password
 
 def run_single_mode():
+    global STOP_FLAG
+    STOP_FLAG = False
     print("\n🚀 Bắt đầu thiết lập chế độ Chạy đơn lẻ 1 tài khoản...")
     cookie_fb = load_cookie()
     Fb = None
@@ -341,8 +465,22 @@ def run_single_mode():
             
             # VÒNG LẶP CHẠY CHÍNH
             failed_load_count = 0 # Bộ đếm số lần không tìm thấy Job liên tiếp
-            while True:
+            last_server_switch_time = time.time()
+            while not STOP_FLAG:
                 try:
+                    # ---- Kiểm tra đổi server ----
+                    switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
+                    if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
+                        try:
+                            switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                            driver.execute_script("arguments[0].click();", switch_btn)
+                            print("🔄 Đã tự động ấn Đổi Server lấy job!")
+                            last_server_switch_time = time.time()
+                            sleep(2)
+                        except:
+                            pass
+                    # ----------------------------
+
                     print("\n================== TÌM JOB MỚI ==================")
                     try:
                         WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
@@ -367,7 +505,7 @@ def run_single_mode():
                                     try:
                                         nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                         driver.execute_script("arguments[0].click();", nv)
-                                        sleep(3.5)
+                                        sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
                                         
                                         fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                         driver.execute_script("arguments[0].click();", fb_btn)
@@ -375,7 +513,7 @@ def run_single_mode():
                                         print(f"❌ Lỗi thao tác Reset: {err}")
                                     
                                     print("⏳ Nghỉ ngơi 30 giây trước khi thử quét tiếp...")
-                                    sleep(30)
+                                    sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
                                     failed_load_count = 0 # Reset đếm
                                     continue
                         except: pass
@@ -389,21 +527,21 @@ def run_single_mode():
                                 # Quay lại menu Nhiệm vụ
                                 nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                 driver.execute_script("arguments[0].click();", nv)
-                                sleep(3.5)
+                                sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
                                 # Click lại Facebook để tải lại trang Job sạch sẽ
                                 fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                 driver.execute_script("arguments[0].click();", fb_btn)
                                 print("✅ Đã làm mới xong trang. Đang nghỉ 5 phút nguội hệ thống...")
                             except Exception as e:
                                 print(f"❌ Lỗi trong lúc tự động Reset: {e}")
-                            sleep(300)
+                            sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
                             continue
 
                         print(f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
                         try:
                             reload_btn = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
                             driver.execute_script("arguments[0].click();", reload_btn)
-                            sleep(12)
+                            sleep(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12))
                         except: pass
                         continue
 
@@ -418,11 +556,11 @@ def run_single_mode():
                     except: job_type_raw = ""
                     
                     driver.execute_script("arguments[0].click();", first_job)
-                    sleep(1.5)
+                    sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                     
                     orig_window = driver.current_window_handle
                     try:
-                        chrome_btn = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((By.XPATH, "//h6[text()='Trình duyệt']/ancestor::a")))
+                        chrome_btn = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((By.XPATH, "//a[.//h6[normalize-space()='Trình duyệt']]")))
                         fb_job_url = chrome_btn.get_attribute("href")
                         chrome_btn.click()
                     except TimeoutException:
@@ -440,16 +578,16 @@ def run_single_mode():
                     sleep(2)
                     driver.close()
                     driver.switch_to.window(orig_window)
-                    sleep(1)
+                    sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
                     
                     # GỌI API
                     j_type = map_job_type(job_type_raw)
                     uid = getidpost(fb_job_url)
                     success = False
                     
-                    if uid and uid != "0":
+                    if uid and uid and uid != "0":
                         print(f"=> Phân tích UID thành công: {uid}. Đang gọi API...")
-                        sleep(1.5)
+                        sleep(CONFIG_DELAY.get("delay_after_api_call", 1.5))
                         try:
                             if j_type == "follow":
                                 res = Fb.FOLLOW(uid)
@@ -473,15 +611,16 @@ def run_single_mode():
 
                     # XÁC NHẬN GOLIKE
                     need_skip = not success
-                    print("Chờ 3.5s đồng bộ hệ thống...")
-                    sleep(3.5)
+                    delay_sync = CONFIG_DELAY.get("delay_after_complete", 3.5)
+                    print(f"Chờ {delay_sync}s đồng bộ hệ thống...")
+                    sleep(delay_sync)
                     
                     if success:
                         print("Đang ấn Hoàn thành...")
                         try:
                             ht = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
                             driver.execute_script("arguments[0].click();", ht)
-                            sleep(4)
+                            sleep(CONFIG_DELAY.get("delay_after_complete", 4))
                             try:
                                 t_p = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
                                 c_p = driver.find_element(By.ID, "swal2-content").text
@@ -498,21 +637,21 @@ def run_single_mode():
                     if need_skip:
                         print("🚨 Bắt đầu Báo lỗi...")
                         try:
-                            bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')]")))
+                            bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
                             driver.execute_script("arguments[0].click();", bl)
-                            sleep(1.5)
+                            sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                             
                             lydo = "Tôi không muốn làm Job này"
                             if not uid or uid == "0": lydo = "Không tìm thấy bài viết"
                             else: lydo = "Báo cáo hoàn thành thất bại"
                             
-                            c_lydo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{lydo}')]/ancestor::div[contains(@class, 'row')]")
+                            c_lydo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row')][.//h6[contains(text(), '{lydo}')]]")
                             driver.execute_script("arguments[0].click();", c_lydo)
-                            sleep(1)
+                            sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
                             
                             gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
                             driver.execute_script("arguments[0].click();", gui)
-                            sleep(1.5)
+                            sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                             try:
                                 o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
                                 driver.execute_script("arguments[0].click();", o_b)
@@ -521,19 +660,18 @@ def run_single_mode():
                         except Exception as e:
                             print(f"Lỗi khi Báo lỗi: {e}")
                     
-                    print("Đợi 10s trước khi tìm job tiếp theo...")
-                    sleep(10)
+                    print(f"Đợi {CONFIG_DELAY.get('delay_between_jobs', 10)}s trước khi tìm job tiếp theo...")
+                    sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
                     
                 except Exception as e:
                     print(f"Lỗi vòng lặp chạy (chờ 5s): {e}")
-                    sleep(5)
+                    sleep(5)  # Keep as error retry - not configurable
         except Exception as e:
             print(f"Lỗi tương tác giao diện tài khoản: {e}")
     except KeyboardInterrupt:
-        print("\n[!] Đã nhận Ctrl+C. Đang tắt...")
+        pass
     finally:
-        try: driver.quit()
-        except: pass
+        pass # Giữ trình duyệt mở theo yêu cầu
 
 # ======================================================================
 # ==================== CHẾ ĐỘ 2: CHẠY SONG SONG (ĐA LUỒNG) =============
@@ -667,9 +805,23 @@ def run_bot_loop(driver, Fb, profile_data, idx):
     
     log_thread(p_name, "🔥 BẮT ĐẦU CHẠY TỰ ĐỘNG!")
     failed_load_count = 0 # Thêm đếm số lần hụt Job liên tiếp
+    last_server_switch_time = time.time()
     try:
-        while True:
+        while not STOP_FLAG:
             try:
+                # ---- Kiểm tra đổi server ----
+                switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
+                if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
+                    try:
+                        switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                        driver.execute_script("arguments[0].click();", switch_btn)
+                        log_thread(p_name, "🔄 Đã tự động ấn Đổi Server!")
+                        last_server_switch_time = time.time()
+                        sleep(2)
+                    except:
+                        pass
+                # ----------------------------
+
                 log_thread(p_name, "=== QUÉT JOB ===")
                 try:
                     WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
@@ -692,7 +844,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                 try:
                                     nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                     driver.execute_script("arguments[0].click();", nv)
-                                    sleep(3.5)
+                                    sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
                                     
                                     fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                     driver.execute_script("arguments[0].click();", fb_btn)
@@ -701,7 +853,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                 
                                 log_thread(p_name, "⏳ Bắt đầu nghỉ ngơi 30 giây nguội máy...")
                                 failed_load_count = 0 # Reset bộ đếm
-                                sleep(30)
+                                sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
                                 continue
                     except: pass
 
@@ -712,20 +864,20 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                         try:
                             nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                             driver.execute_script("arguments[0].click();", nv)
-                            sleep(3.5)
+                            sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                             driver.execute_script("arguments[0].click();", fb_btn)
                             log_thread(p_name, "✅ Reset trang xong. Đang chờ 5 phút nguội hệ thống...")
                         except Exception as e:
                             log_thread(p_name, f"❌ Lỗi khi tự động Reset: {e}")
-                        sleep(300)
+                        sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
                         continue
 
                     log_thread(p_name, f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
                     try:
                         reload = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
                         driver.execute_script("arguments[0].click();", reload)
-                        sleep(12)
+                        sleep(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12))
                     except: pass
                     continue
 
@@ -740,11 +892,11 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 except: j_raw = ""
                 
                 driver.execute_script("arguments[0].click();", first_j)
-                sleep(1.5)
+                sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                 
                 orig_w = driver.current_window_handle
                 try:
-                    ch_b = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((By.XPATH, "//h6[text()='Trình duyệt']/ancestor::a")))
+                    ch_b = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((By.XPATH, "//a[.//h6[normalize-space()='Trình duyệt']]")))
                     fb_url = ch_b.get_attribute("href")
                     ch_b.click()
                 except TimeoutException:
@@ -760,13 +912,13 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 sleep(2)
                 driver.close()
                 driver.switch_to.window(orig_w)
-                sleep(1)
+                sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
                 
                 j_t = map_job_type(j_raw)
                 uid = getidpost(fb_url)
                 ok = False
                 if uid and uid != "0":
-                    sleep(1.5)
+                    sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                     try:
                         if j_t == "follow":
                             res = Fb.FOLLOW(uid)
@@ -788,12 +940,12 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     log_thread(p_name, f"⚠️ Không trích xuất được UID từ Link: {fb_url}")
                 
                 need_skip = not ok
-                sleep(3.5)
+                sleep(CONFIG_DELAY.get("delay_after_api_call", 3.5))
                 if ok:
                     try:
                         ht = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
                         driver.execute_script("arguments[0].click();", ht)
-                        sleep(4)
+                        sleep(CONFIG_DELAY.get("delay_after_complete", 4))
                         try:
                             tp = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
                             cp = driver.find_element(By.ID, "swal2-content").text
@@ -808,17 +960,17 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     
                 if need_skip:
                     try:
-                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')]")))
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
                         driver.execute_script("arguments[0].click();", bl)
-                        sleep(1.5)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                         ldo = "Báo cáo hoàn thành thất bại"
                         if not uid or uid == "0": ldo = "Không tìm thấy bài viết"
-                        c_ldo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{ldo}')]/ancestor::div[contains(@class, 'row')]")
+                        c_ldo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row')][.//h6[contains(text(), '{ldo}')]]")
                         driver.execute_script("arguments[0].click();", c_ldo)
-                        sleep(1)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
                         gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
                         driver.execute_script("arguments[0].click();", gui)
-                        sleep(1.5)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                         try:
                             o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
                             driver.execute_script("arguments[0].click();", o_b)
@@ -827,17 +979,18 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     except: pass
                 
                 log_thread(p_name, "Nghỉ 10 giây...")
-                sleep(10)
+                sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
             except Exception as ex:
                 log_thread(p_name, f"Lỗi chu kỳ: {ex}")
                 sleep(5)
     except Exception as fatal:
         log_thread(p_name, f"🚨 LUỒNG BỊ LỖI ĐỘT NGỘT: {fatal}")
     finally:
-        try: driver.quit()
-        except: pass
+        pass # Giữ trình duyệt mở theo yêu cầu
 
 def run_parallel_mode():
+    global STOP_FLAG
+    STOP_FLAG = False
     config_path = "config_parallel.json"
     if not os.path.exists(config_path):
         sample = [
@@ -901,28 +1054,606 @@ def run_parallel_mode():
     
     try:
         while any(t.is_alive() for t in threads):
+            if STOP_FLAG:
+                break
+            sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
+    except KeyboardInterrupt:
+        pass
+
+# ======================================================================
+# ==================== CHẾ ĐỘ 3: SELENIUM DOM (KHÔNG DÙNG API) =========
+# ======================================================================
+
+def run_selenium_dom_single():
+    """Che do don le: Selenium DOM click truc tiep Facebook (khong can FB_WEB_API_FIXED)"""
+    global STOP_FLAG
+    STOP_FLAG = False
+
+    if not HAS_SELENIUM_DOM_BOT:
+        print("\n[LOI] Module golike_facebook.selenium_fb không có sẵn. Hãy kiểm tra cài đặt.")
+        input("Nhan Enter de quay lai...")
+        return
+
+    print("\n" + "="*60)
+    print("🚀 KHỞI ĐỘNG CHẾ ĐỘ SELENIUM DOM (TƯƠNG TÁC TRỰC TIẾP FACEBOOK)")
+    print("="*60)
+
+    # 1. Load cookie Facebook
+    cookie_fb = load_cookie()
+    if not cookie_fb:
+        print("[LOI] Không có cookie Facebook!")
+        return
+
+    # 2. Hoi user co muon luu Chrome profile khong
+    save_prof = input("\n💾 Lưu Chrome profile để dùng lại lần sau? (y/N) [Enter = N]: ").strip().lower() in ('y', 'yes')
+
+    # 3. Hoi proxy (optional)
+    proxy = input("🌐 Nhập proxy (IP:PORT) hoặc Enter để bỏ qua: ").strip()
+    if not proxy:
+        proxy = None
+
+    # 4. Khoi tao bot
+    bot = FacebookSeleniumBot(
+        cookie_str=cookie_fb,
+        profile_name="single",
+        proxy=proxy,
+        save_profile=save_prof,
+    )
+
+    print("\n[*] Khởi động Chrome...")
+    if not bot.start():
+        print("[LOI] Không thể đăng nhập Facebook. Kiểm tra lại cookie!")
+        try:
+            if bot and hasattr(bot, 'stop'):
+                bot.stop()
+        except Exception as e:
+            print(f"[Canh bao] Lỗi khi dừng bot: {e}")
+        input("Nhan Enter de quay lai...")
+        return
+
+    # 5. Login GoLike + chon account
+    golike_user, golike_pass = get_golike_credentials()
+
+    # Mo GoLike trong tab chinh
+    driver = bot.driver
+    driver.get("https://app.golike.net/login")
+    time.sleep(2)
+
+    try:
+        tk = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input')
+        tk.clear()
+        tk.send_keys(golike_user)
+
+        mk = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input')
+        mk.clear()
+        mk.send_keys(golike_pass)
+
+        dn = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button')
+        dn.click()
+
+        input("\n👉 Vui long tu giai Captcha (neu co).\nSau khi giai xong, an [ENTER] de tiep tuc...")
+
+        nhiemvu = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]'))
+        )
+        driver.execute_script("arguments[0].click();", nhiemvu)
+
+        fb_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div'))
+        )
+        driver.execute_script("arguments[0].click();", fb_btn)
+        sleep(3)
+
+        try:
+            tb = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.CLASS_NAME, 'swal2-title')))
+            print(f"Thong bao tu GoLike: {tb.text}")
+            ok_btn = driver.find_element(By.CSS_SELECTOR, '.swal2-confirm.swal2-styled')
+            driver.execute_script("arguments[0].click();", ok_btn)
+        except TimeoutException:
+            pass
+
+        # Chon account
+        doiacc = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account"))
+        )
+        driver.execute_script("arguments[0].click();", doiacc)
+        sleep(2)
+
+        accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
+        valid_accounts = []
+        for acc in accounts:
+            try:
+                name = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
+                acc_id = acc.get_attribute("id") or ""
+                valid_accounts.append((acc, name, acc_id))
+            except Exception:
+                pass
+
+        print("\n--- CHON TAI KHOAN CAY ---")
+        for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
+            print(f"{i}. {name} | UID: {acc_id}")
+
+        chon_acc = int(input("👉 Nhap so de chọn nick chạy: "))
+        selected_node, name_run, uid_run = valid_accounts[chon_acc - 1]
+        driver.execute_script("arguments[0].click();", selected_node)
+        print(f"🚀 ✅ ĐANG CHẠY ACC: {name_run} | UID: {uid_run}")
+        sleep(3)
+
+        # Vong lap chay chinh - Selenium DOM mode
+        print("\n[*] Bắt đầu vòng lặp job (Selenium DOM mode)...")
+        print("[*] Facebook tương tác qua DOM click trên m.facebook.com")
+        print(f"[*] Driver hiện tại: {driver}")
+
+        # Kiem tra driver co hop le khong
+        if not driver:
+            print("[LOI] Driver là None! Không thể tiếp tục.")
+            return
+
+        try:
+            # Thu test driver bang cach lay hien tai URL
+            _ = driver.current_url
+            print(f"[*] Driver đang mở URL: {_}")
+        except Exception as e:
+            print(f"[LOI] Driver không hoạt động: {e}")
+            return
+
+        last_server_switch_time = time.time()
+
+        while not STOP_FLAG:
+            try:
+                # ---- Kiểm tra đổi server ----
+                switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
+                if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
+                    try:
+                        switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                        driver.execute_script("arguments[0].click();", switch_btn)
+                        print("🔄 Đã tự động ấn Đổi Server lấy job!")
+                        last_server_switch_time = time.time()
+                        sleep(2)
+                    except:
+                        pass
+                # ----------------------------
+
+                print("\n================== TÌM JOB MỚI (DOM) ==================")
+                try:
+                    WebDriverWait(driver, 8).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary"))
+                    )
+                except TimeoutException:
+                    try:
+                        reload_btn = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
+                        driver.execute_script("arguments[0].click();", reload_btn)
+                        sleep(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12))
+                    except Exception:
+                        pass
+                    continue
+
+                jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")
+                if not jobs:
+                    continue
+                first_job = jobs[0]
+
+                try:
+                    job_id = first_job.find_element(By.CSS_SELECTOR, "h6.font-id b").text
+                    job_type_raw = first_job.find_element(By.CSS_SELECTOR, "span.block-text-2").text
+                    print(f"[*] Phát hiện Job: ID {job_id} | Loại: {job_type_raw}")
+                except Exception:
+                    job_type_raw = ""
+
+                driver.execute_script("arguments[0].click();", first_job)
+                sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+
+                # Lay link Facebook job
+                try:
+                    chrome_btn = WebDriverWait(driver, 8).until(
+                        EC.element_to_be_clickable((By.XPATH, "//a[.//h6[normalize-space()='Trình duyệt']]"))
+                    )
+                    fb_job_url = chrome_btn.get_attribute("href")
+
+                    # Khong mo tab GoLike nua - ta dung tab Facebook rieng cua bot
+                    j_type = map_job_type(job_type_raw)
+
+                    # Dung bot Selenium DOM de thuc hien job
+                    print(f"=> Chạy job {j_type} qua Selenium DOM: {fb_job_url[:80]}...")
+                    result = bot.process_job(j_type, fb_job_url)
+                    print(f"=> Kết quả: {result}")
+
+                    if result.get("success"):
+                        print("Đang ấn Hoàn thành...")
+                        try:
+                            ht = WebDriverWait(driver, 5).until(
+                                EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoan thanh')]"))
+                            )
+                            driver.execute_script("arguments[0].click();", ht)
+                            sleep(CONFIG_DELAY.get("delay_after_complete", 4))
+                            try:
+                                tp = WebDriverWait(driver, 10).until(
+                                    EC.visibility_of_element_located((By.ID, "swal2-title"))
+                                ).text
+                                cp = driver.find_element(By.ID, "swal2-content").text
+                                print(f"GoLike bao: [{tp}] {cp}")
+                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                driver.execute_script("arguments[0].click();", ok_c)
+                            except Exception:
+                                pass
+                        except Exception as e:
+                            print(f"Lỗi ấn Hoàn thành: {e}")
+                            _report_job_error(driver)
+                    else:
+                        print(f"🚨 Job fail: {result.get('error', 'unknown')} -> Báo lỗi...")
+                        _report_job_error(driver)
+
+                except TimeoutException:
+                    print("Loi: Không tìm thấy link trình duyệt. Bỏ qua.")
+                    driver.refresh()
+                    sleep(3)
+                    continue
+
+                print(f"Đoi {CONFIG_DELAY.get('delay_between_jobs', 10)}s truoc khi tim job tiep theo...")
+                sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                print(f"Lỗi vòng lặp (chờ 5s): {e}")
+                sleep(5)
+
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Lỗi tương tác giao diện tài khoản: {e}")
+    finally:
+        pass # Giữ trình duyệt mở theo yêu cầu
+
+
+def _report_job_error(driver):
+    """Bao loi job tren GoLike - fix: XPath dung cau truc div.row > h6"""
+    try:
+        # HTML: <div class="row"><h6>Báo lỗi</h6>...</div>
+        bl = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row') and .//h6[normalize-space()='Báo lỗi']]"))
+        )
+        driver.execute_script("arguments[0].click();", bl)
+        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+
+        lydo = "Báo cáo hoàn thành thất bại"
+        c_lydo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row') and .//h6[normalize-space()='{lydo}']]")
+        driver.execute_script("arguments[0].click();", c_lydo)
+        sleep(1)
+
+        gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
+        driver.execute_script("arguments[0].click();", gui)
+        sleep(1.5)
+
+        try:
+            o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+            driver.execute_script("arguments[0].click();", o_b)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def run_selenium_dom_parallel():
+    """Che do song song: nhieu bot Selenium DOM chạy cùng lúc"""
+    global STOP_FLAG
+    STOP_FLAG = False
+
+    if not HAS_SELENIUM_DOM_BOT:
+        print("\n[LOI] Module golike_facebook.selenium_fb không có sẵn.")
+        input("Nhan Enter de quay lai...")
+        return
+
+    config_path = "config_parallel.json"
+    if not os.path.exists(config_path):
+        print(f"\n[LOI] Khong tim thay {config_path}. Hay tao file config truoc.")
+        input("Nhan Enter de quay lai...")
+        return
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            profiles = json.load(f)
+    except Exception as e:
+        print(f"[LOI] Khong doc duoc config: {e}")
+        return
+
+    print(f"\n🚀 PHAT HIEN {len(profiles)} TAI KHOAN CHAY SONG SONG (SELENIUM DOM)!")
+
+    bots = []
+    drivers = []
+    threads = []
+
+    # Phase 1: Setup tung bot (tuong tu nhu API mode)
+    for idx, profile in enumerate(profiles):
+        p_name = profile.get("profile_name", f"Acc-{idx}")
+        gl_user = profile.get("golike_username", "")
+        gl_pass = profile.get("golike_password", "")
+        fb_cookie = profile.get("facebook_cookie", "")
+        target_fb = profile.get("target_fb_name", "")
+        target_uid = profile.get("target_fb_uid", "")
+
+        if not gl_user or not gl_pass or not fb_cookie:
+            print(f"[{p_name}] Thieu thong tin. Bo qua!")
+            continue
+
+        print(f"\n{'='*60}")
+        print(f"🔷 KHOI TAO [{p_name}] - SELENIUM DOM MODE")
+        print("="*60)
+
+        # Khoi tao bot Selenium DOM
+        proj_dir = os.path.dirname(os.path.abspath(__file__))
+        prof_dir = os.path.join(proj_dir, "chrome_profiles", p_name.replace(" ", "_"))
+        os.makedirs(prof_dir, exist_ok=True)
+
+        bot = FacebookSeleniumBot(
+            cookie_str=fb_cookie,
+            profile_name=p_name,
+            user_data_dir=prof_dir,
+            save_profile=True,
+        )
+
+        if not bot.start():
+            print(f"[{p_name}] LOI dang nhap Facebook. Bo qua!")
+            try:
+                if bot and hasattr(bot, 'stop'):
+                    bot.stop()
+            except Exception as e:
+                print(f"[Canh bao] Lỗi khi dừng bot: {e}")
+            continue
+
+        driver = bot.driver
+
+        # Position browser windows
+        w, h = 450, 750
+        px = 20 + (idx * 470)
+        py = 30
+        if px > 1400:
+            px = 20 + ((idx % 3) * 470)
+            py = 450
+        driver.set_window_position(px, py)
+        driver.set_window_size(w, h)
+
+        # Login GoLike
+        try:
+            driver.get("https://app.golike.net/login")
+            sleep(2)
+            driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input').send_keys(gl_user)
+            driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input').send_keys(gl_pass)
+            driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button').click()
+
+            print(f"\n🔑 [BAT BUOC] Hay giai Captcha cho [{p_name}].")
+            input("Khi da vao duoc man hinh chinh, an [ENTER]...")
+
+            nhiemvu = WebDriverWait(driver, 15).until(
+                EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]'))
+            )
+            driver.execute_script("arguments[0].click();", nhiemvu)
+
+            fb_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div'))
+            )
+            driver.execute_script("arguments[0].click();", fb_btn)
+            sleep(3)
+
+            try:
+                tb = WebDriverWait(driver, 4).until(EC.element_to_be_clickable((By.CLASS_NAME, 'swal2-title')))
+                ok_btn = driver.find_element(By.CSS_SELECTOR, '.swal2-confirm.swal2-styled')
+                driver.execute_script("arguments[0].click();", ok_btn)
+            except Exception:
+                pass
+
+            # Chon account
+            doiacc = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account"))
+            )
+            driver.execute_script("arguments[0].click();", doiacc)
+            sleep(2.5)
+
+            accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
+            selected = False
+            for acc in accounts:
+                try:
+                    nm = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
+                    uid_acc = acc.get_attribute("id") or ""
+                    is_match = False
+                    if target_uid and str(target_uid).strip() == str(uid_acc).strip():
+                        is_match = True
+                    elif target_fb and target_fb.lower().strip() in nm.lower().strip():
+                        is_match = True
+                    if is_match:
+                        driver.execute_script("arguments[0].click();", acc)
+                        print(f"🚀 [OK] DA CHON ACC: {nm} | UID: {uid_acc}")
+                        selected = True
+                        break
+                except Exception:
+                    pass
+
+            if not selected and len(accounts) > 0:
+                driver.execute_script("arguments[0].click();", accounts[0])
+                print(f"⚠️ Khong tim thay UID/Ten khop, chon nick dau tien")
+
+            sleep(3)
+            print(f"✅ Thiet lap thanh cong [{p_name}]!")
+
+            bots.append(bot)
+            drivers.append(driver)
+
+            # Start thread
+            t = threading.Thread(
+                target=_selenium_dom_bot_loop,
+                args=(driver, bot, p_name),
+                daemon=True
+            )
+            t.start()
+            threads.append(t)
+
+        except Exception as e:
+            print(f"[{p_name}] Loi setup: {e}")
+            try:
+                if bot and hasattr(bot, 'stop'):
+                    bot.stop()
+            except Exception as e:
+                print(f"[Canh bao] Lỗi khi dừng bot: {e}")
+
+    if not threads:
+        print("\n❌ Khong co tai khoan nao thiet lap thanh cong!")
+        return
+
+    print(f"\n{'*'*60}")
+    print(f"🔥 TAT CA LUONG SELENIUM DOM DANG HOAT DONG!")
+    print("*"*60 + "\n")
+
+    try:
+        while any(t.is_alive() for t in threads):
+            if STOP_FLAG:
+                break
             sleep(1)
     except KeyboardInterrupt:
-        print("\n[!] Kết thúc chế độ song song...")
+        pass
+    finally:
+        pass # Giữ trình duyệt mở theo yêu cầu
+
+
+def _selenium_dom_bot_loop(driver, bot: FacebookSeleniumBot, profile_name: str):
+    """Vong lap job cho 1 bot Selenium DOM trong che do song song"""
+
+    def log(msg):
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"[{ts}] [{profile_name}] {msg}")
+
+    log("🔥 BAT DAU CHAY (SELENIUM DOM)!")
+    last_server_switch_time = time.time()
+
+    while not STOP_FLAG:
+        try:
+            # ---- Kiểm tra đổi server ----
+            switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
+            if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
+                try:
+                    switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                    driver.execute_script("arguments[0].click();", switch_btn)
+                    log("🔄 Đã tự động ấn Đổi Server!")
+                    last_server_switch_time = time.time()
+                    sleep(2)
+                except:
+                    pass
+            # ----------------------------
+
+            log("=== QUET JOB ===")
+            try:
+                WebDriverWait(driver, 8).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary"))
+                )
+            except TimeoutException:
+                try:
+                    reload_btn = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
+                    driver.execute_script("arguments[0].click();", reload_btn)
+                    sleep(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12))
+                except Exception:
+                    pass
+                continue
+
+            jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")
+            if not jobs:
+                continue
+            first_j = jobs[0]
+
+            try:
+                j_id = first_j.find_element(By.CSS_SELECTOR, "h6.font-id b").text
+                j_raw = first_j.find_element(By.CSS_SELECTOR, "span.block-text-2").text
+                log(f"Co Job: ID {j_id} | {j_raw}")
+            except Exception:
+                j_raw = ""
+
+            driver.execute_script("arguments[0].click();", first_j)
+            sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+
+            try:
+                ch_b = WebDriverWait(driver, 8).until(
+                    EC.element_to_be_clickable((By.XPATH, "//a[.//h6[normalize-space()='Trình duyệt']]"))
+                )
+                fb_url = ch_b.get_attribute("href")
+                j_t = map_job_type(j_raw)
+
+                log(f"Chạy job {j_t} qua Selenium DOM: {fb_url[:60]}...")
+                result = bot.process_job(j_t, fb_url)
+                log(f"Kết quả: {result}")
+
+                if result.get("success"):
+                    try:
+                        ht = WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoan thanh')]"))
+                        )
+                        driver.execute_script("arguments[0].click();", ht)
+                        sleep(CONFIG_DELAY.get("delay_after_complete", 4))
+                        try:
+                            tp = WebDriverWait(driver, 10).until(
+                                EC.visibility_of_element_located((By.ID, "swal2-title"))
+                            ).text
+                            cp = driver.find_element(By.ID, "swal2-content").text
+                            log(f"GoLike: [{tp}] {cp}")
+                            ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                            driver.execute_script("arguments[0].click();", ok_c)
+                        except Exception:
+                            pass
+                    except Exception:
+                        _report_job_error(driver)
+                else:
+                    log(f"Job fail: {result.get('error', 'unknown')}")
+                    _report_job_error(driver)
+
+            except TimeoutException:
+                driver.refresh()
+                sleep(3)
+                continue
+
+            log(f"Nghi {CONFIG_DELAY.get('delay_between_jobs', 10)}s...")
+            sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+
+        except Exception as ex:
+            log(f"Loi chu ky: {ex}")
+            sleep(5)
+
 
 # ======================================================================
 # ==================== MENU KHỞI CHẠY HỆ THỐNG CHÍNH ==================
 # ======================================================================
 if __name__ == "__main__":
-    print("\n" + "="*65)
-    print("🔥        HỆ THỐNG AUTO CÀY COIN GOLIKE & FACEBOOK v" + CURRENT_VERSION + "        🔥")
-    print("="*65)
-    print("1. Chạy ĐƠN LẺ 1 tài khoản (Hỗ trợ cấu hình trực tiếp)")
-    print("2. Chạy SONG SONG nhiều tài khoản (Đọc từ config_parallel.json)")
-    print("-"*65)
-    
-    try:
-        lua_chon = input("👉 Lựa chọn chế độ chạy (Nhập 1 hoặc 2, mặc định là 1): ").strip()
-        if lua_chon == "2":
-            run_parallel_mode()
-        else:
-            run_single_mode()
-    except KeyboardInterrupt:
-        print("\n[!] Đã nhận lệnh ngắt chương trình. Đang thoát hệ thống an toàn...")
-    except Exception as e:
-        print(f"\n🚨 Lỗi hệ thống khởi chạy: {e}")
+    # Load config delay khi khởi động
+    load_delay_config()
+
+    while True:
+        print("\n" + "="*65)
+        print("🔥        HỆ THỐNG AUTO CÀY COIN GOLIKE & FACEBOOK v" + CURRENT_VERSION + "        🔥")
+        print("="*65)
+        print("1. Chạy ĐƠN LẺ 1 tài khoản (API - FB_WEB_API_FIXED)")
+        print("2. Chạy SONG SONG nhiều tài khoản (API - FB_WEB_API_FIXED)")
+        print("3. Setup Delay Config")
+        print("4. 🆕 Chạy ĐƠN LẺ - Selenium DOM (click truc tiep Facebook)")
+        print("5. 🆕 Chạy SONG SONG - Selenium DOM (click truc tiep Facebook)")
+        print("0. Thoát chương trình")
+        print("-"*65)
+
+        try:
+            lua_chon = input("👉 Lựa chọn (1/2/3/4/5/0): ").strip()
+
+            if lua_chon == "0":
+                print("\n[✅] Tạm biệt!")
+                cleanup()
+                break
+            elif lua_chon == "3":
+                setup_delay_config()
+                load_delay_config()  # Reload sau khi setup
+                continue
+            elif lua_chon == "2":
+                run_parallel_mode()
+            elif lua_chon == "4":
+                run_selenium_dom_single()
+            elif lua_chon == "5":
+                run_selenium_dom_parallel()
+            else:
+                run_single_mode()
+        except KeyboardInterrupt:
+            print("\n[!] Đã nhận Ctrl+C. Không thoát, vui lòng chọn menu...")
+        except Exception as e:
+            print(f"\n🚨 Lỗi hệ thống khởi chạy: {e}")

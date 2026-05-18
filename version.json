@@ -1,5 +1,5 @@
 {
-    "version": "1.6.7",
-    "release_date": "2026-05-17",
-    "changelog": "Add Termux-specific automation module for direct link opening and clicking functionality on Android device"
+    "version": "1.6.8",
+    "release_date": "2026-05-19",
+    "changelog": "Fix Unicode menu text, update Selenium tool description with API + DOM Click mode support"
 }
