@@ -979,6 +979,14 @@ def check_for_updates():
 def banner():
     """Hiển thị banner"""
     os.system("clear" if os.name == "posix" else "cls")
+    # Đọc changelog từ version.json để hiển thị nội dung cập nhật mới nhất
+    try:
+        _vfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
+        with open(_vfile, "r", encoding="utf-8") as _f:
+            _vdata = json.load(_f)
+        _changelog = _vdata.get("changelog", "Tự động kiểm tra và tải file còn thiếu từ GitHub")
+    except Exception:
+        _changelog = "Tự động kiểm tra và tải file còn thiếu từ GitHub"
     banner_text = f"""
 {colored(':)', 'yellow')}
 {colored('========================================', 'white')}
@@ -986,7 +994,7 @@ def banner():
 {colored('========================================', 'white')}
 {colored('⚠️  Lưu ý    : Tool Sử Dụng Cho Android/PC', 'white')}
 {colored('🔐 Bảo mật  : Credential đã mã hóa, Input validated', 'green')}
-{colored('🔄 Cập nhật : Tự động kiểm tra và tải file còn thiếu từ GitHub', 'green')}
+{colored('🔄 Cập nhật : ' + _changelog, 'green')}
 {colored('🏗️  Code Org : Cấu trúc Modular chuyên nghiệp', 'green')}
 {colored('========================================', 'white')}
 """
