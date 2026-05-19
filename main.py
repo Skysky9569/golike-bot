@@ -863,6 +863,23 @@ class U2JobProcessor(JobProcessor):
             return False
 
 
+def _call_process_job(ui_automator, job_type: str):
+    """Wrapper tương thích ngược cho process_job().
+
+    Hỗ trợ cả tiktok_automation.py cũ (trả 2-tuple) lẫn mới (3-tuple).
+
+    Returns:
+        Tuple[bool, str, bool]: (success, message, not_found)
+    """
+    result = ui_automator.process_job(job_type)
+    if len(result) == 3:
+        return result  # phiên bản mới
+    # Phiên bản cũ: không có not_found → tự suy từ message
+    success, message = result
+    not_found = "không tìm thấy" in message.lower() or "khong tim thay" in message.lower()
+    return success, message, not_found
+
+
 class JobProcessorFactory:
     """Factory để tạo job processor"""
 
@@ -1693,7 +1710,7 @@ def tiktok_menu(auth_token: str) -> None:
         ui_not_found = False
         if ui_automator and job_type in ["follow", "like"]:
             print(colored(f"🤖 Đang thực hiện UI automation cho {job_type}...", "cyan"), end="\r")
-            ui_success, ui_message, ui_not_found = ui_automator.process_job(job_type)
+            ui_success, ui_message, ui_not_found = _call_process_job(ui_automator, job_type)
             logger.info(f"UI automation {job_type}: {ui_message}")
 
             if ui_not_found:
@@ -1797,7 +1814,7 @@ def tiktok_menu(auth_token: str) -> None:
             ui_not_found = False
             if ui_automator and job_type in ["follow", "like"]:
                 print(colored(f"🤖 Đang thực hiện UI automation cho {job_type}...", "cyan"), end="\r")
-                ui_success, ui_message, ui_not_found = ui_automator.process_job(job_type)
+                ui_success, ui_message, ui_not_found = _call_process_job(ui_automator, job_type)
                 logger.info(f"UI automation {job_type} (lần 2): {ui_message}")
 
                 if ui_not_found:
