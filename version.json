@@ -1,5 +1,5 @@
 {
-    "version": "1.6.10",
+    "version": "1.7.0",
     "release_date": "2026-05-20",
-    "changelog": "Hotfix: _call_process_job tương thích ngược tiktok_automation.py cũ (2-tuple) và mới (3-tuple); tránh ValueError khi device chưa cập nhật file"
+    "changelog": "v1.7.0: TikTok [2] WiFi uiautomator2 (IP:Port, lưu thiết bị); U2JobProcessor mở link qua u2.shell(); skip job sau 2 lần không thấy nút; updater tải lại toàn bộ file code khi update (giữ config)"
 }
