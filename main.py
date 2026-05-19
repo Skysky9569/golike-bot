@@ -522,28 +522,39 @@ class ADBManager:
 
     def _find_adb_path(self) -> str:
         """Tìm đường dẫn adb.exe, ưu tiên thư mục ADB nội bộ của dự án"""
-        # 1. Thử đường dẫn tương đối trong dự án
-        local_path = os.path.join(os.getcwd(), "ADB", "adb.exe")
+        # 1. Ưu tiên 1: ADB folder cạnh file main.py hiện tại (dùng __file__ thay vì getcwd)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        local_path = os.path.join(base_dir, "ADB", "adb.exe")
         if os.path.exists(local_path):
             logger.info(f"Sử dụng local ADB: {local_path}")
             return local_path
             
-        # 2. Thử đường dẫn tuyệt đối mặc định của workspace
-        common_path = r"D:\pythonadb\ADB\adb.exe"
-        if os.path.exists(common_path):
-            logger.info(f"Sử dụng ADB path: {common_path}")
-            return common_path
+        # 2. Ưu tiên 2: Kiểm tra PATH môi trường (đã add từ os.environ ở line 280-286)
+        try:
+            result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=2)
+            if result.returncode == 0:
+                logger.info("Sử dụng ADB từ PATH hệ thống")
+                return "adb"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
 
-        # 3. Thử từ config nếu có
+        # 3. Ưu tiên 3: Từ biến môi trường ADB_PATH hoặc config
         try:
             config_path = CONFIG.adb_path
             if config_path and os.path.exists(config_path):
+                logger.info(f"Sử dụng ADB từ config: {config_path}")
                 return config_path
         except Exception:
             pass
 
-        # 4. Dự phòng dùng lệnh hệ thống
-        logger.warning("Không tìm thấy local adb.exe, sử dụng system adb...")
+        # 4. Fallback: Hardcoded path (chỉ dùng nếu project tại D:\pythonadb)
+        common_path = r"D:\pythonadb\ADB\adb.exe"
+        if os.path.exists(common_path):
+            logger.info(f"Sử dụng ADB path mặc định: {common_path}")
+            return common_path
+
+        # 5. Cuối cùng: Dùng system adb (hy vọng đã cài trong PATH)
+        logger.warning("Không tìm thấy ADB, sử dụng 'adb' từ system PATH")
         return "adb"
 
     def check_adb(self) -> bool:
@@ -805,6 +816,53 @@ class ManualJobProcessor(JobProcessor):
         return True
 
 
+class U2JobProcessor(JobProcessor):
+    """Job processor dùng uiautomator2 để mở link (không cần ADB trực tiếp)"""
+
+    def __init__(self, device_id: str):
+        """Khởi tạo U2JobProcessor
+
+        Args:
+            device_id: Địa chỉ IP:Port của thiết bị (vd: 192.168.1.10:5555)
+        """
+        self.device_id = device_id
+        self._u2_device = None
+
+    def _get_device(self):
+        """Lấy kết nối uiautomator2 (cache lại tránh kết nối lại mỗi lần)"""
+        if self._u2_device is None:
+            try:
+                import uiautomator2 as u2
+                self._u2_device = u2.connect(self.device_id)
+            except Exception as e:
+                logger.error(f"Lỗi kết nối u2 để mở link: {e}")
+        return self._u2_device
+
+    def process(self, job: Job) -> bool:
+        """Mở link trên thiết bị bằng uiautomator2 shell
+
+        Args:
+            job: Job cần xử lý
+
+        Returns:
+            bool: True nếu thành công, False nếu không
+        """
+        try:
+            device = self._get_device()
+            if device is None:
+                logger.error("Không có kết nối u2 để mở link")
+                return False
+            # Mở link qua shell của uiautomator2 (không cần ADB trực tiếp)
+            result = device.shell(
+                f'am start -a android.intent.action.VIEW -d "{job.link}"'
+            )
+            logger.info(f"u2 shell mở link: {result}")
+            return True
+        except Exception as e:
+            logger.error(f"Lỗi mở link qua u2 shell: {e}")
+            return False
+
+
 class JobProcessorFactory:
     """Factory để tạo job processor"""
 
@@ -829,6 +887,10 @@ class JobProcessorFactory:
             return ADBJobProcessor(adb_manager, device_id)
         elif method == "termux":
             return TermuxJobProcessor()
+        elif method == "u2":
+            if not device_id:
+                raise ValueError("device_id (IP:Port) required for u2 method")
+            return U2JobProcessor(device_id)
         elif method == "manual":
             return ManualJobProcessor()
         elif method == "search":
@@ -1215,6 +1277,17 @@ def tiktok_menu(auth_token: str) -> None:
             adb_manager = ADBManager()
             adb_manager.selected_device = current_device  # Gán thiết bị đã lưu
             logger.info(f"Tái sử dụng thiết bị ADB đã lưu: {current_device}")
+    elif saved_open_method == "u2":
+        saved_ip_port = adb_config.get("current_device", "")
+        if saved_ip_port:
+            print(colored(f"\n[💡] Thiết bị uiautomator2 đã lưu: {saved_ip_port}", "cyan"))
+            chon_saved = input(colored("👉 Bạn muốn tiếp tục dùng thiết bị này? (y/n, Enter là Có): ", "green")).strip().lower()
+            if chon_saved in ["y", "yes", ""]:
+                use_saved = True
+                open_method = "u2"
+                current_device = saved_ip_port
+                adb_manager = ADBManager()
+                logger.info(f"Tái sử dụng thiết bị u2: {current_device}")
     elif saved_open_method in ["termux", "manual"]:
         method_desc = "Termux" if saved_open_method == "termux" else "Chế độ Thủ công (Bạn tự Click bằng tay)"
         print(colored(f"\n[💡] Phương thức mở link trước đó: {method_desc}", "cyan"))
@@ -1242,7 +1315,7 @@ def tiktok_menu(auth_token: str) -> None:
         print(colored("════════════════════════════════════════════════", "white"))
         print(colored("📱 Cấu hình Kết nối & Auto Click:", "cyan", bold=True))
         print(colored("   [1] ⭐ Chạy TỰ ĐỘNG: Mở Link & Tự Auto Click (Dùng ADB cho PC/Giả lập)", "white"))
-        print(colored("   [2] 📱 Chạy qua Termux: Tự động mở link trên Android (Không Auto Click)", "cyan"))
+        print(colored("   [2] 📱 Chạy qua WiFi (uiautomator2): Nhập IP:Port điện thoại để kết nối", "cyan"))
         print(colored("   [3] ✍️  Chạy Thủ Công: Chỉ hiện Link, bạn TỰ CLICK BẰNG TAY trên điện thoại", "white"))
         print(colored("   [4] 🔍 Tìm kiếm user TikTok để Follow (dùng thanh search trong app)", "yellow"))
         print(colored("════════════════════════════════════════════════", "white"))
@@ -1253,7 +1326,7 @@ def tiktok_menu(auth_token: str) -> None:
                 open_method = "adb"
                 break
             elif conn_choice == "2":
-                open_method = "termux"
+                open_method = "u2"
                 break
             elif conn_choice == "3":
                 open_method = "manual"
@@ -1275,6 +1348,28 @@ def tiktok_menu(auth_token: str) -> None:
             adb_config["open_method"] = "adb"
             adb_config["current_device"] = current_device
             save_adb_config(adb_config)
+        elif open_method == "u2":
+            # Nhập IP:port thủ công để uiautomator2 kết nối qua WiFi
+            print(colored("\n📡 KẾT NỐI UIAUTOMATOR2 QUA WIFI:", "cyan"))
+            while True:
+                ip_port = input(colored("👉 Nhập IP:Port điện thoại (ví dụ: 192.168.1.10:5555): ", "green")).strip()
+                parts = ip_port.split(":")
+                if len(parts) == 2 and parts[1].isdigit() and parts[0]:
+                    break
+                print(colored("⚠️ Định dạng không hợp lệ! Nhập dạng IP:Port (vd: 192.168.1.10:5555)", "yellow"))
+            current_device = ip_port
+            adb_manager = ADBManager()
+            print(colored(f"✅ Sẽ kết nối uiautomator2 đến: {current_device}", "green"))
+            save_choice = input(colored("💾 Lưu thiết bị này lại để dùng nhanh lần sau? (y/n, Enter là Có): ", "green")).strip().lower()
+            if save_choice in ["y", "yes", ""]:
+                adb_config["open_method"] = "u2"
+                adb_config["current_device"] = current_device
+                save_adb_config(adb_config)
+                print(colored(f"✅ Đã lưu thiết bị: {current_device}", "green"))
+            else:
+                adb_config["open_method"] = "u2"
+                adb_config["current_device"] = None
+                save_adb_config(adb_config)
         elif open_method == "search":
             # Search mode can chon thiet bi cho uiautomator2
             adb_manager = ADBManager()
@@ -1409,12 +1504,21 @@ def tiktok_menu(auth_token: str) -> None:
     if UI_AUTOMATION_AVAILABLE:
         try:
             ui_automator = TikTokUIAutomator(device_id=current_device)
+            # Kết nối sớm để lấy u2 instance dùng chung
+            if open_method == "u2":
+                ui_automator.connect()
             logger.info("UI Automation đã sẵn sàng")
             print(colored("🤖 [Hệ Thống] Đã kích hoạt thành công Module Auto Click!", "green", bold=True))
         except Exception as e:
             logger.warning(f"Không thể tạo UI automator: {e}")
             print(colored(f"⚠️ Không thể khởi động UI automator: {e}", "yellow"))
             ui_automator = None
+
+    # u2 mode: inject u2 instance đã connect vào U2JobProcessor để dùng chung 1 connection
+    # tránh 2 connection riêng biệt conflict (uiautomator2 server chỉ nên có 1 client chính)
+    if open_method == "u2" and isinstance(job_processor, U2JobProcessor) and ui_automator and ui_automator._u2:
+        job_processor._u2_device = ui_automator._u2
+        logger.info("Đã inject u2 device chung vào U2JobProcessor")
 
     while True:
         if checkdoiacc >= doiacc:
@@ -1586,12 +1690,34 @@ def tiktok_menu(auth_token: str) -> None:
         # UI Automation: Tìm và click nút Follow/Like
         ui_success = False
         ui_message = ""
+        ui_not_found = False
         if ui_automator and job_type in ["follow", "like"]:
             print(colored(f"🤖 Đang thực hiện UI automation cho {job_type}...", "cyan"), end="\r")
-            ui_success, ui_message = ui_automator.process_job(job_type)
+            ui_success, ui_message, ui_not_found = ui_automator.process_job(job_type)
             logger.info(f"UI automation {job_type}: {ui_message}")
 
-            if ui_success:
+            if ui_not_found:
+                print(colored(f"🚫 Không tìm thấy nút {job_type} sau 2 lần → Skip job!", "red", bold=True))
+                try:
+                    api_client.post('/api/report/send', {
+                        "description": "Báo cáo hoàn thành thất bại",
+                        "users_advertising_id": ads_id,
+                        "type": "ads",
+                        "provider": "tiktok",
+                        "fb_id": account_id,
+                        "error_type": 6
+                    })
+                    api_client.post('/api/advertising/publishers/tiktok/skip-jobs', {
+                        "ads_id": ads_id,
+                        "object_id": object_id,
+                        "account_id": account_id,
+                        "type": job_type
+                    })
+                except Exception as e:
+                    logger.error(f"Lỗi skip job (not_found): {e}")
+                checkdoiacc += 1
+                continue
+            elif ui_success:
                 print(colored(f"✅ UI automation thành công: {ui_message}", "green"))
             else:
                 print(colored(f"⚠️ UI automation cảnh báo: {ui_message}", "yellow"))
@@ -1668,12 +1794,34 @@ def tiktok_menu(auth_token: str) -> None:
             # UI Automation: Tìm và click nút Follow/Like
             ui_success = False
             ui_message = ""
+            ui_not_found = False
             if ui_automator and job_type in ["follow", "like"]:
                 print(colored(f"🤖 Đang thực hiện UI automation cho {job_type}...", "cyan"), end="\r")
-                ui_success, ui_message = ui_automator.process_job(job_type)
-                logger.info(f"UI automation {job_type}: {ui_message}")
+                ui_success, ui_message, ui_not_found = ui_automator.process_job(job_type)
+                logger.info(f"UI automation {job_type} (lần 2): {ui_message}")
 
-                if ui_success:
+                if ui_not_found:
+                    print(colored(f"🚫 Không tìm thấy nút {job_type} sau 2 lần → Skip job!", "red", bold=True))
+                    try:
+                        api_client.post('/api/report/send', {
+                            "description": "Báo cáo hoàn thành thất bại",
+                            "users_advertising_id": ads_id,
+                            "type": "ads",
+                            "provider": "tiktok",
+                            "fb_id": account_id,
+                            "error_type": 6
+                        })
+                        api_client.post('/api/advertising/publishers/tiktok/skip-jobs', {
+                            "ads_id": ads_id,
+                            "object_id": object_id,
+                            "account_id": account_id,
+                            "type": job_type
+                        })
+                    except Exception as e:
+                        logger.error(f"Lỗi skip job (not_found lần 2): {e}")
+                    checkdoiacc += 1
+                    continue
+                elif ui_success:
                     print(colored(f"✅ UI automation thành công: {ui_message}", "green"))
                 else:
                     print(colored(f"⚠️ UI automation cảnh báo: {ui_message}", "yellow"))

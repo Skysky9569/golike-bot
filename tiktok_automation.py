@@ -339,17 +339,18 @@ class TikTokUIAutomator:
             logger.error(f"Lỗi click element: {e}")
             return False
 
-    def find_and_click_follow(self, retry_count: int = 3, retry_delay: float = 2.0) -> Tuple[bool, str]:
+    def find_and_click_follow(self, retry_count: int = 2, retry_delay: float = 2.0) -> Tuple[bool, str, bool]:
         """Tìm và click nút Follow
 
         Args:
-            retry_count: Số lần retry
+            retry_count: Số lần retry (mặc định 2)
             retry_delay: Delay giữa các lần retry (giây)
 
         Returns:
-            Tuple[bool, str]: (success, message)
-                - success: True nếu thành công, False nếu không
+            Tuple[bool, str, bool]: (success, message, not_found)
+                - success: True nếu click thành công
                 - message: Mô tả kết quả
+                - not_found: True nếu không tìm thấy nút (cần skip job)
         """
         for attempt in range(1, retry_count + 1):
             logger.info(f"Tìm nút Follow (lần {attempt}/{retry_count})...")
@@ -361,98 +362,104 @@ class TikTokUIAutomator:
                 if attempt < retry_count:
                     time.sleep(retry_delay)
                     continue
-                return False, "Không tìm thấy nút Follow"
+                # Hết retry vẫn không thấy → báo not_found để skip job
+                return False, "Không tìm thấy nút Follow", True
 
             # Check đã follow chưa
             if self.is_already_followed(element):
                 logger.info("Đã follow rồi")
-                return False, "Đã follow rồi"
+                return False, "Đã follow rồi", False
 
             # Click
             if self.click_element(element):
                 logger.info("Đã click nút Follow")
-                return True, "Đã click nút Follow"
+                return True, "Đã click nút Follow", False
             else:
                 logger.warning(f"Click thất bại (lần {attempt})")
                 if attempt < retry_count:
                     time.sleep(retry_delay)
 
-        return False, "Follow thất bại sau nhiều lần thử"
+        return False, "Follow thất bại sau nhiều lần thử", False
 
-    def find_and_click_like(self, retry_count: int = 3, retry_delay: float = 2.0) -> Tuple[bool, str]:
+    def find_and_click_like(self, retry_count: int = 2, retry_delay: float = 2.0) -> Tuple[bool, str, bool]:
         """Tìm và click nút Like
 
         Args:
-            retry_count: Số lần retry
+            retry_count: Số lần retry (mặc định 2)
             retry_delay: Delay giữa các lần retry (giây)
 
         Returns:
-            Tuple[bool, str]: (success, message)
-                - success: True nếu thành công, False nếu không
+            Tuple[bool, str, bool]: (success, message, not_found)
+                - success: True nếu click thành công
                 - message: Mô tả kết quả
+                - not_found: True nếu không tìm thấy nút (cần skip job)
         """
+        not_found_count = 0
         for attempt in range(1, retry_count + 1):
             logger.info(f"Tìm nút Like (lần {attempt}/{retry_count})...")
 
             element = self.find_like_button(timeout=retry_delay)
 
             if not element:
+                not_found_count += 1
                 logger.warning(f"Không tìm thấy nút Like (lần {attempt}). Thử DOUBLE TAP giữa màn hình để thả tim...")
                 try:
                     # Lấy kích thước màn hình hiện tại
                     w, h = self._u2.window_size()
                     cx, cy = w // 2, h // 2
-                    
+
                     # Thực hiện click 2 lần rất nhanh để kích hoạt double tap thả tim
                     self._u2.click(cx, cy)
                     time.sleep(0.15)
                     self._u2.click(cx, cy)
-                    
+
                     logger.info("Đã kích hoạt thả tim bằng Double Tap thành công")
-                    return True, "Đã thả tim thành công bằng Double Tap"
+                    return True, "Đã thả tim thành công bằng Double Tap", False
                 except Exception as e:
                     logger.error(f"Lỗi khi thực hiện double tap dự phòng: {e}")
 
                 if attempt < retry_count:
                     time.sleep(retry_delay)
                     continue
-                return False, "Không tìm thấy nút Like"
+                # Hết retry vẫn không thấy → báo not_found để skip job
+                return False, "Không tìm thấy nút Like", True
 
             # Check đã like chưa
             if self.is_already_liked(element):
                 logger.info("Đã like rồi")
-                return False, "Đã like rồi"
+                return False, "Đã like rồi", False
 
             # Click
             if self.click_element(element):
                 logger.info("Đã click nút Like")
-                return True, "Đã click nút Like"
+                return True, "Đã click nút Like", False
             else:
                 logger.warning(f"Click thất bại (lần {attempt})")
                 if attempt < retry_count:
                     time.sleep(retry_delay)
 
-        return False, "Like thất bại sau nhiều lần thử"
+        return False, "Like thất bại sau nhiều lần thử", False
 
-    def process_job(self, job_type: str) -> Tuple[bool, str]:
+    def process_job(self, job_type: str) -> Tuple[bool, str, bool]:
         """Xử lý job theo type
 
         Args:
             job_type: Loại job ("follow" hoặc "like")
 
         Returns:
-            Tuple[bool, str]: (success, message)
+            Tuple[bool, str, bool]: (success, message, not_found)
+                - not_found: True nếu không tìm thấy nút sau 2 lần → caller nên skip job
         """
         if not self._connected:
             if not self.connect():
-                return False, "Không thể kết nối đến thiết bị"
+                return False, "Không thể kết nối đến thiết bị", False
 
         if job_type == "follow":
             return self.find_and_click_follow()
         elif job_type == "like":
             return self.find_and_click_like()
         else:
-            return False, f"Loại job không hợp lệ: {job_type}"
+            return False, f"Loại job không hợp lệ: {job_type}", False
 
     def search_user(self, username: str, timeout: float = 5.0, retry_count: int = 3) -> Tuple[bool, str]:
         """Tim kiem user TikTok qua thanh search va vao profile

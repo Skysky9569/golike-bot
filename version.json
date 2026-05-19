@@ -1,5 +1,5 @@
 {
-    "version": "1.6.8",
-    "release_date": "2026-05-19",
-    "changelog": "Fix Unicode menu text, update Selenium tool description with API + DOM Click mode support"
+    "version": "1.6.9",
+    "release_date": "2026-05-20",
+    "changelog": "TikTok [2]: thay Termux bằng WiFi uiautomator2 (nhập IP:Port, hỏi lưu thiết bị); U2JobProcessor mở link qua u2.shell() không dùng ADB; Skip job ngay khi không tìm thấy nút Follow/Like sau 2 lần thử; Shared u2 connection tránh conflict"
 }
