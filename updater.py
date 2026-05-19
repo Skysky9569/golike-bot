@@ -217,27 +217,68 @@ def run_version_check(current_version: str):
         print(f"\033[1;37m[*] Đã từ chối. Tiếp tục chạy phiên bản hiện tại v{current_version}.\033[0m")
 
 def _perform_upgrade(new_version: str, changelog: str = ""):
-    """Thực hiện tải và ghi đè main.py từ GitHub, cập nhật version.json local"""
-    print("\033[1;36m[*] Đang tải phiên bản mới từ GitHub...\033[0m")
-    
-    server_code = _download_text(UPDATE_URL, timeout=20)
-    if not server_code:
-        print("\033[1;31m[❌] Lỗi tải file cập nhật! Vui lòng thử lại sau.\033[0m")
-        return
-    
-    # Ghi đè main.py
-    main_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
-    try:
-        with open(main_file, "w", encoding="utf-8") as f:
-            f.write(server_code)
-    except Exception as e:
-        print(f"\033[1;31m[❌] Lỗi ghi file: {e}\033[0m")
-        return
-    
+    """Tải lại toàn bộ file code từ GitHub (xóa cũ → tải mới).
+    Giữ nguyên các file config: adb_config.json, *.enc, logs/, v.v.
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Danh sách file code cần tải lại (không phải config)
+    CODE_FILES = [
+        "main.py",
+        "updater.py",
+        "tiktok_automation.py",
+        "golikefb_sele.py",
+        "FB_WEB_API_FIXED.py",
+        "golike_core/__init__.py",
+        "golike_core/api_client.py",
+        "golike_core/config.py",
+        "golike_core/error_handling.py",
+        "golike_core/logging.py",
+        "golike_core/security.py",
+    ]
+
+    # Thêm các file trong golike_facebook nếu folder tồn tại
+    fb_dir = os.path.join(base_dir, "golike_facebook")
+    if os.path.exists(fb_dir):
+        for fname in os.listdir(fb_dir):
+            if fname.endswith(".py"):
+                CODE_FILES.append(f"golike_facebook/{fname}")
+
+    print(f"\033[1;36m[*] Đang tải {len(CODE_FILES)} file code từ GitHub...\033[0m")
+
+    ok_count = 0
+    fail_count = 0
+    for rel_path in CODE_FILES:
+        full_path = os.path.join(base_dir, rel_path.replace("/", os.sep))
+        url = f"{GITHUB_RAW_BASE}{rel_path}"
+        print(f"  📥 {rel_path} ... ", end="", flush=True)
+
+        content = _download_text(url, timeout=25)
+        if content is not None:
+            # Tạo thư mục nếu chưa có
+            parent = os.path.dirname(full_path)
+            if parent and not os.path.exists(parent):
+                os.makedirs(parent, exist_ok=True)
+            # Xóa file cũ và ghi mới
+            try:
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print("\033[1;32m[OK]\033[0m")
+                ok_count += 1
+            except Exception as e:
+                print(f"\033[1;31m[LỖI GHI: {e}]\033[0m")
+                fail_count += 1
+        else:
+            print("\033[1;33m[BỎ QUA - không tải được]\033[0m")
+            fail_count += 1
+
     # Cập nhật version.json local
     _save_local_version(new_version, changelog)
-    
-    print("\033[1;32m[✅] Cập nhật hoàn tất! Vui lòng gõ lại `python main.py` để khởi chạy.\033[0m")
+
+    print(f"\n\033[1;32m[✅] Cập nhật hoàn tất! {ok_count} file mới, {fail_count} lỗi.\033[0m")
+    print("\033[1;33m[👉] Vui lòng gõ lại `python main.py` để khởi chạy phiên bản mới.\033[0m")
     sys.exit(0)
 
 def _fallback_version_check(current_version: str):
