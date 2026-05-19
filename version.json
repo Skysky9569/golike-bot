@@ -1,5 +1,5 @@
 {
-    "version": "1.7.0",
+    "version": "1.7.1",
     "release_date": "2026-05-20",
-    "changelog": "v1.7.0: TikTok [2] WiFi uiautomator2 (IP:Port, lưu thiết bị); U2JobProcessor mở link qua u2.shell(); skip job sau 2 lần không thấy nút; updater tải lại toàn bộ file code khi update (giữ config)"
+    "changelog": "Đóm: v1.7.1: TikTok [2] WiFi uiautomator2 (IP:Port, lưu thiết bị); U2JobProcessor mở link qua u2.shell(); skip job sau 2 lần không thấy nút; updater tải lại toàn bộ file code khi update (giữ config)"
 }
