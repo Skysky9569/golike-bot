@@ -1,5 +1,5 @@
 {
-  "version": "1.8.0",
+  "version": "1.8.1",
   "release_date": "2026-05-20",
-  "changelog": "Major: Clean Slate Updater - Xoa file cu, chi de config, tai tuoi tu GitHub"
+  "changelog": "Termux/Android support + Clean Slate Updater"
 }
