@@ -1,0 +1,8 @@
+{
+  "adb_path": "D:\\pythonadb\\ADB\\adb.exe",
+  "api_base_url": "https://gateway.golike.net",
+  "api_timeout": 10,
+  "log_level": "INFO",
+  "max_retry": 3,
+  "wifi_port": 5555
+}

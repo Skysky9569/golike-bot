@@ -1,0 +1,10 @@
+{
+  "app_name": "GoLike Bot",
+  "version": "2.0",
+  "config": {
+    "delay_between_jobs": 10,
+    "max_concurrent_accounts": 5,
+    "retry_attempts": 3,
+    "timeout": 30
+  }
+}

@@ -1,0 +1,23 @@
+# GoLike Bot - Requirements
+# Install: pip install -r requirements.txt
+
+# HTTP requests
+requests>=2.31.0
+
+# Browser automation (Windows/Linux only - not Termux)
+selenium>=4.15.0
+
+# Playwright for E2E testing
+playwright>=1.40.0
+
+# CLI progress bars
+tqdm>=4.66.0
+
+# Color terminal output
+colorama>=0.4.6; sys_platform == 'win32'
+
+# Environment variables (optional)
+python-dotenv>=1.0.0
+
+# Termux compatibility (auto-detect)
+# No special package needed - uses standard library

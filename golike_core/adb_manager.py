@@ -1,0 +1,277 @@
+"""
+ADB Manager module for Golike application
+Quan ly ket noi va thao tac voi thiet bi ADB.
+"""
+import os
+import re
+import json
+import time
+import subprocess
+from typing import Optional, Dict, Any, List
+
+from .config import CONFIG
+from .logging import logger
+
+ADB_CONFIG_FILE = "adb_config.json"
+
+
+def load_adb_config() -> Dict[str, Any]:
+    """Doc cau hinh ADB
+
+    Returns:
+        Dict[str, Any]: Cau hinh ADB
+    """
+    if os.path.exists(ADB_CONFIG_FILE):
+        try:
+            with open(ADB_CONFIG_FILE, "r", encoding="utf8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.debug(f"Loi doc adb_config.json: {e}")
+    return {"devices": [], "current_device": None, "open_method": "termux"}
+
+
+def save_adb_config(config: Dict[str, Any]) -> None:
+    """Luu cau hinh ADB
+
+    Args:
+        config: Cau hinh ADB
+    """
+    with open(ADB_CONFIG_FILE, "w", encoding="utf8") as f:
+        json.dump(config, f, indent=2)
+
+
+def colored(text: str, color: str, bold: bool = False, attrs: Optional[List[str]] = None) -> str:
+    """Helper cho colored output
+
+    Args:
+        text: Text can mau
+        color: Mau (yellow, pink, cyan, white, green, red)
+        bold: Co to dam khong
+        attrs: Danh sach thuoc tinh bo sung (e.g. ["bold"])
+
+    Returns:
+        str: Text da duoc them mau
+    """
+    colors = {
+        "yellow": "\033[33m",
+        "pink": "\033[35m",
+        "cyan": "\033[36m",
+        "white": "\033[97m",
+        "green": "\033[32m",
+        "red": "\033[31m",
+        "magenta": "\033[35m",
+        "blue": "\033[34m",
+        "reset": "\033[0m"
+    }
+    codes = []
+    if bold or (attrs and "bold" in attrs):
+        codes.append("\033[1m")
+    codes.append(colors.get(color, ""))
+    return "".join(codes) + text + colors["reset"]
+
+
+class ADBManager:
+    """Quan ly cac thiet bi ADB
+
+    Cung cap interface de quan ly ket noi va thao tac
+    voi cac thiet bi ADB.
+    """
+
+    def __init__(self, adb_path: Optional[str] = None):
+        """Khoi tao ADBManager
+
+        Args:
+            adb_path: Duong dan den ADB executable (neu None se tu tim)
+        """
+        self.adb_path = adb_path if adb_path else self._find_adb_path()
+        self.selected_device: Optional[str] = None
+
+    def _find_adb_path(self) -> str:
+        """Tim duong dan adb.exe, uu tien thu muc ADB noi bo cua du an"""
+        # 1. Uu tien 1: ADB folder canh file main.py hien tai
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        local_path = os.path.join(base_dir, "ADB", "adb.exe")
+        if os.path.exists(local_path):
+            logger.info(f"Su dung local ADB: {local_path}")
+            return local_path
+
+        # 2. Uu tien 2: Kiem tra PATH moi truong
+        try:
+            result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=2)
+            if result.returncode == 0:
+                logger.info("Su dung ADB tu PATH he thong")
+                return "adb"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # 3. Uu tien 3: Tu bien moi truong ADB_PATH hoac config
+        try:
+            config_path = CONFIG.adb_path
+            if config_path and os.path.exists(config_path):
+                logger.info(f"Su dung ADB tu config: {config_path}")
+                return config_path
+        except Exception:
+            pass
+
+        # 4. Fallback: Hardcoded path
+        common_path = r"D:\pythonadb\ADB\adb.exe"
+        if os.path.exists(common_path):
+            logger.info(f"Su dung ADB path mac dinh: {common_path}")
+            return common_path
+
+        # 5. Cuoi cung: Dung system adb
+        logger.warning("Khong tim thay ADB, su dung 'adb' tu system PATH")
+        return "adb"
+
+    def check_adb(self) -> bool:
+        """Kiem tra ADB co san khong
+
+        Returns:
+            bool: True neu ADB available, False neu khong
+        """
+        try:
+            result = subprocess.run([self.adb_path, 'version'], capture_output=True, text=True, timeout=5)
+            return result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+
+    def check_connected_devices(self) -> List[str]:
+        """Lay danh sach cac thiet bi ADB dang ket noi"""
+        try:
+            result = subprocess.run(
+                [self.adb_path, "devices"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            output = result.stdout.strip().splitlines()
+
+            unauthorized_devices = [line.split()[0] for line in output[1:] if line.strip() and "unauthorized" in line]
+            if unauthorized_devices:
+                print(colored("\n⚠️  CANH BAO: THIET BI CHUA DUOC UY QUYEN (UNAUTHORIZED)! ⚠️", "red", attrs=["bold"]))
+                for ud in unauthorized_devices:
+                    print(colored(f"👉 ID: {ud} -> Hay MO DIEN THOAI len va bam 'CHO PHEP GO LOI USB' (Allow USB Debugging)!", "yellow", bold=True))
+                print(colored("═════════════════════════════════════════════════════════════════", "red"))
+
+            devices = [line.split()[0] for line in output[1:] if line.strip() and "device" in line]
+            return devices
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            logger.error(f"Loi ket noi ADB: {e}")
+            return []
+
+    def select_device(self) -> Optional[str]:
+        """Cho phep nguoi dung chon thiet bi ket noi truc quan"""
+        devices = self.check_connected_devices()
+
+        if not devices:
+            logger.error("Khong co thiet bi ADB nao duoc ket noi.")
+            return None
+
+        print(colored("\n🔌 Thiet bi ADB dang ket noi:", "cyan"))
+        for i, device in enumerate(devices, start=1):
+            print(colored(f"{i}. {device}", "white"))
+
+        while True:
+            try:
+                choice = input(colored("👉 Chon so thiet bi de ket noi: ", "green")).strip()
+                if choice.isdigit():
+                    choice_idx = int(choice)
+                    if 1 <= choice_idx <= len(devices):
+                        self.selected_device = devices[choice_idx - 1]
+                        logger.info(f"🔌 Da chon thiet bi: {self.selected_device}")
+                        return self.selected_device
+                    else:
+                        print(colored("⚠️ Lua chon khong hop le, thu lai.", "yellow"))
+                else:
+                    print(colored("⚠️ Vui long nhap so hop le.", "yellow"))
+            except KeyboardInterrupt:
+                logger.info("Da huy chon thiet bi.")
+                return None
+
+    def open_link(self, link: str, device_id: Optional[str] = None) -> bool:
+        """Mo link tren thiet bi
+
+        Args:
+            link: URL can mo
+            device_id: ID thiet bi (neu None dung thiet bi mac dinh hoac da chon)
+
+        Returns:
+            bool: True neu thanh cong, False neu khong
+        """
+        try:
+            target_device = device_id if device_id else self.selected_device
+            cmd = [self.adb_path]
+            if target_device:
+                cmd.extend(['-s', target_device])
+            cmd.extend(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', link])
+            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def connect_wifi(self, ip: str, port: int = 5555) -> bool:
+        """Ket noi thiet bi qua WiFi
+
+        Args:
+            ip: Dia chi IP Dien thoai
+            port: Cong ket noi WiFi (mac dinh 5555)
+
+        Returns:
+            bool: True neu thanh cong, False neu that bai
+        """
+        try:
+            result = subprocess.run(
+                [self.adb_path, 'connect', f'{ip}:{port}'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 and 'connected' in result.stdout.lower()
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.error(f"Loi ket noi WiFi: {e}")
+            return False
+
+    def disconnect_wifi(self, ip: str, port: int = 5555) -> bool:
+        """Ngat ket noi WiFi khoi thiet bi"""
+        try:
+            subprocess.run([self.adb_path, 'disconnect', f'{ip}:{port}'], capture_output=True, timeout=5)
+            return True
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def restart_server(self) -> bool:
+        """Khoi dong lai ADB server de lam sach ket noi"""
+        try:
+            logger.info("Dang tat ADB daemon server...")
+            subprocess.run([self.adb_path, 'kill-server'], capture_output=True, timeout=5)
+            time.sleep(1)
+            logger.info("Dang khoi tao lai ADB daemon server...")
+            subprocess.run([self.adb_path, 'start-server'], capture_output=True, timeout=5)
+            time.sleep(2)
+            return True
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.error(f"Loi restart ADB server: {e}")
+            return False
+
+    def get_device_wifi_ip(self, device_id: str) -> Optional[str]:
+        """Tu dong truy van dia chi WiFi cuc bo tu thiet bi dang ket noi ADB"""
+        try:
+            result = subprocess.run(
+                [self.adb_path, '-s', device_id, 'shell', 'ip', 'addr', 'show', 'wlan0'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return self._extract_ip_from_output(result.stdout)
+            return None
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+
+    @staticmethod
+    def _extract_ip_from_output(output: str) -> Optional[str]:
+        """Ham Helper trich xuat chuoi IP tu command output bang regex"""
+        match = re.search(r'inet (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', output)
+        if match:
+            return match.group(1)
+        return None

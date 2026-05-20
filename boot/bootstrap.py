@@ -1,11 +1,11 @@
 """
 Pre-flight bootstrap: Download and verify required files from GitHub.
 Lightweight initializer - only ensures absolute minimum files exist.
+Termux/Android compatible.
 """
 import os
 import sys
 import time
-import hashlib
 from typing import Tuple
 
 # Minimum bootstrap files - just enough to run updater
@@ -49,7 +49,7 @@ def download_file(url: str, local_path: str, max_retries: int = 3) -> bool:
                         f.write(response.text)
                     return True
                 else:
-                    print(f"  ⚠️ Attempt {attempt}: HTTP {response.status_code}")
+                    print(f" ⚠️ Attempt {attempt}: HTTP {response.status_code}")
             else:
                 with urllib.request.urlopen(url, timeout=30) as resp:
                     if resp.status == 200:
@@ -61,10 +61,10 @@ def download_file(url: str, local_path: str, max_retries: int = 3) -> bool:
                             f.write(resp.read().decode('utf-8'))
                         return True
         except Exception as e:
-            print(f"  ⚠️ Attempt {attempt}/{max_retries}: {type(e).__name__}")
+            print(f" ⚠️ Attempt {attempt}/{max_retries}: {type(e).__name__}")
 
             if attempt < max_retries:
-                print(f"  ⏳ Retrying in 2 seconds...")
+                print(f" ⏳ Retrying in 2 seconds...")
                 time.sleep(2)
 
     return False
@@ -89,15 +89,15 @@ def check_and_download_missing_files() -> bool:
     local_path = os.path.join(base_dir, filename)
 
     if not os.path.exists(local_path):
-        print(f"  \033[1;31m✗ Missing: {filename}\033[0m → Downloading...")
+        print(f" \033[1;31m✗ Missing: {filename}\033[0m → Downloading...")
         if download_file(url, local_path):
-            print(f"  \033[1;32m✓ Downloaded: {filename}\033[0m")
+            print(f" \033[1;32m✓ Downloaded: {filename}\033[0m")
             downloaded_something = True
         else:
-            print(f"  \033[1;31m✗ ERROR: Cannot download {filename}\033[0m")
+            print(f" \033[1;31m✗ ERROR: Cannot download {filename}\033[0m")
             return False
     else:
-        print(f"  \033[1;32m✓ {filename} exists\033[0m")
+        print(f" \033[1;32m✓ {filename} exists\033[0m")
 
     return downloaded_something
 
@@ -139,7 +139,7 @@ def run_bootstrap(skip_download: bool = False) -> None:
 
     if has_downloads:
         print("\033[1;33m" + "=" * 60 + "\033[0m")
-        print("\033[1;33m⚠️  NEW/UPDATED FILE DETECTED!\033[0m")
+        print("\033[1;33m⚠️ NEW/UPDATED FILE DETECTED!\033[0m")
         print("\033[1;33m" + "=" * 60 + "\033[0m")
         print(f"\033[1;36m📌 Please RESTART the tool to apply changes:\033[0m")
         print(f"\033[1;36m   cd {os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}\033[0m")

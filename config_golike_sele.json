@@ -1,0 +1,16 @@
+{
+  "delay_between_jobs": 10.0,
+  "delay_after_api_call": 5.0,
+  "delay_after_complete": 3.0,
+  "delay_after_report_error": 3.0,
+  "delay_on_job_hunt_retry": 20.0,
+  "delay_between_accounts": 60,
+  "timeout_driver_load": 15.0,
+  "timeout_wait_element": 15.0,
+  "sleep_on_reset": 60.0,
+  "sleep_on_hunt_retry": 15.0,
+  "sleep_on_cool_down": 300.0,
+  "delay_after_reset_click": 15.0,
+  "switch_server_minutes": 0.0,
+  "default_proxy": ""
+}

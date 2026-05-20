@@ -1,16 +1,20 @@
 """
-Main menu for Golike application
+Main menu for GoLike application
 Supports both TikTok and Facebook platforms
+Termux/Android compatible
 """
 import os
 import sys
 import subprocess
 
-# Fix Unicode encoding on Windows PowerShell/cmd (cp1252 -> utf-8)
-try:
-    sys.stdout.reconfigure(encoding='utf-8')
-except Exception:
-    pass
+# ============================================================================
+# TERMUX/ANDROID COMPATIBILITY
+# ============================================================================
+from golike_core.termux import init_termux, get_adb_path, is_termux, fix_encoding
+
+# Initialize encoding and Termux environment
+fix_encoding()
+init_termux()
 
 # ============================================================================
 # PRE-FLIGHT BOOTSTRAP
@@ -34,13 +38,21 @@ except Exception as e:
 # ADB PATH SETUP
 # ============================================================================
 
-local_adb_dir = os.path.join(os.getcwd(), "ADB")
-if os.path.exists(local_adb_dir):
-    os.environ["PATH"] = local_adb_dir + os.pathsep + os.environ["PATH"]
+# Termux: Use termux ADB path
+if is_termux():
+    adb_path = get_adb_path()
+    if adb_path and os.path.exists(adb_path):
+        os.environ["PATH"] = os.path.dirname(adb_path) + os.pathsep + os.environ["PATH"]
+else:
+    # Non-Termux (Windows/Linux): Use local ADB folder
+    local_adb_dir = os.path.join(os.getcwd(), "ADB")
+    if os.path.exists(local_adb_dir):
+        os.environ["PATH"] = local_adb_dir + os.pathsep + os.environ["PATH"]
 
-default_workspace_adb = r"D:\pythonadb\ADB"
-if os.path.exists(default_workspace_adb) and default_workspace_adb not in os.environ["PATH"]:
-    os.environ["PATH"] = default_workspace_adb + os.pathsep + os.environ["PATH"]
+    # Default workspace ADB (Windows path - Termux users will have their own)
+    default_workspace_adb = r"D:\pythonadb\ADB"
+    if os.path.exists(default_workspace_adb) and default_workspace_adb not in os.environ["PATH"]:
+        os.environ["PATH"] = default_workspace_adb + os.pathsep + os.environ["PATH"]
 
 # ============================================================================
 # IMPORTS

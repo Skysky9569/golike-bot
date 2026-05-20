@@ -1,0 +1,1 @@
+"""Boot package for Golike application pre-flight bootstrap"""
