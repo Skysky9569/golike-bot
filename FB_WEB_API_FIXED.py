@@ -74,8 +74,9 @@ class HTMLExtractor:
         pattern = r'jazoest=(\d+)'
         return HTMLExtractor.find_pattern(html, pattern)
 class FacebookSession:
-    def __init__(self, cookie: str):
+    def __init__(self, cookie: str, proxies: dict = None):
         self.cookie = cookie
+        self.proxies = proxies
         self.token = None
         self.user_id = None
         self.revision = None
@@ -98,7 +99,8 @@ class FacebookSession:
                 "https://www.facebook.com/",
                 headers=headers,
                 cookies=CookieHandler.to_dict(self.cookie),
-                timeout=30
+                timeout=30,
+                proxies=self.proxies,
             )
             
             html = response.text
@@ -335,10 +337,11 @@ class GenData:
         }
         return payload
 class FB_API:
-    def __init__(self, cookie: str):
+    def __init__(self, cookie: str, proxies: dict = None):
         self.cookie = cookie
+        self.proxies = proxies
         self.ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        self.session = FacebookSession(cookie)
+        self.session = FacebookSession(cookie, proxies=proxies)
         self.payload_builder = None
         self.ready = False
     def login(self) -> bool:
@@ -364,6 +367,26 @@ class FB_API:
             'x-fb-friendly-name': 'CometUFIFeedbackReactMutation',
         }
         return True
+
+    @staticmethod
+    def _format_error(response):
+        try:
+            data = response.json()
+            errors = data.get('errors', [])
+            if errors:
+                err = errors[0]
+                return {
+                    'code': err.get('code'),
+                    'api_error_code': err.get('api_error_code'),
+                    'severity': err.get('severity'),
+                    'summary': err.get('summary'),
+                    'description': err.get('description'),
+                    'fbtrace_id': err.get('fbtrace_id'),
+                }
+            return str(data)
+        except Exception:
+            return str(response.status_code)
+
     def REACTION(self,REACTION : str,Id_post : str, doc_id : str = 'null'):
         """
             Gửi reaction cho bài viết hoặc bình luận.
@@ -386,7 +409,7 @@ class FB_API:
             if isinstance(payload, dict) and 'err' in payload:
                 return payload
         
-            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload)
+            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload, proxies=self.proxies)
             if response.status_code == 200:
                 feedback_get_id = response.json().get('data', {}).get('feedback_react', {})
                 if feedback_get_id : 
@@ -395,7 +418,7 @@ class FB_API:
                     reaction_count = feedback_get_id_1.get('i18n_reaction_count')
                     return {"success": True, "error" : None , "feedback_id" : str(feedback_id), "reaction_count" : str(reaction_count)}
                 else :
-                    return {"success": False, "error" : str(response.json()) }
+                    return {"success": False, "error" : self._format_error(response) }
             else:
                 return {"success": False, "error" : str(response.status_code)}
         except Exception as e:
@@ -425,7 +448,7 @@ class FB_API:
     
             if isinstance(payload, dict) and 'err' in payload:
                 return payload
-            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload)
+            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload, proxies=self.proxies)
             if response.status_code == 200:
                 cmt_get_id = response.json().get('data', {}).get('comment_create', {})
                 match = re.search(
@@ -437,7 +460,7 @@ class FB_API:
                     comment_url = match.group(1)
                     return {"success": True, "error" : None , "total_count" : total_count,"comment_url" : comment_url}
                 else:
-                    return {"success": False, "error" : str(response.json())}
+                    return {"success": False, "error" : self._format_error(response)}
             else:
                 return {"success": False, "error" : str(response.status_code)}
         except Exception as e:
@@ -460,14 +483,14 @@ class FB_API:
             payload = self.payload_builder.build_Follow(Id_post, doc_id)
             if isinstance(payload, dict) and 'err' in payload:
                 return payload
-            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload)
+            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload, proxies=self.proxies)
             if response.status_code == 200:
                 pattern = r'"profile_owner"\s*:\s*\{[^}]*?"id"\s*:\s*"(\d+)"'
                 match = re.search(pattern, response.text)
                 if match:
                     return {"success": True, "error" : None , "id" : match.group(1)}
                 else:
-                    return {"success": False, "error" : str(response.json())}
+                    return {"success": False, "error" : self._format_error(response)}
             else:
                 return {"success": False, "error" : str(response.status_code)}
         except Exception as e:
@@ -491,7 +514,7 @@ class FB_API:
             payload = self.payload_builder.build_LikePage(PAGE_ID, doc_id)
             if isinstance(payload, dict) and 'err' in payload:
                 return payload
-            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload)
+            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload, proxies=self.proxies)
             
             if response.status_code == 200:
                 return {"success": True, "error": None, "id": PAGE_ID}
@@ -526,7 +549,7 @@ class FB_API:
             if isinstance(payload, dict) and 'err' in payload:
                 return payload
             
-            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload)
+            response = requests.post('https://www.facebook.com/api/graphql/', headers=self.header, data=payload, proxies=self.proxies)
             if response.status_code == 200:
                 if Group_id != 'null':
                     idpost = re.search(r'"post_id"\s*:\s*"(\d+)"', response.text)
@@ -535,7 +558,7 @@ class FB_API:
                 if idpost:
                     return {"success": True, "error" : None , "id" : idpost.group(1) }
                 else:
-                    return {"success": False, "error" : str(response.json())}
+                    return {"success": False, "error" : self._format_error(response)}
             else:
                 return {"success": False, "error" : str(response.status_code)}
         except Exception as e:

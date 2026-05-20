@@ -8,6 +8,24 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import webdriver_manager
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+
+# Helper for delayed waits with visual countdown when delay exceeds 20 seconds
+
+def smart_sleep(seconds: int):
+    """Sleep for *seconds* seconds.
+    If the duration is longer than 20 seconds, prints a countdown to the console.
+    """
+    try:
+        secs = int(seconds)
+    except Exception:
+        secs = int(seconds)
+    if secs > 20:
+        for remaining in range(secs, 0, -1):
+            print(f"⏳ Waiting {remaining}s...", end="\r", flush=True)
+            time.sleep(1)
+        print(" " * 30, end="\r")  # clear line
+    else:
+        time.sleep(secs)
 import sys
 import os
 import re
@@ -17,6 +35,83 @@ from datetime import datetime
 from time import sleep
 import atexit
 import threading
+
+# Helper to detect the "job limit" toast
+
+def job_limit_reached(driver):
+    """Return True if a toast appears indicating the 100‑jobs‑per‑day limit.
+    The toast element looks like:
+        <div class="toast toast-success"><div class="toast-message">Bạn đã làm quá 100 jobs mỗi ngày ...</div></div>
+    """
+    try:
+        toast_msg_elem = WebDriverWait(driver, 3).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, "div.toast-message"))
+        )
+        msg = toast_msg_elem.text.strip()
+        if "Bạn đã làm quá 100 jobs" in msg:
+            print(f"\U0001F6A8 {msg}")
+            return True
+    except Exception:
+        pass
+    return False
+
+
+# ======== PHÁT HIỆN & XỬ LÝ RATE LIMIT ("quá nhanh") ========
+
+RATE_LIMIT_KEYWORDS = [
+    "thao tác quá nhanh", "quá nhanh", "rate limit",
+    "thử lại sau", "vui lòng chờ", "too fast",
+    "slow down", "try again later", "please wait",
+]
+
+def check_rate_limit_on_page(driver):
+    """Kiểm tra page hiện tại có thông báo rate limit không.
+    Kiểm tra: Swal2 popup, toast message, và page source.
+    Returns: True nếu phát hiện rate limit.
+    """
+    page_text = ""
+    try:
+        page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+    except Exception:
+        pass
+    for kw in RATE_LIMIT_KEYWORDS:
+        if kw in page_text:
+            print(f"\n⚠️ PHÁT HIỆN RATE LIMIT: '{kw}' trong nội dung trang")
+            return True
+    # Kiểm tra Swal2 popup
+    for selector, label in [
+        ("#swal2-title", "Swal2 title"),
+        ("#swal2-content", "Swal2 content"),
+        ("div.toast-message", "toast message"),
+    ]:
+        try:
+            elem_text = driver.find_element(By.CSS_SELECTOR, selector).text.lower()
+            for kw in RATE_LIMIT_KEYWORDS:
+                if kw in elem_text:
+                    print(f"\n⚠️ PHÁT HIỆN RATE LIMIT: '{kw}' trong {label}")
+                    return True
+        except Exception:
+            pass
+    return False
+
+
+def handle_rate_limit(driver, context_name="tool"):
+    """Xử lý khi phát hiện rate limit: chờ 10s rồi refresh trang.
+    Returns: True nếu đã xử lý, False nếu không cần.
+    """
+    if not check_rate_limit_on_page(driver):
+        return False
+    print(f"[{context_name}] ⏳ Phát hiện 'quá nhanh' — tạm nghỉ 10 giây...")
+    for remaining in range(10, 0, -1):
+        print(f"⏳ Nghỉ rate limit {remaining}s...", end="\r", flush=True)
+        time.sleep(1)
+    print(" " * 50, end="\r")
+    try:
+        driver.refresh()
+        print(f"[{context_name}] ✅ Đã refresh trang sau rate limit")
+    except Exception as e:
+        print(f"[{context_name}] ❌ Lỗi khi refresh: {e}")
+    return True
 
 # ======== ĐẢM BẢO SCRIPT DIRECTORY TRONG PYTHON PATH ========
 # Lấy đường dẫn tuyệt đối của file đang chạy (golikefb_sele.py)
@@ -172,6 +267,132 @@ def kiem_tra_cap_nhat():
 # Bật auto-update
 kiem_tra_cap_nhat()
 
+# ================= PROXY PARSING =================
+
+def parse_proxy_url(raw: str):
+    """
+    Parse proxy string thanh cac thanh phan cho Selenium Chrome + requests library.
+    Ho tro cac dinh dang:
+      - IP:PORT                     -> HTTP proxy khong auth
+      - IP:PORT:USER:PASS           -> HTTP proxy co auth
+      - socks5://IP:PORT            -> SOCKS5 proxy khong auth
+      - socks5://IP:PORT:USER:PASS  -> SOCKS5 proxy co auth
+      - http://IP:PORT              -> HTTP proxy (tuong minh)
+
+    Returns dict with chrome_arg, requests_proxies, has_auth, etc. or None if empty.
+    """
+    if not raw or not raw.strip():
+        return None
+
+    raw = raw.strip()
+
+    proto = "http"
+    remainder = raw
+    if "://" in raw:
+        proto, remainder = raw.split("://", 1)
+
+    parts = remainder.split(":")
+    if len(parts) < 2:
+        print("[!] Dinh dang proxy khong hop le: %s. Dung IP:PORT" % raw)
+        return None
+
+    host = parts[0]
+    port = parts[1]
+    username = None
+    password = None
+    has_auth = False
+
+    if len(parts) >= 4:
+        username = parts[2]
+        password = parts[3]
+        has_auth = True
+    elif len(parts) == 3:
+        print("[!] Proxy auth thieu password: %s. Su dung khong auth." % raw)
+
+    chrome_arg = "%s://%s:%s" % (proto, host, port)
+
+    if has_auth:
+        requests_proxies = {
+            "http": "%s://%s:%s@%s:%s" % (proto, username, password, host, port),
+            "https": "%s://%s:%s@%s:%s" % (proto, username, password, host, port),
+        }
+    else:
+        requests_proxies = {
+            "http": "%s://%s:%s" % (proto, host, port),
+            "https": "%s://%s:%s" % (proto, host, port),
+        }
+
+    return {
+        "chrome_arg": chrome_arg,
+        "requests_proxies": requests_proxies,
+        "has_auth": has_auth,
+        "username": username,
+        "password": password,
+        "host": host,
+        "port": port,
+    }
+
+
+def _build_proxy_auth_extension(proxy_info: dict) -> str:
+    """Tao Chrome extension tam thoi de handle proxy authentication."""
+    import tempfile
+
+    host = proxy_info["host"]
+    port = proxy_info["port"]
+    username = proxy_info["username"]
+    password = proxy_info["password"]
+
+    ext_dir = tempfile.mkdtemp(prefix="chrome_proxy_auth_")
+
+    manifest = {
+        "version": "1.0.0",
+        "manifest_version": 3,
+        "name": "Proxy Auth",
+        "permissions": ["proxy", "webRequest", "webRequestAuthProvider"],
+        "background": {"service_worker": "background.js"}
+    }
+
+    with open(os.path.join(ext_dir, "manifest.json"), "w") as f:
+        json.dump(manifest, f)
+
+    bg_js = """
+    chrome.webRequest.onAuthRequired.addListener(
+        function(details) {
+            return {
+                authCredentials: {
+                    username: "%s",
+                    password: "%s"
+                }
+            };
+        },
+        {urls: ["<all_urls>"]},
+        ['blocking']
+    );
+    """ % (username, password)
+
+    with open(os.path.join(ext_dir, "background.js"), "w") as f:
+        f.write(bg_js)
+
+    return ext_dir
+
+
+def get_proxy_from_config(profile_proxy: str = None) -> dict:
+    """
+    Lay proxy info tu profile hoac default_proxy.
+    profile_proxy: proxy rieng cua profile (tu config_parallel.json)
+    Returns parse_proxy_url result hoac None.
+    """
+    raw = (profile_proxy or "").strip()
+    if raw:
+        return parse_proxy_url(raw)
+
+    default_raw = CONFIG_DELAY.get("default_proxy", "")
+    if default_raw and default_raw.strip():
+        return parse_proxy_url(default_raw)
+
+    return None
+
+
 # ================= CẤU HÌNH DELAY =================
 CONFIG_DELAY = {}
 
@@ -192,7 +413,8 @@ def load_delay_config(filepath: str = "config_golike_sele.json"):
         "sleep_on_cool_down": 300,
         "delay_after_reset_click": 3.5,
         "sleep_on_hunt_retry": 10,
-        "switch_server_minutes": 0
+        "switch_server_minutes": 0,
+        "default_proxy": ""
     }
 
     if os.path.exists(filepath):
@@ -382,9 +604,22 @@ def run_single_mode():
     STOP_FLAG = False
     print("\n🚀 Bắt đầu thiết lập chế độ Chạy đơn lẻ 1 tài khoản...")
     cookie_fb = load_cookie()
+
+    # Hoi proxy
+    default_proxy = CONFIG_DELAY.get("default_proxy", "")
+    proxy_prompt = "🌐 Nhập proxy (IP:PORT hoặc IP:PORT:USER:PASS) hoặc Enter để bỏ qua"
+    if default_proxy:
+        proxy_prompt += " [mặc định: %s]" % default_proxy
+    proxy_input = input(proxy_prompt + ": ").strip()
+    if not proxy_input:
+        proxy_input = default_proxy
+    proxy_info = parse_proxy_url(proxy_input)
+
+    proxy_auth_ext = None
     Fb = None
     if cookie_fb:
-        Fb = FB_API(cookie_fb)
+        fb_proxies = proxy_info["requests_proxies"] if proxy_info else None
+        Fb = FB_API(cookie_fb, proxies=fb_proxies)
         Fb.login()
 
     golike_user, golike_pass = get_golike_credentials()
@@ -397,6 +632,13 @@ def run_single_mode():
     options.add_argument("--disable-infobars")
     options.add_argument("--no-sandbox")
     options.add_argument("user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
+
+    if proxy_info:
+        options.add_argument("--proxy-server=%s" % proxy_info["chrome_arg"])
+        if proxy_info["has_auth"]:
+            proxy_auth_ext = _build_proxy_auth_extension(proxy_info)
+            options.add_argument("--load-extension=%s" % proxy_auth_ext)
+            print("[*] Proxy co auth: da cai extension tu dong")
 
     driver = selenium_driver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     with drivers_lock:
@@ -468,12 +710,23 @@ def run_single_mode():
             last_server_switch_time = time.time()
             while not STOP_FLAG:
                 try:
+                    # ---- Kiểm tra rate limit ----
+                    handle_rate_limit(driver, name_run)
+
                     # ---- Kiểm tra đổi server ----
                     switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
                     if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
                         try:
-                            switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                            switch_btn = driver.find_element(By.XPATH, "//button[normalize-space(.)='Đổi server']")
                             driver.execute_script("arguments[0].click();", switch_btn)
+                            # Wait for success toast and display its message
+                            try:
+                                toast_msg = WebDriverWait(driver, 5).until(
+                                    EC.visibility_of_element_located((By.CSS_SELECTOR, "div.toast.toast-success div.toast-message"))
+                                ).text
+                                print("🔔 %s" % toast_msg)
+                            except Exception:
+                                pass
                             print("🔄 Đã tự động ấn Đổi Server lấy job!")
                             last_server_switch_time = time.time()
                             sleep(2)
@@ -513,7 +766,7 @@ def run_single_mode():
                                         print(f"❌ Lỗi thao tác Reset: {err}")
                                     
                                     print("⏳ Nghỉ ngơi 30 giây trước khi thử quét tiếp...")
-                                    sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
+                                    smart_sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
                                     failed_load_count = 0 # Reset đếm
                                     continue
                         except: pass
@@ -534,7 +787,7 @@ def run_single_mode():
                                 print("✅ Đã làm mới xong trang. Đang nghỉ 5 phút nguội hệ thống...")
                             except Exception as e:
                                 print(f"❌ Lỗi trong lúc tự động Reset: {e}")
-                            sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
+                            smart_sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
                             continue
 
                         print(f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
@@ -625,15 +878,26 @@ def run_single_mode():
                                 t_p = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
                                 c_p = driver.find_element(By.ID, "swal2-content").text
                                 print(f"GoLike báo: [{t_p}] {c_p}")
-                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                                driver.execute_script("arguments[0].click();", ok_c)
-                                if "lỗi" in t_p.lower() or "thất bại" in t_p.lower() or "lỗi" in c_p.lower() or "thất bại" in c_p.lower():
-                                    need_skip = True
+                                # Kiểm tra rate limit từ popup
+                                popup_text = f"{t_p} {c_p}".lower()
+                                for kw in RATE_LIMIT_KEYWORDS:
+                                    if kw in popup_text:
+                                        print(f"⚠️ GoLike báo rate limit: '{kw}' — tạm nghỉ 10s...")
+                                        ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                        driver.execute_script("arguments[0].click();", ok_c)
+                                        sleep(1)
+                                        handle_rate_limit(driver, name_run)
+                                        break
+                                else:
+                                    ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                    driver.execute_script("arguments[0].click();", ok_c)
+                                    if "lỗi" in t_p.lower() or "thất bại" in t_p.lower() or "lỗi" in c_p.lower() or "thất bại" in c_p.lower():
+                                        need_skip = True
                             except: pass
                         except Exception as e:
                             print(f"Lỗi ấn Hoàn thành: {e}")
                             need_skip = True
-                            
+
                     if need_skip:
                         print("🚨 Bắt đầu Báo lỗi...")
                         try:
@@ -661,8 +925,12 @@ def run_single_mode():
                             print(f"Lỗi khi Báo lỗi: {e}")
                     
                     print(f"Đợi {CONFIG_DELAY.get('delay_between_jobs', 10)}s trước khi tìm job tiếp theo...")
-                    sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
-                    
+                    if job_limit_reached(driver):
+                        print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Nhấn Enter để quay lại menu chính.")
+                        input()
+                        break
+                    smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+
                 except Exception as e:
                     print(f"Lỗi vòng lặp chạy (chờ 5s): {e}")
                     sleep(5)  # Keep as error retry - not configurable
@@ -688,17 +956,23 @@ def setup_bot_profile(profile_data, idx):
     fb_cookie = profile_data.get("facebook_cookie", "")
     target_fb = profile_data.get("target_fb_name", "")
     target_uid = profile_data.get("target_fb_uid", "")
+    profile_proxy = profile_data.get("proxy", "")
+
+    proxy_info = get_proxy_from_config(profile_proxy)
 
     print(f"\n" + "="*60)
     print(f"🔷 KHỞI TẠO TÀI KHOẢN CHẠY SONG SONG: [{p_name}]")
     print("="*60)
-    
+    if proxy_info:
+        print(f"🌐 Proxy: {proxy_info['chrome_arg']}")
+
     if not gl_user or not gl_pass or not fb_cookie:
         print(f"❌ Cấu hình [{p_name}] thiếu thông tin quan trọng. Bỏ qua!")
         return None, None
 
     try:
-        Fb = FB_API(fb_cookie)
+        fb_proxies = proxy_info["requests_proxies"] if proxy_info else None
+        Fb = FB_API(fb_cookie, proxies=fb_proxies)
         kq = Fb.login()
         if isinstance(kq, dict) and 'err' in kq:
             print(f"❌ Cookie FB của [{p_name}] bị sai hoặc hết hạn: {kq['err']}")
@@ -715,7 +989,13 @@ def setup_bot_profile(profile_data, idx):
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
     options.add_argument("user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
-    
+
+    if proxy_info:
+        options.add_argument("--proxy-server=%s" % proxy_info["chrome_arg"])
+        if proxy_info["has_auth"]:
+            proxy_auth_ext = _build_proxy_auth_extension(proxy_info)
+            options.add_argument("--load-extension=%s" % proxy_auth_ext)
+
     driver = selenium_driver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     with drivers_lock:
         active_drivers.append(driver)
@@ -809,12 +1089,23 @@ def run_bot_loop(driver, Fb, profile_data, idx):
     try:
         while not STOP_FLAG:
             try:
+                # ---- Kiểm tra rate limit ----
+                handle_rate_limit(driver, p_name)
+
                 # ---- Kiểm tra đổi server ----
                 switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
                 if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
                     try:
-                        switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                        switch_btn = driver.find_element(By.XPATH, "//button[normalize-space(.)='Đổi server']")
                         driver.execute_script("arguments[0].click();", switch_btn)
+                        # Wait for success toast and display its message
+                        try:
+                            toast_msg = WebDriverWait(driver, 5).until(
+                                EC.visibility_of_element_located((By.CSS_SELECTOR, "div.toast.toast-success div.toast-message"))
+                            ).text
+                            print("🔔 %s" % toast_msg)
+                        except Exception:
+                            pass
                         log_thread(p_name, "🔄 Đã tự động ấn Đổi Server!")
                         last_server_switch_time = time.time()
                         sleep(2)
@@ -853,7 +1144,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                 
                                 log_thread(p_name, "⏳ Bắt đầu nghỉ ngơi 30 giây nguội máy...")
                                 failed_load_count = 0 # Reset bộ đếm
-                                sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
+                                smart_sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
                                 continue
                     except: pass
 
@@ -870,7 +1161,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                             log_thread(p_name, "✅ Reset trang xong. Đang chờ 5 phút nguội hệ thống...")
                         except Exception as e:
                             log_thread(p_name, f"❌ Lỗi khi tự động Reset: {e}")
-                        sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
+                        smart_sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
                         continue
 
                     log_thread(p_name, f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
@@ -950,14 +1241,25 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                             tp = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
                             cp = driver.find_element(By.ID, "swal2-content").text
                             log_thread(p_name, f"GoLike: [{tp}] {cp}")
-                            ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                            driver.execute_script("arguments[0].click();", ok_c)
-                            if "lỗi" in tp.lower() or "thất bại" in tp.lower() or "lỗi" in cp.lower() or "thất bại" in cp.lower():
-                                need_skip = True
-                            else: need_skip = False
+                            # Kiểm tra rate limit từ popup
+                            popup_text = f"{tp} {cp}".lower()
+                            for kw in RATE_LIMIT_KEYWORDS:
+                                if kw in popup_text:
+                                    log_thread(p_name, f"⚠️ Rate limit: '{kw}' — tạm nghỉ 10s...")
+                                    ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                    driver.execute_script("arguments[0].click();", ok_c)
+                                    sleep(1)
+                                    handle_rate_limit(driver, p_name)
+                                    break
+                            else:
+                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                driver.execute_script("arguments[0].click();", ok_c)
+                                if "lỗi" in tp.lower() or "thất bại" in tp.lower() or "lỗi" in cp.lower() or "thất bại" in cp.lower():
+                                    need_skip = True
+                                else: need_skip = False
                         except: pass
                     except: need_skip = True
-                    
+
                 if need_skip:
                     try:
                         bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
@@ -979,7 +1281,10 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     except: pass
                 
                 log_thread(p_name, "Nghỉ 10 giây...")
-                sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+                if job_limit_reached(driver):
+                        print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Quay lại menu chính.")
+                        break
+                smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
             except Exception as ex:
                 log_thread(p_name, f"Lỗi chu kỳ: {ex}")
                 sleep(5)
@@ -1000,7 +1305,8 @@ def run_parallel_mode():
                 "golike_password": "Mật_Khẩu_GoLike",
                 "facebook_cookie": "Cookie_Facebook_Tại_Đây",
                 "target_fb_uid": "61554835667156",
-                "target_fb_name": "Tên_Để_Dự_Phòng"
+                "target_fb_name": "Tên_Để_Dự_Phòng",
+                "proxy": ""
             },
             {
                 "profile_name": "Nick Số 2",
@@ -1008,7 +1314,8 @@ def run_parallel_mode():
                 "golike_password": "Mật_Khẩu_GoLike",
                 "facebook_cookie": "Cookie_Facebook_Tại_Đây",
                 "target_fb_uid": "100093602988096",
-                "target_fb_name": "Tên_Để_Dự_Phòng"
+                "target_fb_name": "Tên_Để_Dự_Phòng",
+                "proxy": ""
             }
         ]
         with open(config_path, 'w', encoding='utf-8') as f:
@@ -1064,6 +1371,192 @@ def run_parallel_mode():
 # ==================== CHẾ ĐỘ 3: SELENIUM DOM (KHÔNG DÙNG API) =========
 # ======================================================================
 
+def load_multi_cookies():
+    """Hoi user co muon nhap nhieu cookie de auto-rotate khong.
+
+    Returns:
+        list[str] | None: Danh sach cookie, hoac None neu user khong muon rotate
+    """
+    print("\n🔄 AUTO-ROTATE ACC: Khi acc dat gioi han job, tool se tu dong chuyen sang cookie tiep theo.")
+    choice = input("👉 Ban co muon nhap nhieu cookie de tu dong chuyen acc khong? (y/N): ").strip().lower()
+    if choice not in ('y', 'yes'):
+        return None
+
+    print("\n📋 Nhap danh sach cookie Facebook (moi dong 1 cookie):")
+    print("   (Nhap cookie va an Enter. De trong va an Enter de ket thuc.)")
+    cookies = []
+    idx = 1
+    while True:
+        c = input(f"   Cookie #{idx}: ").strip()
+        if not c:
+            break
+        cookies.append(c)
+        idx += 1
+
+    if not cookies:
+        print("[!] Khong co cookie nao duoc nhap. Se chay che do don le.")
+        return None
+
+    print(f"✅ Da nhan {len(cookies)} cookie. Tool se tu dong chuyen khi dat gioi han job.")
+    return cookies
+
+
+def _select_golike_account(driver):
+    """Chon tai khoan trong giao dien Golike bang Selenium.
+
+    Returns:
+        tuple: (selected_name, selected_uid) hoac (None, None) neu that bai
+    """
+    try:
+        doiacc = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account"))
+        )
+        driver.execute_script("arguments[0].click();", doiacc)
+        sleep(2)
+
+        accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
+        valid_accounts = []
+        for acc in accounts:
+            try:
+                name = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
+                acc_id = acc.get_attribute("id") or ""
+                valid_accounts.append((acc, name, acc_id))
+            except Exception:
+                pass
+
+        if not valid_accounts:
+            print("[LOI] Khong tim thay tai khoan nao!")
+            return None, None
+
+        print("\n--- CHON TAI KHOAN CAY ---")
+        for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
+            print(f"{i}. {name} | UID: {acc_id}")
+
+        chon_acc = int(input("👉 Nhap so de chon nick chay: "))
+        selected_node, name_run, uid_run = valid_accounts[chon_acc - 1]
+        driver.execute_script("arguments[0].click();", selected_node)
+        print(f"🚀 ✅ DANG CHAY ACC: {name_run} | UID: {uid_run}")
+        sleep(3)
+        return name_run, uid_run
+    except Exception as e:
+        print(f"[LOI] Khong the chon account: {e}")
+        return None, None
+
+
+def _switch_to_next_account(driver, bot, cookie_list, current_idx, proxy_arg, save_prof, proxy_auth_ext, golike_user, golike_pass):
+    """Chuyen sang cookie tiep theo khi acc hien tai dat gioi han job.
+
+    Args:
+        driver: Selenium WebDriver hien tai
+        bot: FacebookSeleniumBot instance hien tai
+        cookie_list: Danh sach tat ca cookie
+        current_idx: Index cua cookie hien tai trong list
+        proxy_arg: Proxy argument (giu nguyen)
+        save_prof: Save profile flag (giu nguyen)
+        proxy_auth_ext: Proxy auth extension (giu nguyen)
+        golike_user: GoLike username
+        golike_pass: GoLike password
+
+    Returns:
+        tuple: (bot_moi, driver_moi, new_idx, name_run, uid_run)
+               hoac (None, None, -1, None, None) neu khong con cookie
+    """
+    next_idx = current_idx + 1
+    if next_idx >= len(cookie_list):
+        print("\n[⚠️] Da het danh sach cookie! Tat ca acc deu dat gioi han.")
+        return None, None, -1, None, None
+
+    print(f"\n{'='*60}")
+    print(f"🔄 CHUYEN SANG ACC #{next_idx + 1}/{len(cookie_list)}")
+    print(f"{'='*60}")
+
+    new_cookie = cookie_list[next_idx]
+    print(f"🔍 Dang kiem tra cookie #{next_idx + 1}...")
+
+    try:
+        from FB_WEB_API_FIXED import FB_API
+        test_fb = FB_API(new_cookie)
+        test_result = test_fb.login()
+        if isinstance(test_result, dict) and 'err' in test_result:
+            print(f"❌ Cookie #{next_idx + 1} khong hop le: {test_result['err']}")
+            print("   Bo qua cookie nay, thu cookie tiep theo...")
+            return _switch_to_next_account(driver, bot, cookie_list, next_idx, proxy_arg, save_prof, proxy_auth_ext, golike_user, golike_pass)
+    except Exception as e:
+        print(f"⚠️ Khong the kiem tra cookie #{next_idx + 1}: {e}")
+
+    print(f"✅ Cookie #{next_idx + 1} hop le!")
+
+    # Stop bot cu
+    try:
+        if bot and hasattr(bot, 'stop'):
+            bot.stop()
+    except Exception as e:
+        print(f"[Canh bao] Loi khi dung bot cu: {e}")
+
+    # Tao bot moi voi cookie moi
+    bot_moi = FacebookSeleniumBot(
+        cookie_str=new_cookie,
+        profile_name=f"rotate_{next_idx}",
+        proxy=proxy_arg,
+        save_profile=save_prof,
+        proxy_auth_ext=proxy_auth_ext,
+    )
+
+    print("[*] Khoi dong Chrome voi cookie moi...")
+    if not bot_moi.start():
+        print("[LOI] Khong the dang nhap Facebook voi cookie moi!")
+        return _switch_to_next_account(driver, bot, cookie_list, next_idx, proxy_arg, save_prof, proxy_auth_ext, golike_user, golike_pass)
+
+    driver_moi = bot_moi.driver
+
+    # Mo lai GoLike + login
+    driver_moi.get("https://app.golike.net/login")
+    time.sleep(2)
+
+    try:
+        tk = driver_moi.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input')
+        tk.clear()
+        tk.send_keys(golike_user)
+
+        mk = driver_moi.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input')
+        mk.clear()
+        mk.send_keys(golike_pass)
+
+        dn = driver_moi.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button')
+        dn.click()
+
+        input("\n👉 Vui long tu giai Captcha (neu co).\nSau khi giai xong, an [ENTER] de tiep tuc...")
+
+        nhiemvu = WebDriverWait(driver_moi, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]'))
+        )
+        driver_moi.execute_script("arguments[0].click();", nhiemvu)
+
+        fb_btn = WebDriverWait(driver_moi, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div'))
+        )
+        driver_moi.execute_script("arguments[0].click();", fb_btn)
+        sleep(3)
+
+        try:
+            tb = WebDriverWait(driver_moi, 3).until(EC.element_to_be_clickable((By.CLASS_NAME, 'swal2-title')))
+            print(f"Thong bao tu GoLike: {tb.text}")
+            ok_btn = driver_moi.find_element(By.CSS_SELECTOR, '.swal2-confirm.swal2-styled')
+            driver_moi.execute_script("arguments[0].click();", ok_btn)
+        except TimeoutException:
+            pass
+    except Exception as e:
+        print(f"[LOI] Khong the login GoLike cho acc moi: {e}")
+        return bot_moi, driver_moi, next_idx, None, None
+
+    # Chon account
+    name_run, uid_run = _select_golike_account(driver_moi)
+    if not name_run:
+        print("[!] Khong the chon account trong Golike!")
+
+    return bot_moi, driver_moi, next_idx, name_run, uid_run
+
+
 def run_selenium_dom_single():
     """Che do don le: Selenium DOM click truc tiep Facebook (khong can FB_WEB_API_FIXED)"""
     global STOP_FLAG
@@ -1084,21 +1577,43 @@ def run_selenium_dom_single():
         print("[LOI] Không có cookie Facebook!")
         return
 
+    # 1b. Hoi user co muon nhap nhieu cookie de auto-rotate
+    multi_cookies = load_multi_cookies()
+    if multi_cookies:
+        cookie_list = [cookie_fb] + multi_cookies
+        rotate_mode = True
+        current_cookie_idx = 0
+        print(f"📋 Tong cong {len(cookie_list)} cookie trong danh sach rotate.")
+    else:
+        cookie_list = [cookie_fb]
+        rotate_mode = False
+        current_cookie_idx = 0
+
     # 2. Hoi user co muon luu Chrome profile khong
     save_prof = input("\n💾 Lưu Chrome profile để dùng lại lần sau? (y/N) [Enter = N]: ").strip().lower() in ('y', 'yes')
 
     # 3. Hoi proxy (optional)
-    proxy = input("🌐 Nhập proxy (IP:PORT) hoặc Enter để bỏ qua: ").strip()
-    if not proxy:
-        proxy = None
+    default_proxy = CONFIG_DELAY.get("default_proxy", "")
+    proxy_prompt = "🌐 Nhập proxy (IP:PORT hoặc IP:PORT:USER:PASS)"
+    if default_proxy:
+        proxy_prompt += " [mặc định: %s]" % default_proxy
+    proxy_input = input(proxy_prompt + " hoặc Enter để bỏ qua: ").strip()
+    if not proxy_input:
+        proxy_input = default_proxy
+    proxy_info = get_proxy_from_config(proxy_input)
+    proxy_arg = proxy_info["chrome_arg"] if proxy_info else None
+    proxy_auth_ext = _build_proxy_auth_extension(proxy_info) if (proxy_info and proxy_info["has_auth"]) else None
 
     # 4. Khoi tao bot
     bot = FacebookSeleniumBot(
         cookie_str=cookie_fb,
         profile_name="single",
-        proxy=proxy,
+        proxy=proxy_arg,
         save_profile=save_prof,
+        proxy_auth_ext=proxy_auth_ext,
     )
+    if proxy_info:
+        print("[*] Proxy: %s" % proxy_info["chrome_arg"])
 
     print("\n[*] Khởi động Chrome...")
     if not bot.start():
@@ -1153,31 +1668,11 @@ def run_selenium_dom_single():
             pass
 
         # Chon account
-        doiacc = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account"))
-        )
-        driver.execute_script("arguments[0].click();", doiacc)
-        sleep(2)
-
-        accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
-        valid_accounts = []
-        for acc in accounts:
-            try:
-                name = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
-                acc_id = acc.get_attribute("id") or ""
-                valid_accounts.append((acc, name, acc_id))
-            except Exception:
-                pass
-
-        print("\n--- CHON TAI KHOAN CAY ---")
-        for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
-            print(f"{i}. {name} | UID: {acc_id}")
-
-        chon_acc = int(input("👉 Nhap so de chọn nick chạy: "))
-        selected_node, name_run, uid_run = valid_accounts[chon_acc - 1]
-        driver.execute_script("arguments[0].click();", selected_node)
-        print(f"🚀 ✅ ĐANG CHẠY ACC: {name_run} | UID: {uid_run}")
-        sleep(3)
+        name_run, uid_run = _select_golike_account(driver)
+        if not name_run:
+            print("[LOI] Khong the chon tai khoan Golike!")
+            input("Nhan Enter de quay lai...")
+            return
 
         # Vong lap chay chinh - Selenium DOM mode
         print("\n[*] Bắt đầu vòng lặp job (Selenium DOM mode)...")
@@ -1201,12 +1696,23 @@ def run_selenium_dom_single():
 
         while not STOP_FLAG:
             try:
+                # ---- Kiểm tra rate limit ----
+                handle_rate_limit(driver, name_run)
+
                 # ---- Kiểm tra đổi server ----
                 switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
                 if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
                     try:
-                        switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                        switch_btn = driver.find_element(By.XPATH, "//button[normalize-space(.)='Đổi server']")
                         driver.execute_script("arguments[0].click();", switch_btn)
+                        # Wait for success toast and display its message
+                        try:
+                            toast_msg = WebDriverWait(driver, 5).until(
+                                EC.visibility_of_element_located((By.CSS_SELECTOR, "div.toast.toast-success div.toast-message"))
+                            ).text
+                            print("🔔 %s" % toast_msg)
+                        except Exception:
+                            pass
                         print("🔄 Đã tự động ấn Đổi Server lấy job!")
                         last_server_switch_time = time.time()
                         sleep(2)
@@ -1272,8 +1778,19 @@ def run_selenium_dom_single():
                                 ).text
                                 cp = driver.find_element(By.ID, "swal2-content").text
                                 print(f"GoLike bao: [{tp}] {cp}")
-                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                                driver.execute_script("arguments[0].click();", ok_c)
+                                # Kiểm tra rate limit từ popup
+                                popup_text = f"{tp} {cp}".lower()
+                                for kw in RATE_LIMIT_KEYWORDS:
+                                    if kw in popup_text:
+                                        print(f"⚠️ Rate limit: '{kw}' — tam nghi 10s...")
+                                        ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                        driver.execute_script("arguments[0].click();", ok_c)
+                                        sleep(1)
+                                        handle_rate_limit(driver, name_run)
+                                        break
+                                else:
+                                    ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                    driver.execute_script("arguments[0].click();", ok_c)
                             except Exception:
                                 pass
                         except Exception as e:
@@ -1290,7 +1807,24 @@ def run_selenium_dom_single():
                     continue
 
                 print(f"Đoi {CONFIG_DELAY.get('delay_between_jobs', 10)}s truoc khi tim job tiep theo...")
-                sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+                if job_limit_reached(driver):
+                    if rotate_mode and current_cookie_idx + 1 < len(cookie_list):
+                        print(f"[⚠️] Acc hien tai da dat gioi han 100 jobs/ngay.")
+                        print(f"[🔄] Dang chuyen sang cookie tiep theo ({current_cookie_idx + 2}/{len(cookie_list)})...")
+                        bot, driver, current_cookie_idx, name_run, uid_run = _switch_to_next_account(
+                            driver, bot, cookie_list, current_cookie_idx,
+                            proxy_arg, save_prof, proxy_auth_ext,
+                            golike_user, golike_pass
+                        )
+                        if bot is None:
+                            print("[⚠️] Tat ca acc da dat gioi han. Quay lai menu chinh.")
+                            break
+                        last_server_switch_time = time.time()
+                        continue
+                    else:
+                        print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Quay lại menu chính.")
+                        break
+                smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
 
             except KeyboardInterrupt:
                 break
@@ -1299,11 +1833,15 @@ def run_selenium_dom_single():
                 sleep(5)
 
     except KeyboardInterrupt:
-        pass
+        print("\n[!] Da nhan Ctrl+C. Dang dung bot...")
     except Exception as e:
         print(f"Lỗi tương tác giao diện tài khoản: {e}")
     finally:
-        pass # Giữ trình duyệt mở theo yêu cầu
+        try:
+            if bot and hasattr(bot, 'stop'):
+                bot.stop()
+        except Exception:
+            pass
 
 
 def _report_job_error(driver):
@@ -1371,6 +1909,11 @@ def run_selenium_dom_parallel():
         fb_cookie = profile.get("facebook_cookie", "")
         target_fb = profile.get("target_fb_name", "")
         target_uid = profile.get("target_fb_uid", "")
+        profile_proxy = profile.get("proxy", "")
+
+        proxy_info = get_proxy_from_config(profile_proxy)
+        proxy_arg = proxy_info["chrome_arg"] if proxy_info else None
+        proxy_auth_ext = _build_proxy_auth_extension(proxy_info) if (proxy_info and proxy_info["has_auth"]) else None
 
         if not gl_user or not gl_pass or not fb_cookie:
             print(f"[{p_name}] Thieu thong tin. Bo qua!")
@@ -1379,6 +1922,8 @@ def run_selenium_dom_parallel():
         print(f"\n{'='*60}")
         print(f"🔷 KHOI TAO [{p_name}] - SELENIUM DOM MODE")
         print("="*60)
+        if proxy_info:
+            print(f"🌐 Proxy: {proxy_info['chrome_arg']}")
 
         # Khoi tao bot Selenium DOM
         proj_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1389,7 +1934,9 @@ def run_selenium_dom_parallel():
             cookie_str=fb_cookie,
             profile_name=p_name,
             user_data_dir=prof_dir,
+            proxy=proxy_arg,
             save_profile=True,
+            proxy_auth_ext=proxy_auth_ext,
         )
 
         if not bot.start():
@@ -1526,12 +2073,23 @@ def _selenium_dom_bot_loop(driver, bot: FacebookSeleniumBot, profile_name: str):
 
     while not STOP_FLAG:
         try:
+            # ---- Kiểm tra rate limit ----
+            handle_rate_limit(driver, profile_name)
+
             # ---- Kiểm tra đổi server ----
             switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
             if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
                 try:
-                    switch_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đổi server')]")
+                    switch_btn = driver.find_element(By.XPATH, "//button[normalize-space(.)='Đổi server']")
                     driver.execute_script("arguments[0].click();", switch_btn)
+                    # Wait for success toast and display its message
+                    try:
+                        toast_msg = WebDriverWait(driver, 5).until(
+                            EC.visibility_of_element_located((By.CSS_SELECTOR, "div.toast.toast-success div.toast-message"))
+                        ).text
+                        print("🔔 %s" % toast_msg)
+                    except Exception:
+                        pass
                     log("🔄 Đã tự động ấn Đổi Server!")
                     last_server_switch_time = time.time()
                     sleep(2)
@@ -1592,8 +2150,19 @@ def _selenium_dom_bot_loop(driver, bot: FacebookSeleniumBot, profile_name: str):
                             ).text
                             cp = driver.find_element(By.ID, "swal2-content").text
                             log(f"GoLike: [{tp}] {cp}")
-                            ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                            driver.execute_script("arguments[0].click();", ok_c)
+                            # Kiểm tra rate limit từ popup
+                            popup_text = f"{tp} {cp}".lower()
+                            for kw in RATE_LIMIT_KEYWORDS:
+                                if kw in popup_text:
+                                    log(f"⚠️ Rate limit: '{kw}' — tam nghi 10s...")
+                                    ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                    driver.execute_script("arguments[0].click();", ok_c)
+                                    sleep(1)
+                                    handle_rate_limit(driver, profile_name)
+                                    break
+                            else:
+                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                driver.execute_script("arguments[0].click();", ok_c)
                         except Exception:
                             pass
                     except Exception:
@@ -1608,7 +2177,10 @@ def _selenium_dom_bot_loop(driver, bot: FacebookSeleniumBot, profile_name: str):
                 continue
 
             log(f"Nghi {CONFIG_DELAY.get('delay_between_jobs', 10)}s...")
-            sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+            if job_limit_reached(driver):
+                print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Quay lại menu chính.")
+                break
+            smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
 
         except Exception as ex:
             log(f"Loi chu ky: {ex}")

@@ -37,7 +37,42 @@ class TikTokUIAutomator:
     - Nút Like (trái tim)
     """
 
-    # Selectors cho nút Follow (chính xác hơn để tránh nhầm với Follower)
+    # Selectors for search icon (more comprehensive)
+    SEARCH_ICON_SELECTORS = [
+        {"resourceId": "com.ss.android.ugc.trill:id/jhs"},
+        {"resourceId": "com.zhiliaoapp.musically:id/search_icon"},
+        {"description": "Tìm kiếm"},
+        {"description": "Search"},
+        {"contentDescription": "Search"},
+        {"contentDescription": "Tìm kiếm"},
+    ]
+
+    SEARCH_INPUT_SELECTORS = [
+        {"resourceId": "com.ss.android.ugc.trill:id/h5p"},
+        {"resourceId": "com.ss.android.ugc.trill:id/search_input"},
+        {"className": "android.widget.EditText"}
+    ]
+
+    SEARCH_BUTTON_SELECTORS = [
+        {"resourceId": "com.ss.android.ugc.trill:id/zpp", "text": "Tìm kiếm"},
+        {"resourceId": "com.ss.android.ugc.trill:id/search_btn"},
+        {"resourceId": "com.zhiliaoapp.musically:id/search_button"},
+        {"resourceId": "com.ss.android.ugc.trill:id/action_search"}
+    ]
+
+    # Selectors for user tab
+    USERS_TAB_SELECTORS = [
+        {"description": "Người dùng"},
+        {"text": "Người dùng"},
+        {"description": "Users"},
+        {"text": "Users"},
+        {"description": "Người dùng", "className": "android.widget.TextView"},
+        {"description": "Users", "className": "android.widget.TextView"},
+        {"text": "Người dùng", "className": "android.widget.TextView"},
+        {"text": "Users", "className": "android.widget.TextView"},
+    ]
+
+    # Selectors cho nút Follow
     FOLLOW_SELECTORS = [
         # Text chính xác - ưu tiên textMatches để tránh nhầm
         {"textMatches": "^Follow$"},
@@ -49,41 +84,13 @@ class TikTokUIAutomator:
         {"resourceId": "com.zhiliaoapp.musically:id/follow_button"},
         {"resourceId": "com.zhiliaoapp.musically:id/follow_btn"},
         {"resourceId": "com.zhiliaoapp.musically:id/follow"},
+        {"resourceId": "com.ss.android.ugc.trill:id/title"},
+        {"resourceId": "com.ss.android.ugc.trill:id/follow_button"},
+        {"resourceId": "com.ss.android.ugc.trill:id/follow_btn"},
+        {"resourceId": "com.ss.android.ugc.trill:id/follow"},
         # Content-description selectors
         {"description": "Follow"},
         {"description": "Theo dõi"},
-    ]
-
-    # Selectors cho nút Follower (để loại trừ)
-    FOLLOWER_SELECTORS = [
-        {"textMatches": ".*Follower.*"},
-        {"textMatches": ".*Người theo dõi.*"},
-        {"text": "Followers"},
-        {"text": "Người theo dõi"},
-    ]
-
-    # Selectors cho thanh search
-    SEARCH_ICON_SELECTORS = [
-        {"resourceId": "com.ss.android.ugc.trill:id/jhs"},
-        {"description": "Tìm kiếm"},
-        {"description": "Search"},
-    ]
-
-    SEARCH_INPUT_SELECTORS = [
-        {"resourceId": "com.ss.android.ugc.trill:id/h5p"},
-        {"className": "android.widget.EditText"},
-    ]
-
-    SEARCH_BUTTON_SELECTORS = [
-        {"resourceId": "com.ss.android.ugc.trill:id/zpp", "text": "Tìm kiếm"},
-        {"resourceId": "com.ss.android.ugc.trill:id/zpp"},
-    ]
-
-    USERS_TAB_SELECTORS = [
-        {"description": "Người dùng"},
-        {"text": "Người dùng"},
-        {"description": "Users"},
-        {"text": "Users"},
     ]
 
     # Selectors cho nút Like
@@ -92,6 +99,9 @@ class TikTokUIAutomator:
         {"resourceId": "com.zhiliaoapp.musically:id/like_container"},
         {"resourceId": "com.zhiliaoapp.musically:id/like_icon"},
         {"resourceId": "com.zhiliaoapp.musically:id/like_btn"},
+        {"resourceId": "com.ss.android.ugc.trill:id/like_container"},
+        {"resourceId": "com.ss.android.ugc.trill:id/like_icon"},
+        {"resourceId": "com.ss.android.ugc.trill:id/like_btn"},
         # Content-description selectors
         {"description": "Like"},
         {"description": "Thích"},
@@ -194,15 +204,33 @@ class TikTokUIAutomator:
                             continue
 
                         bounds = info.get("bounds")
-                        return ElementInfo(
-                            exists=True,
-                            text=info.get("text"),
-                            resource_id=info.get("resourceId"),
-                            content_desc=info.get("contentDescription"),
-                            bounds=(bounds.get("left", 0), bounds.get("top", 0),
-                                   bounds.get("right", 0), bounds.get("bottom", 0)),
-                            is_selected=info.get("selected", False)
-                        )
+                        # Đảm bảo bounds là dictionary hợp lệ
+                        if isinstance(bounds, dict):
+                            # Chuyển đổi các giá trị bounds sang số nguyên
+                            left = int(bounds.get("left", 0)) if bounds.get("left") is not None else 0
+                            top = int(bounds.get("top", 0)) if bounds.get("top") is not None else 0
+                            right = int(bounds.get("right", 0)) if bounds.get("right") is not None else 0
+                            bottom = int(bounds.get("bottom", 0)) if bounds.get("bottom") is not None else 0
+
+                            return ElementInfo(
+                                exists=True,
+                                text=info.get("text"),
+                                resource_id=info.get("resourceId"),
+                                content_desc=info.get("contentDescription"),
+                                bounds=(left, top, right, bottom),
+                                is_selected=info.get("selected", False)
+                            )
+                        else:
+                            # Nếu bounds không phải là dictionary, sử dụng giá trị mặc định
+                            logger.debug(f"Bounds không hợp lệ: {bounds}")
+                            return ElementInfo(
+                                exists=True,
+                                text=info.get("text"),
+                                resource_id=info.get("resourceId"),
+                                content_desc=info.get("contentDescription"),
+                                bounds=(0, 0, 0, 0),  # Giá trị mặc định
+                                is_selected=info.get("selected", False)
+                            )
                 except Exception as e:
                     logger.debug(f"Lỗi tìm element với selector {selector}: {e}")
                     continue
@@ -329,6 +357,11 @@ class TikTokUIAutomator:
 
         try:
             left, top, right, bottom = element.bounds
+            # Kiểm tra xem các giá trị bounds có phải là số nguyên không
+            if isinstance(left, str) or isinstance(top, str) or isinstance(right, str) or isinstance(bottom, str):
+                logger.warning("Bounds không hợp lệ - chứa giá trị chuỗi")
+                return False
+
             center_x = (left + right) // 2
             center_y = (top + bottom) // 2
 
@@ -506,13 +539,32 @@ class TikTokUIAutomator:
                     if attempt < retry_count:
                         time.sleep(1)
                         continue
-                    return False, "Khong tim thay o nhap search"
+                    # Try alternative search with different resource IDs
+                    logger.info("Thu tim voi resource ID thay the...")
+                    # Try common search input resource IDs
+                    alt_search_selectors = [
+                        {"resourceId": "com.zhiliaoapp.musically:id/search_input"},
+                        {"resourceId": "com.ss.android.ugc.trill:id/search_input"},
+                        {"resourceId": "com.zhiliaoapp.musically:id/edit_text"},
+                        {"resourceId": "com.ss.android.ugc.trill:id/edit_text"},
+                        {"className": "android.widget.EditText"}
+                    ]
+                    for selector in alt_search_selectors:
+                        alt_element = self._find_element([selector], timeout=1.0)
+                        if alt_element:
+                            logger.info("Tim thay resource ID thay the")
+                            search_input = alt_element
+                            break
+                    if not search_input:
+                        return False, "Khong tim thay o nhap search"
 
                 # Clear text cu
                 self.click_element(search_input)
                 time.sleep(0.3)
                 try:
-                    self._u2(resourceId='com.ss.android.ugc.trill:id/h5p').clear_text()
+                    # Try multiple ways to clear text
+                    self._u2.clear_text()
+                    self._u2.press("del")
                 except Exception:
                     pass
                 time.sleep(0.3)
@@ -536,45 +588,63 @@ class TikTokUIAutomator:
                     if attempt < retry_count:
                         time.sleep(1)
                         continue
-                    return False, "Khong tim thay tab Nguoi dung"
+                    # Try alternative user tab selectors
+                    logger.info("Thu tim tab Nguoi dung voi selector thay the...")
+                    alt_user_selectors = [
+                        {"text": "Users"},
+                        {"text": "Người dùng"},
+                        {"description": "Users"},
+                        {"description": "Người dùng"}
+                    ]
+                    alt_users_tab = self._find_element(alt_user_selectors, timeout=1.0)
+                    if alt_users_tab:
+                        self.click_element(alt_users_tab)
+                        users_tab = alt_users_tab
+                    else:
+                        return False, "Khong tim thay tab Nguoi dung"
 
-                self.click_element(users_tab)
-                time.sleep(1.0)
+                if users_tab:
+                    self.click_element(users_tab)
+                    time.sleep(1.0)
 
                 # Buoc 6: Tap user dau tien trong danh sach
                 first_user_clicked = False
                 try:
-                    for el in self._u2(className='android.widget.Button', clickable=True):
-                        info = el.info
-                        bounds = info.get('bounds', {})
-                        top = bounds.get('top', 0)
-                        # User items nam duoi tabs (top > 279)
-                        if top > 279:
-                            cx = (bounds.get('left', 0) + bounds.get('right', 0)) // 2
-                            cy = (bounds.get('top', 0) + bounds.get('bottom', 0)) // 2
-                            # Bo qua nut Follow nho trong item
-                            if (bounds.get('right', 0) - bounds.get('left', 0)) > 500:
-                                self._u2.click(cx, cy)
-                                first_user_clicked = True
-                                logger.info(f"Da tap user dau tien tai ({cx}, {cy})")
-                                break
+                    # Try to find and click on first user in search results
+                    # Look for user items in search results
+                    user_elements = []
+                    for el in self._u2(className='android.widget.TextView'):
+                        try:
+                            info = el.info
+                            # Check if this looks like a username element
+                            text = info.get('text', '')
+                            if text and len(text) > 0 and not text.replace('.', '').replace('_', '').isalnum():
+                                user_elements.append(el)
+                        except:
+                            pass
+                    # Click first user if found
+                    if user_elements:
+                        el = user_elements[0] if user_elements else None
+                        if el:
+                            self.click_element(ElementInfo(
+                                exists=True,
+                                bounds=el.info.get('bounds')
+                            ))
+                            first_user_clicked = True
                 except Exception as e:
                     logger.warning(f"Loi khi tim user dau tien: {e}")
 
                 if not first_user_clicked:
                     # Fallback: tap vao toa do co dinh cua user dau tien
                     try:
-                        self._u2.click(360, 380)
+                        w, h = self._u2.window_size()
+                        self._u2.click(w//2, 300)  # Tap near top center of screen
                         first_user_clicked = True
-                        logger.info("Da tap user dau tien (fallback toa do co dinh)")
+                        logger.info("Da tap user dau tien (fallback toa do)")
                     except Exception as e:
                         logger.warning(f"Loi fallback tap user: {e}")
 
-                if not first_user_clicked:
-                    logger.warning(f"Khong tim thay user nao trong ket qua (lan {attempt})")
-                    if attempt < retry_count:
-                        time.sleep(1)
-                        continue
+                if not first_user_clicked and attempt >= retry_count:
                     return False, "Khong tim thay user nao trong ket qua"
 
                 # Buoc 7: Doi profile load
@@ -600,13 +670,35 @@ class TikTokUIAutomator:
             return False
 
         try:
-            # Thu tap vao o search va clear
-            search_input = self._find_element(self.SEARCH_INPUT_SELECTORS, timeout=1.0)
-            if search_input:
-                self.click_element(search_input)
-                time.sleep(0.3)
-                self._u2.clear_text()
-                return True
+            # Vong lap toi da 3 lan de quay lai man hinh thich hop neu chua thay o/nut tim kiem
+            for i in range(3):
+                # 1. Kiem tra xem co o nhap search khong (dang o man hinh ket qua hoac nhap lieu)
+                search_input = self._find_element(self.SEARCH_INPUT_SELECTORS, timeout=0.8)
+                if search_input:
+                    logger.debug("Tim thay o nhap search, tien hanh click va xoa text.")
+                    self.click_element(search_input)
+                    time.sleep(0.3)
+                    self._u2.clear_text()
+                    return True
+
+                # 2. Kiem tra xem co nut tim kiem khong (dang o man hinh chinh/feed)
+                search_icon = self._find_element(self.SEARCH_ICON_SELECTORS, timeout=0.5)
+                if search_icon:
+                    logger.debug("Tim thay icon search (man hinh chinh), click de mo o nhap.")
+                    self.click_element(search_icon)
+                    time.sleep(0.5)
+                    # Sau khi mo, kiem tra lai o nhap search
+                    search_input = self._find_element(self.SEARCH_INPUT_SELECTORS, timeout=1.0)
+                    if search_input:
+                        self.click_element(search_input)
+                        time.sleep(0.3)
+                        self._u2.clear_text()
+                        return True
+
+                # 3. Neu chua thay gi (dang o trang ca nhan hoac trang con khac), tien hanh back
+                logger.info(f"Chua thay o search hoac icon search, dang nhan quay lai (lan {i+1}/3)...")
+                self._u2.press("back")
+                time.sleep(1.0)
         except Exception as e:
             logger.debug(f"Loi clear search text: {e}")
 
