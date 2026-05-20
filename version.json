@@ -1,5 +1,5 @@
 {
-    "version": "1.7.2",
-    "release_date": "2026-05-20",
-    "changelog": "Đóm: v1.7.2: TikTok uiautomator2 tối ưu nút back khi clear search text (chỉ back khi chưa ở màn hình search/chính)"
+  "version": "1.8.0",
+  "release_date": "2026-05-20",
+  "changelog": "Major: Clean Slate Updater - Xoa file cu, chi de config, tai tuoi tu GitHub"
 }
