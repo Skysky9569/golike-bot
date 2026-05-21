@@ -25,14 +25,33 @@ from boot.bootstrap import run_bootstrap, bootstrap_updater, check_and_download_
 # Kiem tra --skip-bootstrap flag
 skip_bootstrap = "--skip-bootstrap" in sys.argv
 
+# ============================================================================
+# SYSTEM INTEGRITY CHECK - Dam bao du file truoc khi vao tool
+# ============================================================================
+
 try:
     run_bootstrap(skip_download=skip_bootstrap)
 
     if not skip_bootstrap:
         import updater
-        updater.ensure_system_complete()
+        if not updater.ensure_system_complete():
+            print("\033[1;31m" + "=" * 60 + "\033[0m")
+            print("\033[1;31m[!] THIEU FILE HE THONG QUAN TRONG!\033[0m")
+            print("\033[1;31m[!] Khong the tu dong tai ve. Vui long kiem tra lai.\033[0m")
+            print("\033[1;33m[!] Thu chay: python main.py --skip-bootstrap\033[0m")
+            print("\033[1;33m[!] Hoac clone lai tu GitHub:\033[0m")
+            print("\033[1;33m    git clone https://github.com/skysky9569/golike-bot.git\033[0m")
+            print("\033[1;31m" + "=" * 60 + "\033[0m")
+            sys.exit(1)
+except KeyboardInterrupt:
+    print("\n\033[1;33m[!] Da huy qua trinh khoi tao.\033[0m")
+    sys.exit(0)
 except Exception as e:
-    print(f"\033[1;31m[!] Loi trong qua trinh khoi tao: {e}\033[0m")
+    print(f"\033[1;31m" + "=" * 60 + "\033[0m")
+    print(f"\033[1;31m[!] LOI KHOI TAO HE THONG: {e}\033[0m")
+    print(f"\033[1;31m" + "=" * 60 + "\033[0m")
+    print(f"\033[1;33m[!] Thu chay: python main.py --skip-bootstrap\033[0m")
+    sys.exit(1)
 
 # ============================================================================
 # ADB PATH SETUP

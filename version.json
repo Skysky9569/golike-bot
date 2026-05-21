@@ -1,5 +1,5 @@
 {
-  "version": "1.8.4",
+  "version": "1.8.5",
   "release_date": "2026-05-21",
-  "changelog": "v1.8.4: System integrity check on startup\n- main.py now checks all 48 essential files before launching tool\n- Auto-download missing files from GitHub if needed\n- Exit with clear error message if critical files cannot be restored\n- Handle KeyboardInterrupt gracefully during bootstrap"
+  "changelog": "v1.8.5: Fix full repo download + binary file handling\n- _get_all_repo_files() now returns ALL files from GitHub (no filter)\n- ensure_system_complete() uses full GitHub API tree, fallback to essential list\n- Auto-skip binary files (exe, dll, png) during text download\n- Proper folder structure recreation when downloading missing files"
 }

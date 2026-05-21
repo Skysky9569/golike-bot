@@ -130,7 +130,7 @@ def _is_config_file(filename: str, filepath: str) -> bool:
 
 def _get_all_repo_files() -> List[str]:
     """
-    Get list of all Python files from GitHub repository.
+    Get list of all files from GitHub repository (recursive).
     Returns relative paths from repo root.
     """
     try:
@@ -143,9 +143,7 @@ def _get_all_repo_files() -> List[str]:
         for item in items:
             if isinstance(item, dict) and item.get('type') == 'file':
                 path = item.get('path', '')
-                # Only include Python files and essential config
-                if path.endswith('.py') or path.endswith('.json') or path.endswith('.md'):
-                    files.append(path)
+                files.append(path)
         return files
     except Exception:
         return []
@@ -250,9 +248,16 @@ def restore_configs(backup_dir: str, base_dir: str) -> int:
     return restored
 
 
+# Cac extension text co the download duoc
+TEXT_EXTENSIONS = {'.py', '.json', '.md', '.txt', '.yml', '.yaml', '.cfg', '.conf',
+                   '.ini', '.xml', '.html', '.css', '.js', '.sh', '.bat', '.ps1',
+                   '.gitignore', '.dockerignore', '.env.example', '.enc', '.toml'}
+
+
 def download_repo_files(base_dir: str) -> Tuple[int, int]:
     """
-    Download all Python files from GitHub repository.
+    Download all text files from GitHub repository.
+    Skips binary files (exe, dll, png, etc).
     Returns (success_count, fail_count)
     """
     repo_files = _get_all_repo_files()
@@ -265,6 +270,11 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
     fail_count = 0
 
     for rel_path in repo_files:
+        # Bo qua file nhi phan
+        _, ext = os.path.splitext(rel_path)
+        if ext.lower() not in TEXT_EXTENSIONS and ext != '':
+            continue
+
         full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
         url = f"{GITHUB_RAW_BASE}{rel_path}"
 
@@ -293,35 +303,17 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
     return ok_count, fail_count
 
 
-# Essential files that must exist for the bot to run
+# Fallback essential files (dung khi GitHub API khong kha dung)
 ESSENTIAL_FILES = [
-    # Root entry points
-    'main.py',
-    'updater.py',
-    'requirements.txt',
-    'version.json',
-    'golikefb_sele.py',
-    'tiktok_automation.py',
-    'FB_WEB_API_FIXED.py',
-    'tiktok_follow_bot.py',
-    'tiktok_follow_bot_v2.py',
-    'tt_like_page.py',
-    # Config
-    'app_config.json',
-    'adb_config.json',
-    'config_parallel.json',
-    'golike_config_sample.json',
-    # Core package
-    'golike_core/__init__.py',
-    'golike_core/adb_manager.py',
-    'golike_core/api_client.py',
-    'golike_core/config.py',
-    'golike_core/error_handling.py',
-    'golike_core/job_processors.py',
-    'golike_core/logging.py',
-    'golike_core/security.py',
+    'main.py', 'updater.py', 'requirements.txt', 'version.json',
+    'golikefb_sele.py', 'tiktok_automation.py', 'FB_WEB_API_FIXED.py',
+    'tiktok_follow_bot.py', 'tiktok_follow_bot_v2.py', 'tt_like_page.py',
+    'app_config.json', 'adb_config.json', 'config_parallel.json',
+    'golike_core/__init__.py', 'golike_core/adb_manager.py',
+    'golike_core/api_client.py', 'golike_core/config.py',
+    'golike_core/error_handling.py', 'golike_core/job_processors.py',
+    'golike_core/logging.py', 'golike_core/security.py',
     'golike_core/termux.py',
-    # Core modules
     'golike_core/modules/__init__.py',
     'golike_core/modules/account_manager.py',
     'golike_core/modules/browser_manager.py',
@@ -337,48 +329,30 @@ ESSENTIAL_FILES = [
     'golike_core/modules/rate_limit_handler.py',
     'golike_core/modules/system_manager.py',
     'golike_core/modules/task_manager.py',
-    # Facebook
-    'golike_facebook/__init__.py',
-    'golike_facebook/facebook_client.py',
-    'golike_facebook/fb_web_api.py',
-    'golike_facebook/selenium_fb.py',
-    # TikTok
-    'golike_tiktok/__init__.py',
-    'golike_tiktok/tiktok_client.py',
-    # UI
-    'ui/__init__.py',
-    'ui/adb_menu.py',
-    'ui/console.py',
-    'ui/facebook_flow.py',
-    'ui/system_panels.py',
-    'ui/tiktok_flow.py',
-    # Boot
-    'boot/__init__.py',
-    'boot/bootstrap.py',
+    'golike_facebook/__init__.py', 'golike_facebook/facebook_client.py',
+    'golike_facebook/fb_web_api.py', 'golike_facebook/selenium_fb.py',
+    'golike_tiktok/__init__.py', 'golike_tiktok/tiktok_client.py',
+    'ui/__init__.py', 'ui/adb_menu.py', 'ui/console.py',
+    'ui/facebook_flow.py', 'ui/system_panels.py', 'ui/tiktok_flow.py',
+    'boot/__init__.py', 'boot/bootstrap.py',
 ]
 
 
-def ensure_system_complete() -> bool:
+def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, int]:
     """
-    Check if all essential files exist. Download missing ones from GitHub.
-    Returns True if all files are present, False if critical files cannot be restored.
+    Download multiple missing text files from GitHub.
+    Skips binary files automatically.
+    Returns (restored_count, failed_count)
     """
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    missing = []
-
-    for rel_path in ESSENTIAL_FILES:
-        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
-        if not os.path.exists(full_path):
-            missing.append(rel_path)
-
-    if not missing:
-        return True
-
-    print(f"\n  ⚠️ {len(missing)} essential file(s) missing. Downloading from GitHub...")
-
     restored = 0
     failed = 0
-    for rel_path in missing:
+
+    for rel_path in file_list:
+        # Bo qua file nhi phan (khong download duoc dang text)
+        _, ext = os.path.splitext(rel_path)
+        if ext.lower() not in TEXT_EXTENSIONS and ext != '':
+            continue
+
         full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
         url = f"{GITHUB_RAW_BASE}{rel_path}"
 
@@ -391,19 +365,51 @@ def ensure_system_complete() -> bool:
             try:
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                print(f"  ✅ Restored: {rel_path}")
+                print(f"  ✅ {rel_path}")
                 restored += 1
             except Exception as e:
-                print(f"  ❌ Cannot write {rel_path}: {e}")
+                print(f"  ❌ {rel_path}: {e}")
                 failed += 1
         else:
-            print(f"  ❌ Cannot download {rel_path}")
+            print(f"  ❌ {rel_path}: download failed")
             failed += 1
 
+    return restored, failed
+
+
+def ensure_system_complete() -> bool:
+    """
+    Check all files from GitHub exist locally. Download missing ones.
+    Falls back to ESSENTIAL_FILES list if GitHub API is unavailable.
+    Returns True if all essential files are present.
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Try to get full file tree from GitHub API first
+    repo_files = _get_all_repo_files()
+    using_full_api = bool(repo_files)
+
+    if not repo_files:
+        repo_files = ESSENTIAL_FILES
+        print("  ℹ️ Using fallback file list (GitHub API unavailable)")
+
+    # Find missing files
+    missing = []
+    for rel_path in repo_files:
+        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
+        if not os.path.exists(full_path):
+            missing.append(rel_path)
+
+    if not missing:
+        return True
+
+    print(f"\n  ⚠️ {len(missing)} file(s) missing, downloading...")
+    restored, failed = _download_missing_files(base_dir, missing)
+
     if failed == 0:
-        print(f"  ✅ All {restored} missing file(s) restored successfully")
+        print(f"  ✅ All {restored} file(s) restored")
     else:
-        print(f"  ⚠️ Restored {restored}/{restored + failed} file(s), {failed} failed")
+        print(f"  ⚠️ Restored {restored}/{len(missing)} file(s), {failed} failed")
 
     print()
     return failed == 0
