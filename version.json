@@ -1,5 +1,5 @@
 {
-  "version": "1.8.3",
+  "version": "1.8.4",
   "release_date": "2026-05-21",
-  "changelog": "v1.8.3: GitHub cleanup + Updater fixes\n- Remove 159 redundant files from GitHub tracking (node_modules, pycache, old scripts, etc.)\n- Fix: Authorization.txt now preserved during clean update\n- Fix: ensure_system_complete() now actually checks for missing essential files\n- Untrack sensitive auth files from repository"
+  "changelog": "v1.8.4: System integrity check on startup\n- main.py now checks all 48 essential files before launching tool\n- Auto-download missing files from GitHub if needed\n- Exit with clear error message if critical files cannot be restored\n- Handle KeyboardInterrupt gracefully during bootstrap"
 }
