@@ -83,9 +83,10 @@ def _process_single_job(
     ui_automator,
     job_processor,
     delay: int,
-    lannhan: str,
     open_method: str,
     search_mode: bool,
+    stt: int = 0,
+    tong: int = 0,
 ) -> Tuple[bool, int, bool]:
     """Xu ly mot job don le: mo link, UI auto, nhan tien.
 
@@ -99,9 +100,10 @@ def _process_single_job(
         ui_automator: TikTokUIAutomator instance hoac None
         job_processor: JobProcessor instance
         delay: Thoi gian delay giua cac job
-        lannhan: Co nhan tien lan 2 khong (y/n)
         open_method: Phuong thuc mo link (adb/u2/search)
         search_mode: Dang o che do search khong
+        stt: So thu tu job
+        tong: Tong tien hien tai
 
     Returns:
         Tuple[bool, int, bool]: (ok, reward, not_found_skip)
@@ -169,7 +171,7 @@ def _process_single_job(
         print(colored("🧹 Da xoa text search", "cyan"), end="\r")
 
     # Nhan tien
-    return _claim_payment(api_client, ads_id, account_id, job_type, lannhan)
+    return _claim_payment(api_client, ads_id, account_id, job_type, stt=stt, tong=tong)
 
 
 def _skip_job(api_client: GolikeAPIClient, ads_id: str, object_id: str, account_id: str, job_type: str) -> None:
@@ -198,7 +200,8 @@ def _claim_payment(
     ads_id: str,
     account_id: str,
     job_type: str,
-    lannhan: str,
+    stt: int = 0,
+    tong: int = 0,
 ) -> Tuple[bool, int, bool]:
     """Nhan tien job, co retry.
 
@@ -207,7 +210,7 @@ def _claim_payment(
     """
     ok = False
     reward = 0
-    for lan in range(1, 3 if lannhan == "y" else 2):
+    for lan in range(1, 3):
         try:
             logger.info(f"Dang nhan tien lan {lan} cho job {job_type} (ads_id: {ads_id})...")
             nhantien = api_client.post('/api/advertising/publishers/tiktok/complete-jobs', {
@@ -220,7 +223,7 @@ def _claim_payment(
                 ok = True
                 reward = nhantien["data"].get("prices", 0)
                 now = datetime.now(tz).strftime("%H:%M:%S") if tz else time.strftime("%H:%M:%S")
-                print(colored(f"| ... | {now} | success | {nhantien['data'].get('type', '')} | +{reward} | ...", "green", bold=True))
+                print(colored(f"| {stt} | {now} | success | {nhantien['data'].get('type', '')} | +{reward} | {tong + reward}", "green", bold=True))
                 logger.info(f"Job hoan thanh: {nhantien['data'].get('type')}, +{reward} xu")
                 break
             elif lan == 1:
@@ -415,11 +418,6 @@ def tiktok_menu(auth_token: str) -> None:
             logger.warning("Vui long nhap so thu tu hoac ID hop le!")
 
     delay = input_int("👀 Nhap thoi gian lam job : ")
-    while True:
-        lannhan = input(colored("🛑 Nhan tien lan 2 neu lan 1 fail? (y/n): ", "green")).strip().lower()
-        if lannhan in {"y", "n"}:
-            break
-        logger.warning("Nhap sai hay nhap lai!!!")
 
     doiacc = input_int("📆 So job fail de doi acc TikTok (nhap 1 neu k muon dung) : ")
     while True:
@@ -553,7 +551,8 @@ def tiktok_menu(auth_token: str) -> None:
         ok, reward, not_found = _process_single_job(
             api_client, ads_id, link, object_id, account_id,
             job_type, ui_automator, job_processor,
-            delay, lannhan, open_method, search_mode
+            delay, open_method, search_mode,
+            stt=dem + 1, tong=tong
         )
 
         if not_found:
@@ -565,29 +564,10 @@ def tiktok_menu(auth_token: str) -> None:
             tong += reward
             checkdoiacc = 0
         else:
-            # Retry lan 2
-            print(colored("❌ Nhan tien that bai - Thu lai...", "red", bold=True))
+            logger.warning("Nhan tien that bai sau 2 lan retry → Skip job")
             _skip_job(api_client, ads_id, object_id, account_id, job_type)
-
-            ok2, reward2, not_found2 = _process_single_job(
-                api_client, ads_id, link, object_id, account_id,
-                job_type, ui_automator, job_processor,
-                delay, lannhan, open_method, search_mode
-            )
-
-            if not_found2:
-                checkdoiacc += 1
-                continue
-
-            if ok2:
-                dem += 1
-                tong += reward2
-                checkdoiacc = 0
-            else:
-                logger.warning("Nhan tien that bai ca 2 lan")
-                _skip_job(api_client, ads_id, object_id, account_id, job_type)
-                time.sleep(1)
-                checkdoiacc += 1
+            time.sleep(1)
+            checkdoiacc += 1
 
 
 def _select_new_account(data: List[Dict], account_id: str, checkdoiacc: int) -> str:
