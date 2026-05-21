@@ -222,9 +222,11 @@ def _claim_payment(
             if nhantien.get("status") == 200:
                 ok = True
                 reward = nhantien["data"].get("prices", 0)
+                job_type = nhantien['data'].get('type', '')
+                message = nhantien['data'].get('message', 'Success')
                 now = datetime.now(tz).strftime("%H:%M:%S") if tz else time.strftime("%H:%M:%S")
-                print(colored(f"| {stt} | {now} | success | {nhantien['data'].get('type', '')} | +{reward} | {tong + reward}", "green", bold=True))
-                logger.info(f"Job hoan thanh: {nhantien['data'].get('type')}, +{reward} xu")
+                print(colored(f"| {stt} | {now} | success | {job_type} | +{reward} | {tong + reward} | {message}", "green", bold=True))
+                logger.info(f"Job hoan thanh: {job_type}, +{reward} xu - {message}")
                 break
             elif lan == 1:
                 print(colored("⚠️ Lan 1 that bai - Dang thu lan 2...", "yellow"), end="\r")
