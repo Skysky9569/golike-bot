@@ -234,7 +234,7 @@ except ValueError:
     pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.8.4" # v1.8.4: System integrity check on startup
+CURRENT_VERSION = "1.8.5" # v1.8.5: Rate limit delay increased to 45s
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
