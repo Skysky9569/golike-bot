@@ -1,5 +1,5 @@
 {
-  "version": "1.8.2",
+  "version": "1.8.3",
   "release_date": "2026-05-21",
-  "changelog": "Termux/Android support + Clean Slate Updater\n- Show STT and total money in success output for TikTok jobs\n- Remove redundant 'lannhan' parameter\n- Skip job immediately after 2 claim failures"
+  "changelog": "v1.8.3: GitHub cleanup + Updater fixes\n- Remove 159 redundant files from GitHub tracking (node_modules, pycache, old scripts, etc.)\n- Fix: Authorization.txt now preserved during clean update\n- Fix: ensure_system_complete() now actually checks for missing essential files\n- Untrack sensitive auth files from repository"
 }

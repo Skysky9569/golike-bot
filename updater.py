@@ -31,7 +31,7 @@ CONFIG_EXTENSIONS = ['.json', '.enc', '.md']
 PRESERVED_FOLDERS = ['node_modules', '.git', '__pycache__', '.pytest_cache', '.claude', '.agents']
 
 # Files to always keep (logs, credentials, local configs)
-ALWAYS_KEEP_FILES = ['logs', 'logs/', '.gitignore', 'package.json', 'package-lock.json']
+ALWAYS_KEEP_FILES = ['logs', 'logs/', '.gitignore', 'package.json', 'package-lock.json', 'Authorization.txt']
 
 
 def _download_text(url: str, timeout: int = 20) -> Optional[str]:
@@ -293,14 +293,120 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
     return ok_count, fail_count
 
 
+# Essential files that must exist for the bot to run
+ESSENTIAL_FILES = [
+    # Root entry points
+    'main.py',
+    'updater.py',
+    'requirements.txt',
+    'version.json',
+    'golikefb_sele.py',
+    'tiktok_automation.py',
+    'FB_WEB_API_FIXED.py',
+    'tiktok_follow_bot.py',
+    'tiktok_follow_bot_v2.py',
+    'tt_like_page.py',
+    # Config
+    'app_config.json',
+    'adb_config.json',
+    'config_parallel.json',
+    'golike_config_sample.json',
+    # Core package
+    'golike_core/__init__.py',
+    'golike_core/adb_manager.py',
+    'golike_core/api_client.py',
+    'golike_core/config.py',
+    'golike_core/error_handling.py',
+    'golike_core/job_processors.py',
+    'golike_core/logging.py',
+    'golike_core/security.py',
+    'golike_core/termux.py',
+    # Core modules
+    'golike_core/modules/__init__.py',
+    'golike_core/modules/account_manager.py',
+    'golike_core/modules/browser_manager.py',
+    'golike_core/modules/config_manager.py',
+    'golike_core/modules/cookie_manager.py',
+    'golike_core/modules/error_handler.py',
+    'golike_core/modules/facebook_automation.py',
+    'golike_core/modules/golike_handler.py',
+    'golike_core/modules/golike_handler_updated.py',
+    'golike_core/modules/job_checker.py',
+    'golike_core/modules/job_processor.py',
+    'golike_core/modules/parallel_processor.py',
+    'golike_core/modules/rate_limit_handler.py',
+    'golike_core/modules/system_manager.py',
+    'golike_core/modules/task_manager.py',
+    # Facebook
+    'golike_facebook/__init__.py',
+    'golike_facebook/facebook_client.py',
+    'golike_facebook/fb_web_api.py',
+    'golike_facebook/selenium_fb.py',
+    # TikTok
+    'golike_tiktok/__init__.py',
+    'golike_tiktok/tiktok_client.py',
+    # UI
+    'ui/__init__.py',
+    'ui/adb_menu.py',
+    'ui/console.py',
+    'ui/facebook_flow.py',
+    'ui/system_panels.py',
+    'ui/tiktok_flow.py',
+    # Boot
+    'boot/__init__.py',
+    'boot/bootstrap.py',
+]
+
+
 def ensure_system_complete() -> bool:
     """
-    Scan workspace and dynamically reconstruct all missing essential files.
-    Legacy support - use clean update approach instead.
+    Check if all essential files exist. Download missing ones from GitHub.
+    Returns True if all files are present, False if critical files cannot be restored.
     """
-    # For now, delegate to clean update
-    print("\033[1;33m[⚠️] Using legacy self-healing mode. Consider running full update.\033[0m")
-    return True  # Simplified for now
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    missing = []
+
+    for rel_path in ESSENTIAL_FILES:
+        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
+        if not os.path.exists(full_path):
+            missing.append(rel_path)
+
+    if not missing:
+        return True
+
+    print(f"\n  ⚠️ {len(missing)} essential file(s) missing. Downloading from GitHub...")
+
+    restored = 0
+    failed = 0
+    for rel_path in missing:
+        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
+        url = f"{GITHUB_RAW_BASE}{rel_path}"
+
+        parent = os.path.dirname(full_path)
+        if parent and not os.path.exists(parent):
+            os.makedirs(parent, exist_ok=True)
+
+        content = _download_text(url, timeout=15)
+        if content is not None:
+            try:
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"  ✅ Restored: {rel_path}")
+                restored += 1
+            except Exception as e:
+                print(f"  ❌ Cannot write {rel_path}: {e}")
+                failed += 1
+        else:
+            print(f"  ❌ Cannot download {rel_path}")
+            failed += 1
+
+    if failed == 0:
+        print(f"  ✅ All {restored} missing file(s) restored successfully")
+    else:
+        print(f"  ⚠️ Restored {restored}/{restored + failed} file(s), {failed} failed")
+
+    print()
+    return failed == 0
 
 
 def run_version_check(current_version: str):

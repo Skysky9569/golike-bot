@@ -96,13 +96,13 @@ def check_rate_limit_on_page(driver):
 
 
 def handle_rate_limit(driver, context_name="tool"):
-    """Xử lý khi phát hiện rate limit: chờ 10s rồi refresh trang.
+    """Xử lý khi phát hiện rate limit: chờ 45s rồi refresh trang.
     Returns: True nếu đã xử lý, False nếu không cần.
     """
     if not check_rate_limit_on_page(driver):
         return False
-    print(f"[{context_name}] ⏳ Phát hiện 'quá nhanh' — tạm nghỉ 10 giây...")
-    for remaining in range(10, 0, -1):
+    print(f"[{context_name}] ⏳ Phát hiện 'quá nhanh' — tạm nghỉ 45 giây...")
+    for remaining in range(45, 0, -1):
         print(f"⏳ Nghỉ rate limit {remaining}s...", end="\r", flush=True)
         time.sleep(1)
     print(" " * 50, end="\r")
@@ -234,7 +234,7 @@ except ValueError:
     pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.6.1" # Nang cap v1.6.1: Tu dong tai file con thieu tu GitHub khi khoi dong
+CURRENT_VERSION = "1.8.3" # v1.8.3: GitHub cleanup + Updater fixes
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
