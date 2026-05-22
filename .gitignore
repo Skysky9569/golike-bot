@@ -29,7 +29,11 @@ node_modules/
 
 # === FILE ĐỊA PHƯƠNG ===
 .env
+.env.local
 *.local.json
+config_golike.json
+config_parallel.json
+settings.local.json
 settings.local.json
 *_config.json
 !*_config.json.example

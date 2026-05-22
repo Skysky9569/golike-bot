@@ -1,4 +1,10 @@
-{
-    "username": "Aivayta2",
-    "password": "Tranvanduy000"
-}
+[
+    {
+        "profile_name": "Tran Duy",
+        "golike_username": "Aivayta2",
+        "golike_password": "${GOLIKE_PASSWORD}",
+        "facebook_cookie": "PLACEHOLDER_YOUR_COOKIE_HERE",
+        "target_fb_uid": "YOUR_FB_UID",
+        "target_fb_name": "Target Name"
+    }
+]

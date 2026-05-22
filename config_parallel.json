@@ -1,18 +1,30 @@
-[
+{
+  "delay_between_jobs": 10.0,
+  "delay_after_api_call": 5.0,
+  "delay_after_complete": 3.0,
+  "delay_after_report_error": 3.0,
+  "delay_on_job_hunt_retry": 16.0,
+  "delay_between_accounts": 30.0,
+  "timeout_driver_load": 15.0,
+  "timeout_wait_element": 15.0,
+  "sleep_on_reset": 60.0,
+  "sleep_on_hunt_retry": 15.0,
+  "sleep_on_cool_down": 180.0,
+  "delay_after_reset_click": 15.0,
+  "switch_server_minutes": 0.0,
+  "default_proxy": "",
+  "parallel_accounts": [
     {
-        "profile_name": "Tran Duy",
-        "golike_username": "Aivayta2",
-        "golike_password": "Tranvanduy000",
-        "facebook_cookie": "datr=EOX-af0mOQpI-3sf_oxT9MmW;sb=EOX-aeoRTL1eomPDN8NU6LYP;c_user=100052855329768;ps_l=1;ps_n=1;locale=vi_VN;pas=100052855329768%3AjmwFCy1lom;wl_cbv=v2%3Bclient_version%3A3164%3Btimestamp%3A1779116125;fbl_st=100421872%3BT%3A29651935;xs=42%3AsH0wagfIi5mbbw%3A2%3A1778312572%3A-1%3A-1%3A%3AAcwW1gl8Nu-xOim8h43v1fVmn5ONooOGI2nh8leeUoyl;i_user=61571199419605;fr=1MlikKHHAPblvwP6K.AWdHaTWIg9EKjHxmDxFD66lMJ7TzCW_QdG2iYVQAaFtaTiD16aE.BqC_J6..AAA.0.0.BqC_Ku.AWcRG9SnfQrsPQUVwaIGpFnGDA0;wd=1667x784;",
-        "target_fb_uid": "61571199419605",
-        "target_fb_name": "Tạ Quốc Thịnh"
+      "profile_name": "Profile 1",
+      "golike_username": "username1",
+      "golike_password": "${GOLIKE_PASSWORD_1}",
+      "facebook_cookie": "PLACEHOLDER_COOKIE_1"
     },
     {
-        "profile_name": "Vo Oanh",
-        "golike_username": "Aivayta2",
-        "golike_password": "Tranvanduy000",
-        "facebook_cookie": "datr=EOX-af0mOQpI-3sf_oxT9MmW;sb=EOX-aeoRTL1eomPDN8NU6LYP;c_user=100052855329768;ps_l=1;ps_n=1;locale=vi_VN;pas=100052855329768%3AjmwFCy1lom;wl_cbv=v2%3Bclient_version%3A3164%3Btimestamp%3A1779116125;fbl_st=100421872%3BT%3A29651935;xs=42%3AsH0wagfIi5mbbw%3A2%3A1778312572%3A-1%3A-1%3A%3AAcwW1gl8Nu-xOim8h43v1fVmn5ONooOGI2nh8leeUoyl;fr=1MlikKHHAPblvwP6K.AWdHaTWIg9EKjHxmDxFD66lMJ7TzCW_QdG2iYVQAaFtaTiD16aE.BqC_J6..AAA.0.0.BqC_Ku.AWcRG9SnfQrsPQUVwaIGpFnGDA0;wd=1667x784;i_user=61570942273152;",
-        "target_fb_uid": "61570942273152",
-        "target_fb_name": "Võ Văn Oanh"
+      "profile_name": "Profile 2",
+      "golike_username": "username2",
+      "golike_password": "${GOLIKE_PASSWORD_2}",
+      "facebook_cookie": "PLACEHOLDER_COOKIE_2"
     }
-]
+  ]
+}
