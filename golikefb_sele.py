@@ -37,23 +37,97 @@ import atexit
 import threading
 
 # Helper to detect the "job limit" toast
-
 def job_limit_reached(driver):
-    """Return True if a toast appears indicating the 100‑jobs‑per‑day limit.
-    The toast element looks like:
-        <div class="toast toast-success"><div class="toast-message">Bạn đã làm quá 100 jobs mỗi ngày ...</div></div>
-    """
+    """Return True if a toast or popup appears indicating the max jobs limit."""
     try:
-        toast_msg_elem = WebDriverWait(driver, 3).until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, "div.toast-message"))
-        )
-        msg = toast_msg_elem.text.strip()
-        if "Bạn đã làm quá 100 jobs" in msg:
-            print(f"\U0001F6A8 {msg}")
+        # 1. Check Toast messages
+        toast_elems = driver.find_elements(By.CSS_SELECTOR, "div.toast-message")
+        for elem in toast_elems:
+            try:
+                msg = elem.get_attribute("textContent").lower()
+                if "100 job" in msg or ("tối đa" in msg and "job" in msg) or ("giới hạn" in msg and "job" in msg) or "đã làm quá" in msg or "max job" in msg:
+                    print(f"🚨 Phát hiện giới hạn Job: {elem.get_attribute('textContent').strip()}")
+                    return True
+            except: pass
+                    
+        # 2. Check SweetAlert popups
+        popup_titles = driver.find_elements(By.CSS_SELECTOR, "h2#swal2-title")
+        popup_contents = driver.find_elements(By.CSS_SELECTOR, "div#swal2-content")
+        
+        full_text = ""
+        for t in popup_titles:
+            if t.is_displayed(): full_text += t.text.lower() + " "
+        for c in popup_contents:
+            if c.is_displayed(): full_text += c.text.lower() + " "
+            
+        if "100 job" in full_text or ("tối đa" in full_text and "job" in full_text) or ("giới hạn" in full_text and "job" in full_text) or "đã làm quá" in full_text or "max job" in full_text:
+            print(f"🚨 Phát hiện giới hạn Job từ Popup: {full_text.strip()}")
+            # Tự động đóng popup nếu có
+            try:
+                ok_btn = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                if ok_btn.is_displayed():
+                    driver.execute_script("arguments[0].click();", ok_btn)
+            except: pass
             return True
+            
     except Exception:
         pass
+        
     return False
+
+
+# ======== TÌM NÚT "TRÌNH DUYỆT" (BROWSER BUTTON) ========
+
+_BROWSER_BTN_SELECTORS = [
+    # XPATH dựa theo text h6 bên trong thẻ <a>
+    ("xpath", "//a[.//h6[normalize-space()='Trình duyệt']]"),
+    ("xpath", "//a[.//h6[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'trình duyệt')]]"),
+    # Text trực tiếp trên thẻ <a>
+    ("xpath", "//a[normalize-space()='Trình duyệt']"),
+    ("xpath", "//a[contains(normalize-space(), 'Trình duyệt')]"),
+    # Có thể Golike dùng button thay vì <a>
+    ("xpath", "//button[contains(normalize-space(), 'Trình duyệt')]"),
+    # CSS fallback - link chứa text 'trinh-duyet' hoặc href chứa 'facebook'
+    ("css", "a[href*='facebook.com']"),
+    ("css", "a[href*='fb.com']"),
+    # Nếu Golike dùng 'Browser' tiếng Anh
+    ("xpath", "//a[.//h6[contains(normalize-space(), 'Browser')]]"),
+    ("xpath", "//a[contains(normalize-space(), 'Browser')]"),
+]
+
+def find_browser_button(driver, timeout=8):
+    """Tìm nút 'Trình duyệt' trong giao diện GoLike job detail.
+    Thử nhiều selector khác nhau để xử lý khi Golike thay đổi UI.
+    Trả về element nếu tìm thấy, raise TimeoutException nếu không.
+    """
+    import time as _time
+    deadline = _time.time() + timeout
+    last_err = None
+    while _time.time() < deadline:
+        for sel_type, sel_val in _BROWSER_BTN_SELECTORS:
+            try:
+                if sel_type == "xpath":
+                    elems = driver.find_elements(By.XPATH, sel_val)
+                else:
+                    elems = driver.find_elements(By.CSS_SELECTOR, sel_val)
+                for el in elems:
+                    try:
+                        if el.is_displayed() and el.is_enabled():
+                            return el
+                    except Exception:
+                        pass
+            except Exception as e:
+                last_err = e
+        _time.sleep(0.5)
+    # Không tìm thấy — in HTML debug để giúp chẩn đoán
+    try:
+        body_html = driver.find_element(By.TAG_NAME, "body").get_attribute("innerHTML")
+        snippet = body_html[:3000]
+        print("[DEBUG] Không tìm thấy nút Trình duyệt. HTML snippet (3000 chars):")
+        print(snippet)
+    except Exception:
+        pass
+    raise TimeoutException("Không tìm thấy nút Trình duyệt sau khi thử tất cả selectors")
 
 
 # ======== PHÁT HIỆN & XỬ LÝ RATE LIMIT ("quá nhanh") ========
@@ -148,7 +222,6 @@ try:
     HAS_SELENIUM_DOM_BOT = True
 except ImportError as e:
     HAS_SELENIUM_DOM_BOT = False
-    print(f"[CANH BAO] Khong the import golike_facebook.selenium_fb: {e}")
     class FacebookSeleniumBot:
         pass
 
@@ -195,28 +268,27 @@ def cleanup():
 STOP_FLAG = False
 
 def handle_exit_signal(signum, frame):
-    """Xử lý Ctrl+C - tạm dừng tool nhưng chưa đóng selenium chrome"""
+    """Xử lý Ctrl+C - Tạm dừng, hỏi người dùng muốn làm gì"""
     global STOP_FLAG
 
     print("\n[🛑] Đã nhận Ctrl+C. Tạm dừng tool, trình duyệt Selenium vẫn đang mở...")
-    print("[💡] Gõ 'c' để TIẾP TỤC chạy (Resume).")
-    print("[💡] Gõ 'm' để VỀ MENU chính (Lưu ý: các Chrome đang mở sẽ vẫn giữ nguyên).")
+    print("[💡] Gõ 'm' để VỀ MENU chính (Chrome sẽ bị đóng).")
     print("[💡] Gõ 'exit' để THOÁT hoàn toàn và ĐÓNG tool.")
 
     # Đợi user nhập lựa chọn
     try:
-        user_input = input("👉 Lựa chọn (c/m/exit): ").strip().lower()
+        user_input = input("👉 Lựa chọn (m/exit): ").strip().lower()
         if user_input == 'exit':
-            print("[✅] Thoát chương trình...")
+            print("[✅] Đang đóng trình duyệt và thoát chương trình...")
             cleanup()
             sys.exit(0)
-        elif user_input == 'c':
-            print("[✓] Đang tiếp tục tiến trình chạy...")
-            return None
-        else:
+        else:  # 'm' hoặc bất kỳ phím nào khác
+            print("[🔴] Đang đóng trình duyệt...")
+            cleanup()
             print("[✓] Đang trở về menu chính...")
-    except:
-        pass
+    except (EOFError, KeyboardInterrupt):
+        cleanup()
+        sys.exit(0)
 
     STOP_FLAG = True
     raise KeyboardInterrupt
@@ -233,7 +305,7 @@ except ValueError:
     pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.8.9" # v1.8.9: Safe Boot (ImportError Catch for missing cores)
+CURRENT_VERSION = "1.8.11" # v1.8.11: MAX_JOB Auto-Switch + Telegram Setup + Browser Button Fix
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
@@ -432,6 +504,87 @@ def load_delay_config(filepath: str = "config_golike_sele.json"):
     CONFIG_DELAY = default_config
     print(f"[!] Không tìm thấy config, dùng mặc định")
 
+
+def send_tg_notify(message: str):
+    """Gửi thông báo Telegram nếu đã cấu hình trong config_golike_sele.json."""
+    if not CONFIG_DELAY.get("telegram_enabled", False):
+        return
+    token = CONFIG_DELAY.get("telegram_bot_token", "").strip()
+    chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
+    if not token or not chat_id:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"}, timeout=10)
+    except Exception:
+        pass
+
+
+def setup_telegram_notify():
+    """Hỏi user có muốn nhận thông báo Telegram không, và cấu hình chat_id."""
+    config_path = os.path.join(SCRIPT_DIR, "config_golike_sele.json")
+    token = CONFIG_DELAY.get("telegram_bot_token", "").strip()
+    if not token:
+        return  # Không có bot token thì bỏ qua
+
+    saved_chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
+    was_enabled   = CONFIG_DELAY.get("telegram_enabled", False)
+
+    print("\n" + "─"*55)
+    print("🔔  CẤU HÌNH THÔNG BÁO TELEGRAM")
+    print("─"*55)
+    ans = input("Bạn có muốn nhận thông báo từ Telegram bot không? (y/n): ").strip().lower()
+
+    if ans not in ["y", "yes", ""]:
+        CONFIG_DELAY["telegram_enabled"] = False
+        print("[✓] Đã tắt thông báo Telegram.")
+        _save_tg_config(config_path)
+        return
+
+    # Hỏi dùng chat_id cũ hay nhập mới
+    if saved_chat_id:
+        print(f"[*] Chat ID đã lưu: {saved_chat_id}")
+        reuse = input("Dùng ID cũ (Enter/y) hay nhập ID mới (n)? ").strip().lower()
+        if reuse in ["n", "no"]:
+            saved_chat_id = input("👉 Nhập Chat ID mới: ").strip()
+    else:
+        print("[*] Chưa có Chat ID nào được lưu.")
+        saved_chat_id = input("👉 Nhập Chat ID của bạn: ").strip()
+
+    if not saved_chat_id:
+        print("[!] Không nhập Chat ID, bỏ qua cấu hình Telegram.")
+        return
+
+    # Gửi tin nhắn test
+    print("[*] Đang gửi tin nhắn kiểm tra...")
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        r = requests.post(url, json={
+            "chat_id": saved_chat_id,
+            "text": "✅ <b>GoLike Bot đã kết nối!</b>\nBạn sẽ nhận thông báo khi acc đạt giới hạn job.",
+            "parse_mode": "HTML"
+        }, timeout=10)
+        if r.status_code == 200:
+            print("[✅] Gửi thành công! Bot Telegram đã hoạt động.")
+            CONFIG_DELAY["telegram_enabled"] = True
+            CONFIG_DELAY["telegram_chat_id"] = saved_chat_id
+            _save_tg_config(config_path)
+        else:
+            print(f"[❌] Gửi thất bại (HTTP {r.status_code}). Kiểm tra lại Chat ID.")
+            CONFIG_DELAY["telegram_enabled"] = False
+    except Exception as ex:
+        print(f"[❌] Lỗi kết nối Telegram: {ex}")
+        CONFIG_DELAY["telegram_enabled"] = False
+
+
+def _save_tg_config(config_path: str):
+    """Lưu lại config_golike_sele.json sau khi cập nhật telegram settings."""
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(CONFIG_DELAY, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
 def setup_delay_config():
     """Menu setup delay lần đầu"""
     config_path = os.path.join(SCRIPT_DIR, "config_golike_sele.json")
@@ -526,6 +679,20 @@ def getidpost(lk: str):
         if m: return m.group(1)
         
     return "0"
+
+def click_home_navigation(driver):
+    try:
+        home = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[1]')))
+        driver.execute_script("arguments[0].click();", home)
+    except Exception as e:
+        print(f"Lỗi click Trang chủ: {e}")
+
+def click_kiem_xu_navigation(driver):
+    try:
+        nhiemvu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+        driver.execute_script("arguments[0].click();", nhiemvu)
+    except Exception as e:
+        print(f"Lỗi click Kiếm xu: {e}")
 
 # ================================================================
 # ==================== CHẾ ĐỘ 1: CHẠY ĐƠN LẺ ====================
@@ -639,7 +806,14 @@ def run_single_mode():
     global STOP_FLAG
     STOP_FLAG = False
     print("\n🚀 Bắt đầu thiết lập chế độ Chạy đơn lẻ...")
-    target_server = input("👉 Bạn muốn cày ở Server nào? (VD: SV1, SV2... hoặc Enter để tự động chuyển server): ").strip().upper()
+    target_server_raw = input("👉 Bạn muốn cày ở Server nào? (Nhập 1 hoặc 2, hoặc Enter để tự động chuyển): ").strip()
+    target_server = ""
+    if target_server_raw == "1":
+        target_server = "SV1"
+    elif target_server_raw == "2":
+        target_server = "SV2"
+    elif target_server_raw.upper() in ["SV1", "SV2"]:
+        target_server = target_server_raw.upper()
     is_seq = input("Bạn có muốn chạy lần lượt nhiều tài khoản (Sequential Single Mode)? (y/n): ").strip().lower()
     accounts_list = []
     if is_seq in ['y', 'yes']:
@@ -716,6 +890,7 @@ def run_single_mode():
         driver.execute_script("arguments[0].click();", fb_btn)
         sleep(3)
 
+        prev_max_job = False  # Flag: acc trước bị MAX_JOB
         for acc_idx, acc_info in enumerate(accounts_list):
             if STOP_FLAG: break
             
@@ -787,6 +962,10 @@ def run_single_mode():
                 driver.execute_script("arguments[0].click();", selected_node)
                 print(f"🚀 ✅ ĐANG CHẠY ACC: {name_run} | UID: {uid_run}")
                 sleep(3)
+                if prev_max_job:
+                    print("⏳ Chờ 60s để thông báo cũ biến mất...")
+                    smart_sleep(60)
+                    prev_max_job = False
             
                 # VÒNG LẶP CHẠY CHÍNH
                 failed_load_count = 0 # Bộ đếm số lần không tìm thấy Job liên tiếp
@@ -840,7 +1019,14 @@ def run_single_mode():
 
                         print("\n================== TÌM JOB MỚI ==================")
                         try:
-                            WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                            # 1. Quét thông báo max job trong 3s
+                            for _ in range(3):
+                                if job_limit_reached(driver):
+                                    raise Exception("MAX_JOB")
+                                sleep(1)
+
+                            # 2. Quét job (chờ 15s)
+                            WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
                             failed_load_count = 0 # Khởi động lại đếm khi tìm thấy Job thành công
                         except TimeoutException:
                             # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
@@ -925,9 +1111,9 @@ def run_single_mode():
                     
                         orig_window = driver.current_window_handle
                         try:
-                            chrome_btn = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((By.XPATH, "//a[.//h6[normalize-space()='Trình duyệt']]")))
+                            chrome_btn = find_browser_button(driver, timeout=8)
                             fb_job_url = chrome_btn.get_attribute("href")
-                            chrome_btn.click()
+                            driver.execute_script("arguments[0].click();", chrome_btn)
                         except TimeoutException:
                             print("Lỗi: Không tìm thấy lựa chọn trình duyệt. Bỏ qua.")
                             driver.refresh()
@@ -1044,6 +1230,19 @@ def run_single_mode():
                         smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
 
                     except Exception as e:
+                        if str(e) == "MAX_JOB":
+                            acc_name = locals().get('name_run') or str(current_uid)
+                            now_str = datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+                            tg_msg = (
+                                f"🚨 <b>GoLike MAX JOB</b>\n"
+                                f"👤 Acc: <b>{acc_name}</b>\n"
+                                f"⏰ Lúc: {now_str}\n"
+                                f"✅ Đã đủ 100 jobs/ngày. Đang chuyển sang acc tiếp theo..."
+                            )
+                            send_tg_notify(tg_msg)
+                            print("[⚠️] Đã đạt giới hạn 100 jobs/ngày.")
+                            prev_max_job = True
+                            break  # Thoát while -> for loop xử lý chuyển acc
                         print(f"Lỗi vòng lặp chạy (chờ 5s): {e}")
                         sleep(5)  # Keep as error retry - not configurable
             except Exception as e:
@@ -1227,7 +1426,14 @@ def run_bot_loop(driver, Fb, profile_data, idx):
 
                 log_thread(p_name, "=== QUÉT JOB ===")
                 try:
-                    WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                    # 1. Quét thông báo max job trong 3s
+                    for _ in range(3):
+                        if job_limit_reached(driver):
+                            raise Exception("MAX_JOB")
+                        sleep(1)
+
+                    # 2. Quét job (chờ 15s)
+                    WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
                     failed_load_count = 0 # Đã thấy Job, reset bộ đếm
                 except TimeoutException:
                     # Kiểm tra Popup Lỗi của GoLike khi không tải được danh sách
@@ -1299,10 +1505,11 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 
                 orig_w = driver.current_window_handle
                 try:
-                    ch_b = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((By.XPATH, "//a[.//h6[normalize-space()='Trình duyệt']]")))
+                    ch_b = find_browser_button(driver, timeout=8)
                     fb_url = ch_b.get_attribute("href")
-                    ch_b.click()
+                    driver.execute_script("arguments[0].click();", ch_b)
                 except TimeoutException:
+                    log_thread(p_name, "Lỗi: Không tìm thấy lựa chọn trình duyệt. Bỏ qua.")
                     driver.refresh()
                     sleep(3)
                     continue
@@ -1675,6 +1882,8 @@ def _switch_to_next_account(driver, bot, cookie_list, current_idx, proxy_arg, sa
 if __name__ == "__main__":
     # Load config delay khi khởi động
     load_delay_config()
+    # Hỏi user về thông báo Telegram
+    setup_telegram_notify()
 
     while True:
         print("\n" + "="*65)

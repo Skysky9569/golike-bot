@@ -98,8 +98,6 @@ def run_facebook_selenium_bot() -> None:
     print(colored("🚀 KHOI DONG TOOL GOLIKE FACEBOOK SELENIUM", "yellow"))
     print(colored("════════════════════════════════════════════════", "cyan"))
     print(colored("Tool Facebook Selenium dang khoi dong...", "white"))
-    print(colored("  - API mode: Dung FB_WEB_API_FIXED.py goi Facebook API", "white"))
-    print(colored("  - DOM mode: Click truc tiep tren m.facebook.com qua Selenium", "white"))
 
     try:
         result = subprocess.run([sys.executable, "golikefb_sele.py"])

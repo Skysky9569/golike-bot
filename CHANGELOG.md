@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## [v1.8.11] - 2026-05-22
+
+### Sửa Lỗi (Fixed)
+- **Sửa lỗi nút "Trình duyệt" không tìm thấy**:
+  - Thêm hàm `find_browser_button()` thử 9 selector khác nhau (XPATH, CSS, tiếng Anh/Việt, thẻ `<a>`/`<button>`) để thích nghi khi Golike thay đổi UI.
+  - Khi vẫn không tìm thấy, in ra 3000 ký tự HTML để chẩn đoán.
+- **Sửa lỗi MAX_JOB không chuyển acc** (vòng lặp cứ lặp lại mãi):
+  - `raise Exception("MAX_JOB")` trước đây bị nuốt bởi `except Exception` chung. Đã bắt riêng để `break` đúng vòng lặp.
+- **Sửa thứ tự delay khi MAX_JOB**:
+  - Flow đúng: MAX_JOB → `break` → Home → Kiếm xu → Facebook → chọn nick → chờ 60s → bắt đầu làm.
+  - 60s được đặt sau khi đã vào đúng acc mới, tránh thông báo cũ còn sót.
+
+### Thêm Mới (Added)
+- **Chờ 60s + Gửi Telegram khi MAX_JOB**:
+  - Khi đạt 100 jobs/ngày, gửi ngay thông báo Telegram kèm tên acc và giờ xảy ra.
+  - Tự động chờ 60s sau khi chuyển vào acc mới để thông báo cũ biến mất hoàn toàn.
+- **Hỏi cấu hình Telegram lúc khởi động** (`setup_telegram_notify()`):
+  - Hỏi user có muốn nhận thông báo Telegram không.
+  - Nếu có: hiển thị Chat ID đã lưu, cho phép giữ nguyên hoặc nhập mới.
+  - Gửi tin nhắn test ngay để xác nhận bot hoạt động, lưu kết quả vào `config_golike_sele.json`.
+- **Ctrl+C menu gọn hơn**:
+  - Bỏ tùy chọn `c` (Resume) — chỉ còn `m` (đóng Chrome → về Menu) và `exit` (đóng Chrome → thoát).
+- **Xóa thông báo khởi động thừa**:
+  - Bỏ dòng mô tả "API mode / DOM mode" khi khởi động.
+  - Bỏ cảnh báo `[CANH BAO] Khong the import golike_facebook.selenium_fb`.
+
+## [v1.8.10] - 2026-05-22
+
+### Thêm Mới & Sửa Lỗi (Added & Fixed)
+- **Cải thiện Nhận diện Max Job (Anti-Timeout)**:
+  - Tối ưu hóa vòng lặp bắt thông báo giới hạn 100 jobs/ngày. Quét DOM mỗi giây song song với việc chờ Job, giúp bắt gọn các popup hoặc Toast Message (bất kể là Toast hay SweetAlert2) cho dù nó chỉ xuất hiện lướt qua.
+- **Bổ sung Hàm điều hướng còn thiếu**:
+  - Fix triệt để lỗi `NameError: name 'click_home_navigation' is not defined` và `click_kiem_xu_navigation` khi hệ thống cố gắng điều hướng để chuyển acc trong Chế độ chạy Đơn Nối Tiếp.
+- **Cải tiến Trải nghiệm Nhập liệu & Phím tắt**:
+  - Tối ưu chọn Server: Cho phép gõ nhanh `1` hoặc `2` thay vì phải gõ tên đầy đủ của Server.
+  - Sửa logic Ctrl+C: Lược bỏ tính năng Tiếp tục (`c`) không cần thiết. Giờ đây khi ấn Ctrl+C rồi chọn Menu (`m`), tool sẽ ngay lập tức **đóng và dọn dẹp sạch sẽ toàn bộ Chrome** đang mở để giải phóng RAM tối đa, sau đó mới quay lại Menu chính.
+
 ## [v1.8.9] - 2026-05-22
 
 ### Tính Năng (Feature)
