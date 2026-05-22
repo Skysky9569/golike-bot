@@ -28,6 +28,7 @@ node_modules/
 .claude/
 
 # === FILE ĐỊA PHƯƠNG ===
+.env
 *.local.json
 settings.local.json
 *_config.json

@@ -8,6 +8,11 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import webdriver_manager
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from golike_core.config import CONFIG
 
@@ -497,13 +502,32 @@ def load_delay_config(filepath: str = "config_golike_sele.json"):
 
 
 def send_tg_notify(message: str):
-    """Gửi thông báo Telegram nếu đã cấu hình trong config_golike_sele.json."""
-    if not CONFIG_DELAY.get("telegram_enabled", False):
+    """Gửi thông báo Telegram nếu đã cấu hình trong .env hoặc config."""
+    # Ưu tiên enviroment variables, fallback vào config
+    if not os.getenv('TELEGRAM_ENABLED', '').lower() in ('true', '1', 'yes'):
+        if not CONFIG_DELAY.get("telegram_enabled", False):
+            return
+
+    # Lấy token từ env var, fallback vào config (sau khi resolve placeholder)
+    token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+    if not token:
+        cfg_token = CONFIG_DELAY.get("telegram_bot_token", "")
+        # Nếu là placeholder ${VAR}, lấy từ env
+        if cfg_token.startswith('${') and cfg_token.endswith('}'):
+            token = os.getenv(cfg_token[2:-1], "")
+        else:
+            token = cfg_token
+
+    if not token:
         return
-    token = CONFIG_DELAY.get("telegram_bot_token", "").strip()
-    chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
-    if not token or not chat_id:
+
+    chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
+    if not chat_id:
+        chat_id = CONFIG_DELAY.get("telegram_chat_id", "")
+
+    if not chat_id:
         return
+
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"}, timeout=10)
@@ -514,12 +538,31 @@ def send_tg_notify(message: str):
 def setup_telegram_notify():
     """Hỏi user có muốn nhận thông báo Telegram không, và cấu hình chat_id."""
     config_path = os.path.join(SCRIPT_DIR, "config_golike_sele.json")
-    token = CONFIG_DELAY.get("telegram_bot_token", "").strip()
+
+    # Ưu tiên env var, fallback vào config
+    token = os.getenv('TELEGRAM_BOT_TOKEN', '')
     if not token:
+        cfg_token = CONFIG_DELAY.get("telegram_bot_token", "")
+        if cfg_token.startswith('${') and cfg_token.endswith('}'):
+            token = os.getenv(cfg_token[2:-1], '')
+        else:
+            token = cfg_token
+
+    if not token:
+        # Hướng dẫn user cách setup
+        print("\n[!] Chua co bot token. Day phil set trong .env file:")
+        print("    TELEGRAM_BOT_TOKEN=your_bot_token")
+        print("    TELEGRAM_CHAT_ID=your_chat_id")
         return  # Không có bot token thì bỏ qua
 
-    saved_chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
-    was_enabled   = CONFIG_DELAY.get("telegram_enabled", False)
+    # Lấy chat_id từ env hoặc config
+    saved_chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
+    if not saved_chat_id:
+        saved_chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
+
+    was_enabled   = os.getenv('TELEGRAM_ENABLED', '').lower() in ('true', '1', 'yes')
+    if not was_enabled:
+        was_enabled = CONFIG_DELAY.get("telegram_enabled", False)
 
     print("\n" + "─"*55)
     print("🔔  CẤU HÌNH THÔNG BÁO TELEGRAM")
@@ -557,6 +600,7 @@ def setup_telegram_notify():
         }, timeout=10)
         if r.status_code == 200:
             print("[✅] Gửi thành công! Bot Telegram đã hoạt động.")
+            # Lưu config (không lưu token vì đã dùng env var)
             CONFIG_DELAY["telegram_enabled"] = True
             CONFIG_DELAY["telegram_chat_id"] = saved_chat_id
             _save_tg_config(config_path)
@@ -564,6 +608,8 @@ def setup_telegram_notify():
             print(f"[❌] Gửi thất bại (HTTP {r.status_code}). Kiểm tra lại Chat ID.")
             CONFIG_DELAY["telegram_enabled"] = False
     except Exception as ex:
+        print(f"[❌] Lỗi kết nối: {ex}")
+        CONFIG_DELAY["telegram_enabled"] = False
         print(f"[❌] Lỗi kết nối Telegram: {ex}")
         CONFIG_DELAY["telegram_enabled"] = False
 
@@ -571,8 +617,12 @@ def setup_telegram_notify():
 def _save_tg_config(config_path: str):
     """Lưu lại config_golike_sele.json sau khi cập nhật telegram settings."""
     try:
+        # Xóa sensitive data trước khi lưu để tránh commit
+        config_to_save = CONFIG_DELAY.copy()
+        config_to_save.pop('telegram_bot_token', None)
+        config_to_save.pop('telegram_chat_id', None)
         with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(CONFIG_DELAY, f, indent=2, ensure_ascii=False)
+            json.dump(config_to_save, f, indent=2, ensure_ascii=False)
     except Exception:
         pass
 
