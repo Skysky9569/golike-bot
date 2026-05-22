@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [v1.1.0] - 2026-05-22
+## [v1.8.6] - 2026-05-22
 
 ### Thêm Mới (Added)
 - **Fast Switch Sequential Single Mode (Chế độ chạy đơn nối tiếp mượt mà)**:
