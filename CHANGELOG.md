@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v1.8.9] - 2026-05-22
+
+### Tính Năng (Feature)
+- **Safe Boot (Cơ chế bảo vệ khởi động)**:
+  - Tool tự động bắt lỗi ModuleNotFoundError hoặc ImportError ở cấp cao nhất trong main.py.
+  - Thay vì văng lỗi Python rắc rối, hệ thống hiện thông báo tiếng Việt yêu cầu chạy python updater.py để khôi phục các file lõi bị thiếu. Chống tình trạng hỏng tool khi quá trình nâng cấp bị gián đoạn.
+
+
+
 ## [v1.8.8] - 2026-05-22
 
 ### Sửa Lỗi (Fixed)

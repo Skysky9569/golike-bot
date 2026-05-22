@@ -233,7 +233,7 @@ except ValueError:
     pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.8.8" # v1.8.8: Fixed updater recursive folder sync
+CURRENT_VERSION = "1.8.9" # v1.8.9: Safe Boot (ImportError Catch for missing cores)
 UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
 
 def kiem_tra_cap_nhat():
