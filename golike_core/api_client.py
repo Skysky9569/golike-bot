@@ -5,7 +5,7 @@ Supports both TikTok and Facebook platforms
 import requests
 from typing import Optional, Dict, Any, List
 from .config import CONFIG
-from .error_handling import APIError, retry_on_error
+from .error_handling import APIError, NetworkError, SessionExpiredError, RateLimitError, retry_on_error
 from .logging import logger
 
 
@@ -99,9 +99,16 @@ class GolikeAPIClient:
                 headers=self._build_headers(),
                 timeout=self.timeout
             )
+            # Check for rate limit and session expired
+            if response.status_code == 429:
+                raise RateLimitError("Rate limit exceeded", status_code=429)
+            if response.status_code in (401, 403):
+                raise SessionExpiredError("Session expired or forbidden", status_code=response.status_code)
             return response.json()
+        except (RateLimitError, SessionExpiredError):
+            raise  # Không retry các lỗi này
         except requests.RequestException as e:
-            raise APIError(f"GET request failed: {e}")
+            raise NetworkError(f"GET request failed: {e}")
 
     @retry_on_error(max_retries=3, exceptions=(requests.RequestException,), logger_instance=logger)
     def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -125,9 +132,16 @@ class GolikeAPIClient:
                 headers=self._build_headers(),
                 timeout=self.timeout
             )
+            # Check for rate limit and session expired
+            if response.status_code == 429:
+                raise RateLimitError("Rate limit exceeded", status_code=429)
+            if response.status_code in (401, 403):
+                raise SessionExpiredError("Session expired or forbidden", status_code=response.status_code)
             return response.json()
+        except (RateLimitError, SessionExpiredError):
+            raise  # Không retry các lỗi này
         except requests.RequestException as e:
-            raise APIError(f"POST request failed: {e}")
+            raise NetworkError(f"POST request failed: {e}")
 
     def get_accounts(self, provider: str = 'tiktok', limit: int = 200) -> Dict[str, Any]:
         """Lấy danh sách account theo provider

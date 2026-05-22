@@ -27,8 +27,16 @@ class CredentialError(AppError):
 
 
 class APIError(AppError):
-    """Lỗi API"""
-    pass
+    """Lỗi API với status code"""
+    def __init__(self, message: str, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.message = message
+
+    def __str__(self):
+        if self.status_code:
+            return f"{self.message} (HTTP {self.status_code})"
+        return self.message
 
 
 class ADBError(AppError):
@@ -36,8 +44,18 @@ class ADBError(AppError):
     pass
 
 
-class NetworkError(AppError):
-    """Lỗi mạng"""
+class NetworkError(APIError):
+    """Lỗi kết nối mạng - có thể retry"""
+    pass
+
+
+class SessionExpiredError(APIError):
+    """Lỗi session expired - không retry, cần login lại"""
+    pass
+
+
+class RateLimitError(APIError):
+    """Lỗi rate limit - cần đợi"""
     pass
 
 
