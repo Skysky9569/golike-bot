@@ -1,5 +1,5 @@
 {
-  "version": "1.8.5",
+  "version": "1.8.7",
   "release_date": "2026-05-21",
-  "changelog": "v1.8.5: Fix full repo download + binary file handling\n- _get_all_repo_files() now returns ALL files from GitHub (no filter)\n- ensure_system_complete() uses full GitHub API tree, fallback to essential list\n- Auto-skip binary files (exe, dll, png) during text download\n- Proper folder structure recreation when downloading missing files"
+  "changelog": "v1.8.7: Test update folder\n- Add test_update_dir/main.py"
 }

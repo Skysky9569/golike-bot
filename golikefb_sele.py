@@ -731,7 +731,6 @@ def run_single_mode():
             if acc_idx > 0:
                 print(f"\n🔄 Chuyển sang tài khoản tiếp theo (UID: {current_uid})...")
                 click_home_navigation(driver)
-                from time import sleep
                 sleep(2)
                 try:
                     btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Đã hiểu')]")
