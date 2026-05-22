@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [v1.9.1] - 2026-05-22
+
+### Sửa Lỗi (Fixed)
+- **Sửa MAX JOB không gửi Telegram + không tự chuyển acc**:
+  - Trước đây khi phát hiện max job ở nhánh `if job_limit_reached()` cuối vòng lặp, tool gọi `input()` chặn chương trình → người dùng phải nhấn Enter thủ công, không gửi Telegram, không set `prev_max_job`.
+  - Đã sửa: tự động gửi Telegram → set `prev_max_job = True` → `break` sang acc tiếp → chờ 60s → bắt đầu làm việc.
+  - Sửa tương tự cho chế độ song song (parallel): nay cũng gửi Telegram khi đạt giới hạn.
+- **Sửa lỗi không tìm thấy nick GoLike khi chuyển acc (`golike_uid` vs `uid`)**:
+  - `uid` trong `multi_accounts.json` là **Facebook UID** (dùng cho FB API), nhưng dropdown GoLike dùng **GoLike UID** khác hoàn toàn.
+  - Thêm field `golike_uid` vào `multi_accounts.json` để phân biệt rõ ràng.
+  - Code nay dùng `golike_uid` để khớp nick GoLike trong dropdown, fallback về `uid` nếu chưa có field mới.
+
+### Thêm Mới (Added)
+- **Hiển thị cả FB UID và GoLike UID khi chuyển tài khoản**:
+  - Log: `🔄 Chuyển sang tài khoản tiếp theo (FB UID: ... | GoLike UID: ...)` để dễ debug.
+- **Field `golike_uid` trong `multi_accounts.json`**:
+  - Tách biệt FB UID (c_user trong cookie) và GoLike UID (i_user trong cookie) để cấu hình đúng.
+
 ## [v1.8.11] - 2026-05-22
 
 ### Sửa Lỗi (Fixed)

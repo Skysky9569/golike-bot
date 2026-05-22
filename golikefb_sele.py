@@ -9,6 +9,8 @@ import webdriver_manager
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 
+from golike_core.config import CONFIG
+
 # Helper for delayed waits with visual countdown when delay exceeds 20 seconds
 
 def smart_sleep(seconds: int):
@@ -574,6 +576,66 @@ def _save_tg_config(config_path: str):
     except Exception:
         pass
 
+# ── ANSI color helpers ──────────────────────────────────────────────
+C_RESET = "\033[0m"
+C_BOLD = "\033[1m"
+C_YELLOW = "\033[93m"
+C_CYAN = "\033[96m"
+C_BLUE = "\033[94m"
+C_MAGENTA = "\033[95m"
+LABEL_COLORS = [C_CYAN, C_BLUE, C_MAGENTA]
+
+
+def show_config_summary():
+    """Hiển thị tóm tắt config đã cài và hỏi user có muốn thay đổi không."""
+    print("\n" + "─" * 55)
+    print(f"{C_BOLD}📋 CONFIG HIỆN TẠI (config_golike_sele.json){C_RESET}")
+    print("─" * 55)
+
+    # ── Nhóm Delay & Timeout ──────────────────────────────────────
+    print(f"\n  {C_BOLD}⏱ DELAY & TIMEOUT{C_RESET}")
+    delay_keys = [
+        ("delay_between_jobs",       "Delay giữa các job"),
+        ("delay_after_api_call",     "Delay sau API call"),
+        ("delay_after_complete",     "Delay sau khi hoàn thành"),
+        ("delay_after_report_error", "Delay sau khi báo lỗi"),
+        ("delay_on_job_hunt_retry",  "Delay khi tải lại job"),
+        ("delay_between_accounts",   "Delay khi đổi acc"),
+        ("timeout_driver_load",      "Timeout tải driver"),
+        ("timeout_wait_element",     "Timeout chờ element"),
+        ("sleep_on_reset",           "Sleep khi reset trang"),
+        ("sleep_on_cool_down",       "Sleep khi nguội hệ thống"),
+        ("delay_after_reset_click",  "Delay click khi reset"),
+        ("sleep_on_hunt_retry",      "Sleep khi retry hunt job"),
+        ("switch_server_minutes",    "Tự động đổi server"),
+    ]
+
+    for i, (key, label) in enumerate(delay_keys):
+        val = CONFIG_DELAY.get(key, "?")
+        color = LABEL_COLORS[i % len(LABEL_COLORS)]
+
+        if key == "sleep_on_cool_down" and val:
+            suffix = f"  ({round(val / 60, 1)} phút)"
+        elif key == "switch_server_minutes":
+            suffix = "  (tắt)" if val == 0 else ""
+        else:
+            suffix = ""
+
+        unit = " phút" if key == "switch_server_minutes" else "s"
+        print(f"    {color}{label + ' ':.<40s}{C_RESET} {C_YELLOW}{val}{unit}{suffix}{C_RESET}")
+
+    # ── Nhóm Proxy ────────────────────────────────────────────────
+    print(f"\n  {C_BOLD}🌐 PROXY{C_RESET}")
+    proxy_val = CONFIG_DELAY.get("default_proxy", "")
+    proxy_display = proxy_val if proxy_val else "(không đặt)"
+    print(f"    {C_MAGENTA}{'Default proxy':.<40s}{C_RESET} {C_YELLOW}{proxy_display}{C_RESET}")
+    print("─" * 55)
+
+    ans = input("\n👉 Bạn có muốn thay đổi config không? (Enter để bỏ qua): ").strip().lower()
+    if ans in ("y", "yes"):
+        setup_delay_config()
+
+
 def setup_delay_config():
     """Menu setup delay lần đầu"""
     config_path = os.path.join(SCRIPT_DIR, "config_golike_sele.json")
@@ -884,7 +946,8 @@ def run_single_mode():
             if STOP_FLAG: break
             
             current_cookie = acc_info.get("cookie")
-            current_uid = acc_info.get("uid")
+            current_uid = acc_info.get("uid")  # Facebook UID (dùng cho API)
+            current_golike_uid = acc_info.get("golike_uid") or current_uid  # GoLike UID (dùng để chọn nick trong dropdown)
             
             if current_cookie:
                 Fb = FB_API(current_cookie, proxies=fb_proxies)
@@ -893,7 +956,7 @@ def run_single_mode():
                 Fb = None
                 
             if acc_idx > 0:
-                print(f"\n🔄 Chuyển sang tài khoản tiếp theo (UID: {current_uid})...")
+                print(f"\n🔄 Chuyển sang tài khoản tiếp theo (FB UID: {current_uid} | GoLike UID: {current_golike_uid})...")
                 click_home_navigation(driver)
                 sleep(2)
                 try:
@@ -935,14 +998,14 @@ def run_single_mode():
                 for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
                     print(f"{i}. {name} | UID: {acc_id}")
             
-                if current_uid:
+                if current_golike_uid:
                     chon_acc = None
                     for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
-                        if str(current_uid).strip() == str(acc_id).strip():
+                        if str(current_golike_uid).strip() == str(acc_id).strip():
                             chon_acc = i
                             break
                     if not chon_acc:
-                        print(f"❌ Không tìm thấy nick GoLike với UID: {current_uid}. Bỏ qua!")
+                        print(f"❌ Không tìm thấy nick GoLike với UID: {current_golike_uid}. Bỏ qua!")
                         continue
                 else:
                     chon_acc = int(input("👉 Nhập số để chọn nick chạy: "))
@@ -1063,7 +1126,7 @@ def run_single_mode():
                                     # Click lại Facebook để tải lại trang Job sạch sẽ
                                     fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                     driver.execute_script("arguments[0].click();", fb_btn)
-                                    print("✅ Đã làm mới xong trang. Đang nghỉ 5 phút nguội hệ thống...")
+                                    print(f"✅ Đã làm mới xong trang. Đang nghỉ {round(CONFIG_DELAY.get("sleep_on_cool_down", 300)/60,2)} phút nguội hệ thống...")
                                 except Exception as e:
                                     print(f"❌ Lỗi trong lúc tự động Reset: {e}")
                                 smart_sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
@@ -1213,8 +1276,17 @@ def run_single_mode():
                     
                         print(f"Đợi {CONFIG_DELAY.get('delay_between_jobs', 10)}s trước khi tìm job tiếp theo...")
                         if job_limit_reached(driver):
-                            print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Nhấn Enter để quay lại menu chính.")
-                            input()
+                            acc_name = locals().get('name_run') or str(current_uid)
+                            now_str = datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+                            tg_msg = (
+                                f"🚨 <b>GoLike MAX JOB</b>\n"
+                                f"👤 Acc: <b>{acc_name}</b>\n"
+                                f"⏰ Lúc: {now_str}\n"
+                                f"✅ Đã đủ 100 jobs/ngày. Đang chuyển sang acc tiếp theo..."
+                            )
+                            send_tg_notify(tg_msg)
+                            print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Tự động chuyển acc tiếp theo...")
+                            prev_max_job = True
                             break
                         smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
 
@@ -1590,8 +1662,16 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 
                 log_thread(p_name, "Nghỉ 10 giây...")
                 if job_limit_reached(driver):
-                        print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Quay lại menu chính.")
-                        break
+                    now_str = datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+                    tg_msg = (
+                        f"🚨 <b>GoLike MAX JOB</b>\n"
+                        f"👤 Acc: <b>{p_name}</b>\n"
+                        f"⏰ Lúc: {now_str}\n"
+                        f"✅ Đã đủ 100 jobs/ngày. Luồng [{p_name}] dừng lại."
+                    )
+                    send_tg_notify(tg_msg)
+                    log_thread(p_name, "[⚠️] Đã đạt giới hạn 100 jobs/ngày. Dừng luồng.")
+                    break
                 smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
             except Exception as ex:
                 log_thread(p_name, f"Lỗi chu kỳ: {ex}")
@@ -1873,6 +1953,8 @@ if __name__ == "__main__":
     load_delay_config()
     # Hỏi user về thông báo Telegram
     setup_telegram_notify()
+    # Hiển thị config và hỏi user có muốn thay đổi
+    show_config_summary()
 
     while True:
         print("\n" + "="*65)
