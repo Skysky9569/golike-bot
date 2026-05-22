@@ -2,10 +2,12 @@
 Facebook Job Processor
 Xử lý các job Facebook từ API Golike
 """
+import os
 import time
 from typing import Optional, Dict, Any
 from golike_core.api_client import GolikeAPIClient
 from golike_core.logging import logger
+from golike_core.error_handling import SessionExpiredError, RateLimitError
 from .fb_web_api import FB_API
 
 
@@ -30,6 +32,22 @@ class FacebookJobProcessor:
         self.internal_id = internal_id
         self.cookie = cookie
         self.fb_api = None
+
+    def _clear_session_files(self) -> None:
+        """Xóa các file session local khi phát hiện session expired"""
+        session_files = [
+            'session_fb.pkl',
+            '.facebook_session',
+            'facebook_cookie.enc',
+            f'fb_session_{self.fb_id}.pkl' if self.fb_id else None
+        ]
+        for f in session_files:
+            if f and os.path.exists(f):
+                try:
+                    os.remove(f)
+                    logger.info(f"Removed expired session file: {f}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove session file {f}: {e}")
 
     def _init_fb_api(self) -> bool:
         """Khởi tạo FB API nếu chưa có
@@ -180,12 +198,26 @@ class FacebookJobProcessor:
                 server=server,
                 low_job=low_job
             )
+        except SessionExpiredError as e:
+            logger.warning("Session expired khi lấy job")
+            self._clear_session_files()
+            return {"success": False, "reason": "session_expired"}
+        except RateLimitError as e:
+            logger.warning("Rate limit khi lấy job")
+            return {"success": False, "reason": "rate_limited"}
         except Exception as e:
             logger.error(f"Lỗi lấy job: {e}")
             return {"success": False, "reason": "api_error"}
 
         # Kiểm tra có job không
-        if not job_response or job_response.get("status") != 200:
+        status = job_response.get("status") if job_response else None
+        if status == 401 or status == 403:
+            logger.warning("Session expired (HTTP 401/403)")
+            self._clear_session_files()
+            return {"success": False, "reason": "session_expired"}
+        if status == 429:
+            return {"success": False, "reason": "rate_limited"}
+        if status != 200:
             return {"success": False, "reason": "api_error"}
 
         job_list = job_response.get("data")
