@@ -1,0 +1,56 @@
+NVIDIA NIM Models Có Sẵn Để Sử Dụng qua API
+========================================
+
+Danh sách các nhận dạng model (dùng trong API NVIDIA NIM, ví dụ trong trường `model`):
+- nvidia/nemotron-3-super-120b-a12b          (Nemotron 3 Super 120B)
+- nvidia/kimi-k2-5                           (Kimi‑K2.5)
+- nvidia/nemotron-content-safety-reasoning-4b-experimental  (Nemotron‑Content‑Safety‑Reasoning‑4B‑Experimental)
+- nvidia/deepseek-r1                         (DeepSeek‑R1)
+- nvidia/qwen-3-5                            (Qwen 3.5)
+- nvidia/minimax-m2-7                        (MiniMax M2.7)
+- nvidia/google-gemma-4-31b                  (Google Gemma 4 31B)
+- nvidia/meta-llama-family                   (Chuỗi Meta Llama – ví dụ: Llama‑3‑8B, Llama‑3‑70B)
+- nvidia/google-gemma                        (Chuỗi Google Gemma)
+- nvidia/nemotron-series                     (Các biến thể Nemotron khác – ví dụ: Nemotron‑3‑8B, Nemotron‑3‑22B)
+- nvidia/nemotron-speech                     (Nemotron Speech)
+- nvidia/studio-voice                        (Studio Voice)
+- nvidia/background-noise-removal            (Loại bỏ tiếng nền)
+
+Gợi ý sử dụng model
+===================
+
+Tổng quan, sinh văn bản chất lượng cao & suy luận:
+- **nvidia/nemotron-3-super-120b-a12b** – Tốt nhất cho luận lý phức tạp, nội dung dài, sinh mã và các nhiệm vụ cần tham số lớn.
+
+Đa ngôn ngữ & hiểu bối cảnh dài:
+- **nvidia/kimi-k2-5** – Tối ưu cho đối thoại đa ngôn ngữ và cửa sổ bối cảnh mở; thích hợp cho bản dịch, câu hỏi‑đ trả lời xuyên langue và tài liệu dài.
+
+An toàn & kiểm duyệt nội dung:
+- **nvidia/nemotron-content-safety-reasoning-4b-experimental** – Thiết kế để phát hiện nội dung gây hại, đưa ra điểm số an toàn và gợi ý sửa đổi; lý tưởng cho đường ống moderation.
+
+Tập trung vào mã:
+- **nvidia/deepseek-r1** – Mạnh về các ngôn ngữ lập trình, debug và suy luận thuật toán; dùng để tự động hoàn thành mã, tái cấu trúc và tài liệu kỹ thuật.
+
+Hiệu quả, suy luận nhẹ:
+- **nvidia/google-gemma-4-31b** – Cân bằng tốt giữa chất lượng và tốc độ; phù hợp cho chatbot, tóm tắt và triển khai trên thiết bị biên nơi độ trễ quan trọng.
+- **nvidia/google-gemma** – Các biến thể Gemma còn nhỏ hơn cho tình huống tài nguyên cực thấp.
+
+Các mẫu đa dụng, đã được cộng đồng kiểm nghiệm:
+- **nvidia/meta-llama-family** – Chọn Llama‑3‑8B để phản hồi nhanh, Llama‑3‑70B để chất lượng cao; hoạt động tốt cho nhiều tác vụ NLP (QA, phân loại, …).
+- **nvidia/nemotron-series** – Các model Nemotron trung bình (8B, 22B) cung cấp hiệu năng mạnh với mức tính toán thấp hơn so với biến thể 120B.
+
+Nhiệm vụ liên quan đến âm thanh:
+- **nvidia/nemotron-speech** – Nhận dạng giọng nói, xử lý lệnh thoại và hiểu ngôn ngữ nói.
+- **nvidia/studio-voice** – Nhân bản giọng nói, комплекс TTS và tạo giọng nói biểu cảm.
+- **nvidia/background-noise-removal** – Lọc khoảng trống, giảm tiếng ồn trong bản ghi hoặc luồng trực tiếp.
+
+Cách sử dụng
+------------
+Khi gọi API NVIDIA NIM (ví dụ qua `https://integrate.api.nvidia.com/v1/chat/completions`), đặt trường `model` thành một trong các nhận dạng trên, ví dụ:
+{
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "messages": [{"role": "user", "content": "Giải thích sự tronglập lượng tử bằng cách đơn giản."}],
+  ...
+}
+
+Chọn model phù hợp với yêu cầu về chất lượng, thời gian trễ, phạm vi ngôn ngữ và các cân nhắc an toàn của nhiệm vụ bạn.

@@ -1,0 +1,31 @@
+{
+  "app_name": "GoLike Bot",
+  "version": "2.0",
+  "modules": {
+    "core": {
+      "description": "Module chính của hệ thống",
+      "components": [
+        {
+          "name": "config_manager",
+          "description": "Module quản lý cấu hình"
+        },
+        {
+          "name": "job_processor",
+          "description": "Module xử lý tác vụ"
+        },
+        {
+          "name": "facebook_automation",
+          "description": "Module tự động hóa Facebook"
+        },
+        {
+          "name": "golike_handler",
+          "description": "Module xử lý GoLike"
+        },
+        {
+          "name": "browser_manager",
+          "description": "Module quản lý trình duyệt"
+        }
+      ]
+    }
+  }
+}

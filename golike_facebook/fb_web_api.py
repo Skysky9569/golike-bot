@@ -12,6 +12,8 @@ import base64
 import uuid
 from typing import Dict, Any, Optional
 
+from golike_core.logging import logger
+
 
 class CookieHandler:
     @staticmethod

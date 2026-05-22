@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>So sánh khả năng viết code / sửa lỗi của các model NVIDIA NIM</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 14px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background-color: #f1f9ff;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .score-high { color: #27ae60; font-weight: 600; }
+        .score-medium { color: #f39c12; font-weight: 600; }
+        .score-low { color: #e74c3c; font-weight: 600; }
+        .note {
+            font-size: 0.9em;
+            color: #555;
+        }
+        .section {
+            margin-top: 40px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        @media (max-width: 768px) {
+            th, td {
+                padding: 10px 8px;
+                font-size: 0.9em;
+            }
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>So sánh khả năng viết code / sửa lỗi của các model NVIDIA NIM</h1>
+
+    <div class="section">
+        <h2>Bảngso sánh chi tiết</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Model (ID API)</th>
+                    <th>Kích thước / Loại</th>
+                    <th>HumanEval (%)</th>
+                    <th>SWE‑bench (Verified Resolved) (%)</th>
+                    <th>Ghi chú về khả năng code / sửa lỗi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>nvidia/deepseek-r1</code></td>
+                    <td>DeepSeek‑R1 (coder‑focused)</td>
+                    <td class="score-high">90.20</td>
+                    <td class="score-high">49.2</td>
+                    <td class="note">Rất mạnh trong sinh mã, debug và suy luận thuật toán. Sử dụng chuẩn HumanEval cao và SWE‑bench gần 50% cho thấy khả năng sửa lỗi thực tế tốt.</td>
+                </tr>
+                <tr>
+                    <td><code>nvidia/nemotron-3-super-120b-a12b</code></td>
+                    <td>Nemotron 3 Super 120B (MoE, 12B aktif)</td>
+                    <td class="score-high">91.6 (HumanEval+ 91‑92)</td>
+                    <td>-</td>
+                    <td class="note">Điểm HumanEval+ trên 91 cho thấy khả năng sinh mã gần GPT‑4o, tốt cho việc tạo hàm phức tạp và sửa lỗi cấp hàm.</td>
+                </tr>
+                <tr>
+                    <td><code>nvidia/qwen-3-5-397b-a17b</code></td>
+                    <td>Qwen 3.5 397B A17B (phiên bản lớn nhất)</td>
+                    <td class="score-high">96.3</td>
+                    <td>-</td>
+                    <td class="note">HumanEval cực kỳ cao (>96) – hiện đang đứng đầu bảng xếp hạng, cho thấy khả năng viết code xuất sắc, nhưng cần nhiều tài nguyên.</td>
+                </tr>
+                <tr>
+                    <td><code>nvidia/qwen-3-5-4b</code></td>
+                    <td>Qwen 3.5 4B (phiên bản nhẹ)</td>
+                    <td class="score-medium">48.8 (base) → ~72 (sau fine‑tune)</td>
+                    <td>-</td>
+                    <td class="note">Base model còn hạn chế; sau khi fine‑tuned (S0‑Tuning) lên ~72%, nên nếu dùng version nhỏ cần cân nhắc về chất lượng.</td>
+                </tr>
+                <tr>
+                    <td><code>nvidia/google-gemma-4-31b</code></td>
+                    <td>Gemma 4 31B (Instruction‑tuned)</td>
+                    <td class="score-medium">76.8</td>
+                    <td>-</td>
+                    <td class="note">Cân bằng tốt giữa tốc độ và chất lượng; đủ cho hầu hết tác vụ sinh mã và sửa lỗi đơn giản‑trung bình.</td>
+                </tr>
+                <tr>
+                    <td><code>nvidia/google-gemma</code> (≤9B)</td>
+                    <td>Gemma 4 (≤9B)</td>
+                    <td class="score-low">~60‑70</td>
+                    <td>-</td>
+                    <td class="note">Phù hợp cho môi trường có hạn chế tài nguyên, nhưng chỉ đủ cho các tác vụ code cơ bản.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Gợi ý sử dụng theo nhu cầu</h2>
+        <ul>
+            <li><strong>Code generation phức tạp, tối ưu độ chính xác cao:</strong> <code>nvidia/nemotron-3-super-120b-a12b</code> hoặc <code>nvidia/qwen-3-5-397b-a17b</code> (HumanEval >91).</li>
+            <li><strong>Cân bằng giữa chất lượng và chi phí tính toán:</strong> <code>nvidia/google-gemma-4-31b</code> (HumanEval ~77%, model nhẹ).</li>
+            <li><strong>Tập trung vào sửa lỗi thực tế (SWE‑bench) và debug sâu:</strong> <code>nvidia/deepseek-r1</code> (SWE‑bench ~49%, HumanEval tốt).</li>
+            <li><strong>Tài nguyên cực limité (edge, thiết bị IoT):</strong> <code>nvidia/google-gemma</code> (≤9B) hoặc <code>nvidia/qwen-3-5-4b</code> (nếu đã fine‑tuned).</li>
+            <li><strong>Cần đa ngôn ngữ và bối cảnh dài:</strong> <code>nvidia/kimi-k2-5</code> (không có số liệu công开 trong nguồn, nhưng được quảng cáo là mạnh về đa ngôn ngữ và context window lớn).</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>Nguồn tham khảo</h2>
+        <ul>
+            <li>DeepSeek V4 benchmarks – HumanEval 90.20%: <a href="https://macaron.im/blog/deepseek-v4-benchmarks" target="_blank">macaron.im/blog/deepseek-v4-benchmarks</a></li>
+            <li>DeepSeek‑R1 performance – SWE‑bench 49.2%: <a href="https://deepwiki.com/deepseek-ai/DeepSeek-R1/4-performance-and-benchmarks" target="_blank">deepwiki.com/deepseek-ai/DeepSeek-R1/4-performance-and-benchmarks</a></li>
+            <li>Nemotron 3 Super 120B HumanEval+ 91.6: <a href="https://www.digitalapplied.com/blog/nemotron-3-super-120b-nvidia-open-source-coding-model" target="_blank">digitalapplied.com/blog/nemotron-3-super-120b...</a></li>
+            <li>Qwen 3.5 397B A17B HumanEval 96.3: <a href="https://pricepertoken.com/leaderboards/benchmark/humaneval" target="_blank">pricepertoken.com/leaderboards/benchmark/humaneval</a></li>
+            <li>Qwen 3.5 4B base HumanEval 48.8%: <a href="https://huggingface.co/JackYoung27/s0-tuning-qwen3.5-4b-humaneval" target="_blank">huggingface.co/JackYoung27/s0-tuning-qwen3.5-4b-humaneval</a></li>
+            <li>Gemma 4 31B HumanEval 76.8%: <a href="https://gemma4-ai.com/blog/gemma4-benchmark" target="_blank">gemma4-ai.com/blog/gemma4-benchmark</a></li>
+        </ul>
+    </div>
+
+    <footer>
+        Trang thông tin được tạo tự động – Ngày 14/05/2026
+    </footer>
+
+    <script>
+        // Optional: highlight rows on click for better UX
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', () => {
+                // toggle highlight
+                row.classList.toggle('active');
+            });
+        });
+        // Add CSS for active class
+        const style = document.createElement('style');
+        style.textContent = `
+            tbody tr.active {
+                background-color: #d6eaf8 !important;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

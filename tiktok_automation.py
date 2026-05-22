@@ -1,13 +1,13 @@
 """
 TikTok UI Automation Module
 
-Module nay cung cap class TikTokUIAutomator de tu dong hoa cac tac vu UI tren TikTok:
-- Tim va click nut Follow
-- Tim va click nut Like
-- Verify trang thai da follow/like
-- Tim kiem user qua thanh search
+Module này cung cấp class TikTokUIAutomator để tự động hóa các tác vụ UI trên TikTok:
+- Tìm và click nút Follow
+- Tìm và click nút Like
+- Verify trạng thái đã follow/like
+- Tìm kiếm user qua thanh search
 
-Su dung thu vien uiautomator2 de tuong tac voi UI.
+Sử dụng thư viện uiautomator2 để tương tác với UI.
 """
 
 import time
@@ -610,37 +610,45 @@ class TikTokUIAutomator:
                 # Buoc 6: Tap user dau tien trong danh sach
                 first_user_clicked = False
                 try:
-                    # Try to find and click on first user in search results
-                    # Look for user items in search results
-                    user_elements = []
-                    for el in self._u2(className='android.widget.TextView'):
-                        try:
-                            info = el.info
-                            # Check if this looks like a username element
-                            text = info.get('text', '')
-                            if text and len(text) > 0 and not text.replace('.', '').replace('_', '').isalnum():
-                                user_elements.append(el)
-                        except:
-                            pass
-                    # Click first user if found
-                    if user_elements:
-                        el = user_elements[0] if user_elements else None
-                        if el:
-                            self.click_element(ElementInfo(
-                                exists=True,
-                                bounds=el.info.get('bounds')
-                            ))
+                    # Cach 1: Tim element chinh xac bang ten username tren man hinh
+                    user_obj = self._u2(text=clean_username)
+                    if not user_obj.exists:
+                        # Thu tim chua username
+                        user_obj = self._u2(textContains=clean_username)
+                        
+                    if user_obj.exists:
+                        # Tap vao element dau tien tim duoc
+                        info = user_obj[0].info
+                        bounds = info.get('bounds')
+                        if bounds:
+                            left = int(bounds.get("left", 0))
+                            top = int(bounds.get("top", 0))
+                            right = int(bounds.get("right", 0))
+                            bottom = int(bounds.get("bottom", 0))
+                            self._u2.click((left + right) // 2, (top + bottom) // 2)
                             first_user_clicked = True
+                            logger.info(f"Da tap vao user chua text '{clean_username}'")
                 except Exception as e:
-                    logger.warning(f"Loi khi tim user dau tien: {e}")
+                    logger.warning(f"Loi khi tim user theo ten: {e}")
 
                 if not first_user_clicked:
-                    # Fallback: tap vao toa do co dinh cua user dau tien
+                    # Fallback: tap vao toa do duoi tab Nguoi dung
                     try:
                         w, h = self._u2.window_size()
-                        self._u2.click(w//2, 300)  # Tap near top center of screen
+                        click_x = w // 2
+                        click_y = 400  # Default fallback
+                        
+                        # Neu co bounds cua tab Nguoi dung, tap xuong duoi 150px
+                        if users_tab and users_tab.bounds:
+                            _, _, _, tab_bottom = users_tab.bounds
+                            click_y = tab_bottom + 150
+                            
+                        if click_y > h: 
+                            click_y = h // 2
+                            
+                        self._u2.click(click_x, click_y)
                         first_user_clicked = True
-                        logger.info("Da tap user dau tien (fallback toa do)")
+                        logger.info(f"Da tap user dau tien (fallback toa do: {click_x}, {click_y})")
                     except Exception as e:
                         logger.warning(f"Loi fallback tap user: {e}")
 
@@ -658,36 +666,36 @@ class TikTokUIAutomator:
                     time.sleep(1)
                 continue
 
-        return False, f"Tim kiem '{clean_username}' that bai sau {retry_count} lan thu"
+        return False, f"Tìm kiếm '{clean_username}' thất bại sau {retry_count} lần thử"
 
     def clear_search_text(self) -> bool:
-        """Xoa text trong o search ve trang thai trong
+        """Xóa text trong ô search về trạng thái trống
 
         Returns:
-            bool: True neu xoa thanh cong
+            bool: True nếu xóa thành công
         """
         if not self._connected:
             return False
 
         try:
-            # Vong lap toi da 3 lan de quay lai man hinh thich hop neu chua thay o/nut tim kiem
+            # Vòng lặp tối đa 3 lần để quay lại màn hình thích hợp nếu chưa thấy ô/nút tìm kiếm
             for i in range(3):
-                # 1. Kiem tra xem co o nhap search khong (dang o man hinh ket qua hoac nhap lieu)
+                # 1. Kiểm tra xem có ô nhập search không (đang ở màn hình kết quả hoặc nhập liệu)
                 search_input = self._find_element(self.SEARCH_INPUT_SELECTORS, timeout=0.8)
                 if search_input:
-                    logger.debug("Tim thay o nhap search, tien hanh click va xoa text.")
+                    logger.debug("Tìm thấy ô nhập search, tiến hành click và xóa text.")
                     self.click_element(search_input)
                     time.sleep(0.3)
                     self._u2.clear_text()
                     return True
 
-                # 2. Kiem tra xem co nut tim kiem khong (dang o man hinh chinh/feed)
+                # 2. Kiểm tra xem có nút tìm kiếm không (đang ở màn hình chính/feed)
                 search_icon = self._find_element(self.SEARCH_ICON_SELECTORS, timeout=0.5)
                 if search_icon:
-                    logger.debug("Tim thay icon search (man hinh chinh), click de mo o nhap.")
+                    logger.debug("Tìm thấy icon search (màn hình chính), click để mở ô nhập.")
                     self.click_element(search_icon)
                     time.sleep(0.5)
-                    # Sau khi mo, kiem tra lai o nhap search
+                    # Sau khi mở, kiểm tra lại ô nhập search
                     search_input = self._find_element(self.SEARCH_INPUT_SELECTORS, timeout=1.0)
                     if search_input:
                         self.click_element(search_input)
@@ -695,11 +703,11 @@ class TikTokUIAutomator:
                         self._u2.clear_text()
                         return True
 
-                # 3. Neu chua thay gi (dang o trang ca nhan hoac trang con khac), tien hanh back
-                logger.info(f"Chua thay o search hoac icon search, dang nhan quay lai (lan {i+1}/3)...")
+                # 3. Nếu chưa thấy gì (đang ở trang cá nhân hoặc trang con khác), tiến hành back
+                logger.info(f"Chưa thấy ô search hoặc icon search, đang nhấn quay lại (lần {i+1}/3)...")
                 self._u2.press("back")
                 time.sleep(1.0)
         except Exception as e:
-            logger.debug(f"Loi clear search text: {e}")
+            logger.debug(f"Lỗi clear search text: {e}")
 
         return False
