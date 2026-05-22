@@ -1,5 +1,5 @@
 {
-  "version": "1.8.9",
-  "release_date": "2026-05-21",
-  "changelog": "v1.8.9: Th\u00eam c\u01a1 ch\u1ebf b\u1ea3o v\u1ec7 kh\u1edfi \u0111\u1ed9ng (Safe Boot)\n- Th\u00eam th\u00f4ng b\u00e1o h\u01b0\u1edbng d\u1eabn ch\u1ea1y python updater.py r\u00f5 r\u00e0ng thay v\u00ec v\u0103ng l\u1ed7i kh\u00f3 hi\u1ec3u khi h\u1ec7 th\u1ed1ng b\u1ecb thi\u1ebfu c\u00e1c file/th\u01b0 m\u1ee5c l\u00f5i do qu\u00e1 tr\u00ecnh c\u1eadp nh\u1eadt tr\u01b0\u1edbc \u0111\u00f3 b\u1ecb l\u1ed7i."
+  "version": "1.9.0",
+  "release_date": "2026-05-22",
+  "changelog": "v1.9.0: Đồng bộ hóa toàn bộ cơ chế cập nhật thông minh (đọc chung 1 version.json)"
 }

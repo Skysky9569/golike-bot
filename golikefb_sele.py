@@ -305,35 +305,24 @@ except ValueError:
     pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
-CURRENT_VERSION = "1.8.11" # v1.8.11: MAX_JOB Auto-Switch + Telegram Setup + Browser Button Fix
-UPDATE_URL = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/golikefb_sele.py"
+def _load_sele_version() -> str:
+    """Đọc version từ version.json cùng thư mục."""
+    try:
+        _vf = os.path.join(SCRIPT_DIR, "version.json")
+        with open(_vf, "r", encoding="utf-8") as _f:
+            return json.load(_f).get("version", "1.8.11")
+    except (json.JSONDecodeError, IOError):
+        return "1.8.11"
+
+CURRENT_VERSION = _load_sele_version()
 
 def kiem_tra_cap_nhat():
-    print(f"[*] Đang kiểm tra cập nhật (Phiên bản hiện tại: v{CURRENT_VERSION})...")
+    # Sử dụng hệ thống cập nhật tập trung từ updater.py
     try:
-        r = requests.get(UPDATE_URL, timeout=8)
-        if r.status_code == 200:
-            server_code = r.text
-            import re
-            match = re.search(r'CURRENT_VERSION\s*=\s*["\']([^"\']+)["\']', server_code)
-            if match:
-                latest_ver = match.group(1)
-                if latest_ver != CURRENT_VERSION:
-                    print(f"\n[🔥] PHÁT HIỆN PHIÊN BẢN MỚI v{latest_ver}!")
-                    # HỎI Ý KIẾN NGƯỜI DÙNG TRƯỚC KHI UPDATE
-                    chon = input("👉 Bạn có muốn tải và cài đặt bản cập nhật này không? (y/n, Enter là có): ").strip().lower()
-                    if chon in ['y', 'yes', '']:
-                        print("[*] Đang tải về và ghi đè cập nhật...")
-                        with open(__file__, "w", encoding="utf-8") as f:
-                            f.write(server_code)
-                        print("[✅] Cập nhật thành công! Vui lòng bật lại tool để áp dụng.")
-                        sys.exit(0)
-                    else:
-                        print("[*] Bạn đã chọn bỏ qua cập nhật. Chạy phiên bản hiện tại.")
-                else:
-                    print("[✓] Đang chạy phiên bản mới nhất.")
-    except Exception:
-        print("[!] Không thể kết nối tới server cập nhật (bỏ qua).")
+        import updater
+        updater.run_version_check(CURRENT_VERSION)
+    except Exception as e:
+        print(f"[!] Không thể kiểm tra cập nhật: {e}")
 
 # Bật auto-update
 kiem_tra_cap_nhat()
