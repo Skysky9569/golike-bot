@@ -19,10 +19,10 @@ except ImportError:
     HAS_REQUESTS = False
 
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/skysky9569/golike-bot/main/"
-GITHUB_API_BASE = "https://api.github.com/repos/skysky9569/golike-bot/contents/"
+GITHUB_API_BASE = "https://api.github.com/repos/skysky9569/golike-bot/"
 UPDATE_URL = f"{GITHUB_RAW_BASE}main.py"
 VERSION_URL = f"{GITHUB_RAW_BASE}version.json"
-REPO_TREE_URL = f"{GITHUB_API_BASE}?recursive=1"
+REPO_TREE_URL = f"{GITHUB_API_BASE}git/trees/main?recursive=1"
 
 # File extensions to PRESERVE during update (user data)
 CONFIG_EXTENSIONS = ['.json', '.enc', '.md']
@@ -138,10 +138,14 @@ def _get_all_repo_files() -> List[str]:
         if response.status_code != 200:
             return []
 
-        items = response.json()
+        data = response.json()
+        if 'tree' not in data:
+            return []
+            
+        items = data['tree']
         files = []
         for item in items:
-            if isinstance(item, dict) and item.get('type') == 'file':
+            if isinstance(item, dict) and item.get('type') == 'blob':
                 path = item.get('path', '')
                 files.append(path)
         return files
