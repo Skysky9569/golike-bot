@@ -178,11 +178,13 @@ def main() -> None:
             auth = cred_manager.get_auth()
             while not auth:
                 auth = input(colored("📢 Nhap Authorization: ", "green")).strip()
-                auth = validator.sanitize_string(auth, 500)
+                # Validate TRƯỚC sanitize để không làm mất dữ liệu hợp lệ
                 if not validator.validate_auth_token(auth):
                     logger.warning("Token khong hop le! Phai tu 10-500 ky tu")
                     auth = ""
                     continue
+                # Sanitize sau khi validate thành công
+                auth = validator.sanitize_string(auth, 500)
                 if auth:
                     if cred_manager.save_auth(auth):
                         logger.info("Da luu authorization token")

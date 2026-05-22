@@ -56,11 +56,13 @@ def facebook_menu(auth_token: str) -> None:
 
     while not cookie:
         cookie = input(colored("📢 Nhap Facebook Cookie: ", "green")).strip()
-        cookie = validator.sanitize_string(cookie, 1000)
+        # Validate TRƯỚC sanitize để không làm mất dữ liệu hợp lệ
         if not validator.validate_cookie(cookie):
             logger.warning("Cookie khong hop le!")
             cookie = ""
             continue
+        # Sanitize sau khi validate thành công
+        cookie = validator.sanitize_string(cookie, 1000)
         if cookie:
             if save_fb_cookie(cookie):
                 logger.info("Da luu Facebook cookie")
