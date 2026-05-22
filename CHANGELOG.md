@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.8.8] - 2026-05-22
+
+### Sửa Lỗi (Fixed)
+- **Sửa lỗi Auto-Update (Tải thư mục con)**:
+  - Cập nhật GitHub API endpoint sang /git/trees/main?recursive=1 để updater.py có thể quét và tải được toàn bộ file nằm sâu trong các thư mục con (recursive), thay vì chỉ tải được file ở thư mục gốc như trước đây.
+
+
+
 ## [v1.8.6] - 2026-05-22
 
 ### Thêm Mới (Added)
