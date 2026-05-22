@@ -33,17 +33,27 @@ class GolikeAPIClient:
         }
     }
 
-    def __init__(self, base_url: Optional[str] = None, timeout: int = 10):
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        timeout: int = 30,  # Tăng từ 10s → 30s
+        connect_timeout: int = 5  # Tách connect timeout
+    ):
         """Khởi tạo GolikeAPIClient
 
         Args:
             base_url: URL cơ sở cho API (mặc định từ CONFIG)
-            timeout: Timeout mặc định cho requests
+            timeout: Timeout mặc định cho requests (default: 30s)
+            connect_timeout: Connect timeout (default: 5s)
         """
         self.base_url = base_url or CONFIG.api_base_url
         self.timeout = timeout
+        self.connect_timeout = connect_timeout
         self._auth_token: Optional[str] = None
         self._t_token = 'VFZSak0wOUVWWGRQUkZrd1QxRTlQUT09'
+        # Session với timeout cấu hình
+        self.session = requests.Session()
+        self.session.timeout = (connect_timeout, timeout)
 
     def set_auth(self, auth_token: str) -> None:
         """Set authorization token
@@ -97,7 +107,7 @@ class GolikeAPIClient:
                 url,
                 params=params,
                 headers=self._build_headers(),
-                timeout=self.timeout
+                timeout=(self.connect_timeout, self.timeout)
             )
             # Check for rate limit and session expired
             if response.status_code == 429:
@@ -130,7 +140,7 @@ class GolikeAPIClient:
                 url,
                 json=data,
                 headers=self._build_headers(),
-                timeout=self.timeout
+                timeout=(self.connect_timeout, self.timeout)
             )
             # Check for rate limit and session expired
             if response.status_code == 429:
@@ -309,3 +319,36 @@ class GolikeAPIClient:
         }
 
         return self.post(endpoint, skip_data)
+
+    def health_check(self) -> Dict[str, Any]:
+        """
+        Kiểm tra API server health.
+
+        Returns:
+            Dict với status, latency_ms, message
+        """
+        import time
+        start = time.time()
+        try:
+            # Test endpoint cơ bản
+            response = self.get('/health', timeout=5)
+            latency = int((time.time() - start) * 1000)
+            if response.get('status') == 200:
+                return {
+                    'status': 'ok',
+                    'latency_ms': latency,
+                    'message': 'Healthy'
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'latency_ms': latency,
+                    'message': 'Unhealthy response'
+                }
+        except Exception as e:
+            latency = int((time.time() - start) * 1000)
+            return {
+                'status': 'error',
+                'latency_ms': latency,
+                'message': str(e)
+            }

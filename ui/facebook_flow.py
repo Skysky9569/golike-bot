@@ -9,6 +9,7 @@ from golike_core.logging import logger
 from golike_core.adb_manager import colored
 from golike_core.api_client import GolikeAPIClient
 from golike_core.security import CredentialManager, InputValidator
+from golike_core.utils.safe_logger import safe_log
 from golike_facebook.facebook_client import FacebookJobProcessor
 from ui.console import input_int
 
@@ -75,7 +76,7 @@ def facebook_menu(auth_token: str) -> None:
 
     try:
         accounts = api_client.get_accounts(provider='facebook')
-        logger.debug(f"API Response: {accounts}")
+        logger.debug(f"API Response: {safe_log(accounts)}")
     except Exception as e:
         logger.error(f"Loi lay danh sach account Facebook: {e}")
         print(colored("🚨 Loi ket noi API!", "red"))
