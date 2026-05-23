@@ -55,7 +55,8 @@ class ConfigManager:
             "sleep_on_cool_down": 300,
             "delay_after_reset_click": 3.5,
             "sleep_on_hunt_retry": 10,
-            "switch_server_minutes": 0
+            "switch_server_minutes": 0,
+            "max_job_limit": 100
         }
 
         if os.path.exists(config_path):

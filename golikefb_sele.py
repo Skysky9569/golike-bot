@@ -54,8 +54,10 @@ def job_limit_reached(driver):
                 if "100 job" in msg or ("tối đa" in msg and "job" in msg) or ("giới hạn" in msg and "job" in msg) or "đã làm quá" in msg or "max job" in msg:
                     print(f"🚨 Phát hiện giới hạn Job: {elem.get_attribute('textContent').strip()}")
                     return True
-            except: pass
-                    
+            except Exception as e:
+                print(f'[!] Lỗi kiểm tra toast element: {type(e).__name__}: {e}')
+                continue
+
         # 2. Check SweetAlert popups
         popup_titles = driver.find_elements(By.CSS_SELECTOR, "h2#swal2-title")
         popup_contents = driver.find_elements(By.CSS_SELECTOR, "div#swal2-content")
@@ -65,20 +67,30 @@ def job_limit_reached(driver):
             if t.is_displayed(): full_text += t.text.lower() + " "
         for c in popup_contents:
             if c.is_displayed(): full_text += c.text.lower() + " "
-            
-        if "100 job" in full_text or ("tối đa" in full_text and "job" in full_text) or ("giới hạn" in full_text and "job" in full_text) or "đã làm quá" in full_text or "max job" in full_text:
+
+        # Check SV2 pattern: số job hôm này X
+        job_match = re.search(r"số job hôm này\s*(\d+)", full_text)
+        max_job_limit = CONFIG_DELAY.get("max_job_limit", 100)
+        try:
+            max_job_limit = int(max_job_limit) if max_job_limit is not None else 100
+        except (ValueError, TypeError):
+            max_job_limit = 100  # Fallback an toàn
+        is_sv2_max = job_match and int(job_match.group(1)) >= max_job_limit
+
+        if "100 job" in full_text or ("tối đa" in full_text and "job" in full_text) or ("giới hạn" in full_text and "job" in full_text) or "đã làm quá" in full_text or "max job" in full_text or is_sv2_max:
             print(f"🚨 Phát hiện giới hạn Job từ Popup: {full_text.strip()}")
             # Tự động đóng popup nếu có
             try:
                 ok_btn = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
                 if ok_btn.is_displayed():
                     driver.execute_script("arguments[0].click();", ok_btn)
-            except: pass
+            except Exception as e:
+                print(f'[!] Không đóng được popup: {type(e).__name__}: {e}')
             return True
-            
-    except Exception:
-        pass
-        
+
+    except Exception as e:
+        print(f'[ERROR] Lỗi kiểm tra job limit: {type(e).__name__}: {e}')
+
     return False
 
 

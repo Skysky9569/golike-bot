@@ -12,6 +12,7 @@
   "sleep_on_cool_down": 180.0,
   "delay_after_reset_click": 15.0,
   "switch_server_minutes": 0.0,
+  "max_job_limit": 100,
   "default_proxy": "",
   "telegram_enabled": true,
   "telegram_bot_token": "${TELEGRAM_BOT_TOKEN}",
