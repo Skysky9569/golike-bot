@@ -2,10 +2,11 @@
 Security module for credential management and input validation
 """
 import os
+import json
 import hashlib
 import base64
 import re
-from typing import Optional
+from typing import Optional, Dict, List
 
 # Removed cryptography dependency for Termux compatibility
 # Always use simple XOR encryption
@@ -20,6 +21,7 @@ class CredentialManager:
 
     Sử dụng XOR encryption với Base64 encoding để bảo vệ
     authorization token và cookie.
+    Lưu trữ nhiều token trong file JSON: {label: encrypted_token}
     """
 
     def __init__(self, key: Optional[str] = None):
@@ -29,7 +31,9 @@ class CredentialManager:
             key: Khóa mã hóa (nếu None sẽ dùng key mặc định)
         """
         self.key = key or self._generate_key()
-        self.credential_file = "secure_credentials.enc"
+        self.credential_file = "auth_tokens.json"
+        self.old_credential_file = "secure_credentials.enc"
+        self._migrate_old_credential()
 
     @staticmethod
     def _generate_key() -> str:
@@ -73,53 +77,143 @@ class CredentialManager:
         except Exception:
             return ""
 
-    def save_auth(self, auth_token: str) -> bool:
-        """Lưu authorization token đã mã hóa
+    def _load_tokens(self) -> Dict[str, str]:
+        """Load token dictionary from JSON file
+
+        Returns:
+            Dict[str, str]: Dictionary of label to encrypted token
+        """
+        if not os.path.exists(self.credential_file):
+            return {}
+        try:
+            with open(self.credential_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    # Ensure all values are strings
+                    return {k: str(v) for k, v in data.items()}
+                else:
+                    return {}
+        except (json.JSONDecodeError, IOError):
+            return {}
+
+    def _save_tokens(self, tokens: Dict[str, str]) -> None:
+        """Save token dictionary to JSON file
 
         Args:
+            tokens: Dictionary of label to encrypted token
+        """
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(os.path.abspath(self.credential_file)), exist_ok=True)
+            with open(self.credential_file, 'w', encoding='utf-8') as f:
+                json.dump(tokens, f, indent=2, ensure_ascii=False)
+        except IOError as e:
+            print(f"[!] Lỗi lưu file token: {e}")
+
+    def _migrate_old_credential(self) -> None:
+        """Migrate old single token file to new JSON format if needed"""
+        if os.path.exists(self.old_credential_file) and not os.path.exists(self.credential_file):
+            try:
+                with open(self.old_credential_file, 'r') as f:
+                    old_encrypted = f.read().strip()
+                old_decrypted = self._decrypt(old_encrypted)
+                if old_decrypted:
+                    # Save as label "default" in new format
+                    tokens = {"default": self._encrypt(old_decrypted)}
+                    self._save_tokens(tokens)
+                # Remove old file after migration (whether successful or not)
+                os.remove(self.old_credential_file)
+            except Exception:
+                # If migration fails, we still remove the old file to avoid infinite retry
+                try:
+                    os.remove(self.old_credential_file)
+                except:
+                    pass
+
+    def save_auth(self, label: str, auth_token: str) -> bool:
+        """Lưu authorization token đã mã hóa với nhãn cụ thể
+
+        Args:
+            label: Nhãn để xác định token
             auth_token: Authorization token cần lưu
 
         Returns:
             bool: True nếu thành công, False nếu thất bại
         """
+        if not label or not auth_token:
+            return False
         try:
-            encrypted = self._encrypt(auth_token)
-            with open(self.credential_file, 'w', encoding='utf-8') as f:
-                f.write(encrypted)
+            tokens = self._load_tokens()
+            tokens[label] = self._encrypt(auth_token)
+            self._save_tokens(tokens)
             return True
         except Exception as e:
             print(f"[!] Lỗi lưu credential: {e}")
             return False
 
-    def get_auth(self) -> Optional[str]:
-        """Lấy authorization token
+    def get_auth_by_label(self, label: str) -> Optional[str]:
+        """Lấy authorization token theo nhãn
+
+        Args:
+            label: Nhãn của token cần lấy
 
         Returns:
             Optional[str]: Token hoặc None nếu không tồn tại
         """
-        if not os.path.exists(self.credential_file):
-            return None
-        try:
-            with open(self.credential_file, 'r', encoding='utf-8') as f:
-                encrypted = f.read().strip()
-            decrypted = self._decrypt(encrypted)
-            return decrypted if decrypted else None
-        except Exception:
-            return None
+        tokens = self._load_tokens()
+        if label in tokens:
+            return self._decrypt(tokens[label])
+        return None
+
+    def get_auth_labels(self) -> List[str]:
+        """Lấy danh sách tất cả các nhãn token
+
+        Returns:
+            List[str]: Danh sách các nhãn
+        """
+        return list(self._load_tokens().keys())
 
     def clear_auth(self) -> bool:
-        """Xóa authorization token
+        """Xóa tất cả authorization tokens
 
         Returns:
             bool: True nếu thành công, False nếu thất bại
         """
         try:
-            if os.path.exists(self.credential_file):
-                os.remove(self.credential_file)
+            self._save_tokens({})
             return True
         except Exception as e:
             print(f"[!] Lỗi xóa credential: {e}")
             return False
+
+    def delete_auth(self, label: str) -> bool:
+        """Xóa authorization token theo nhãn
+
+        Args:
+            label: Nhãn của token cần xóa
+
+        Returns:
+            bool: True nếu thành công, False nếu thất bại
+        """
+        try:
+            tokens = self._load_tokens()
+            if label in tokens:
+                del tokens[label]
+                self._save_tokens(tokens)
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"[!] Lỗi xóa token: {e}")
+            return False
+
+    def has_any_token(self) -> bool:
+        """Kiểm tra xem có token nào được lưu trữ không
+
+        Returns:
+            bool: True nếu có ít nhất một token, False nếu không
+        """
+        return len(self._load_tokens()) > 0
 
 
 class ValidationError(Exception):

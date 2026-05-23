@@ -113,6 +113,57 @@ def run_facebook_selenium_bot() -> None:
     input(colored("Nhan Enter de quay lai...", "white"))
 
 
+def auth_manager_menu() -> None:
+    """Menu untuk quản lý các authorization token"""
+    cred_manager = CredentialManager()
+    validator = InputValidator()
+
+    while True:
+        print(colored("\n════════════════════════════════════════════════", "cyan"))
+        print(colored("🔐 QUẢN LÝ AUTHORIZATION TOKENS", "yellow"))
+        print(colored("════════════════════════════════════════════════", "cyan"))
+
+        tokens = cred_manager.get_auth_labels()
+        if tokens:
+            print(colored("Danh sách token hiện có:", "white"))
+            for i, label in enumerate(tokens, 1):
+                token = cred_manager.get_auth_by_label(label)
+                if token and len(token) > 14:
+                    masked = token[:10] + "..." + token[-4:]
+                else:
+                    masked = token
+                print(f"  [{i}] {label} ({masked})")
+        else:
+            print(colored("Chưa có token nào được lưu trữ.", "yellow"))
+
+        print(colored("\nLựa chọn:", "white"))
+        print(colored("   [1] ➕ Thêm token mới", "green"))
+        print(colored("   [0] 🔙 Quay lại menu chính", "white"))
+        print(colored("════════════════════════════════════════════════", "cyan"))
+
+        choice = input(colored("Nhap lua chon: ", "white")).strip()
+
+        if choice == "0":
+            break
+        elif choice == "1":
+            # Thêm token mới
+            label = input(colored("Nhap nhan cho token moi: ", "green")).strip()
+            while not label:
+                label = input(colored("Nhan khong duoc de trong. Nhap lai: ", "green")).strip()
+
+            token = input(colored("Nhap authorization token: ", "green")).strip()
+            while not validator.validate_auth_token(token):
+                print(colored("Token khong hop le! Phai tu 10-500 ky tu", "red"))
+                token = input(colored("Nhap lai authorization token: ", "green")).strip()
+
+            if cred_manager.save_auth(label, token):
+                print(colored(f"[✔] Da luu token voi nhan '{label}'!", "green"))
+            else:
+                print(colored("[!] Luu token that bai!", "red"))
+        else:
+            print(colored("Lua chon khong hop le!", "yellow"))
+
+
 def main() -> None:
     """Main function"""
     validator = InputValidator()
@@ -134,16 +185,8 @@ def main() -> None:
             adb_menu()
             continue
         elif choose == "5":
-            if cred_manager.clear_auth():
-                cookie_file = "facebook_cookie.enc"
-                if os.path.exists(cookie_file):
-                    try:
-                        os.remove(cookie_file)
-                    except OSError:
-                        pass
-                print(colored("[✔] Da xoa credential!", "green"))
-            else:
-                print(colored("[!] Khong the xoa credential!", "red"))
+            # Thay đổi tùy chọn 5 thành Quản lý authorization tokens
+            auth_manager_menu()
             continue
         elif choose == "6":
             show_security_config()
@@ -158,41 +201,67 @@ def main() -> None:
             toggle_debug_mode()
             continue
         elif choose == "1":
-            auth = cred_manager.get_auth()
-            while not auth:
-                auth = input(colored("📢 Nhap Authorization: ", "green")).strip()
-                auth = validator.sanitize_string(auth, 500)
-                if not validator.validate_auth_token(auth):
-                    logger.warning("Token khong hop le! Phai tu 10-500 ky tu")
-                    auth = ""
-                    continue
-                if auth:
-                    if cred_manager.save_auth(auth):
-                        logger.info("Da luu authorization token")
-                        print(colored("✅ Da luu token an toan!", "green"))
-                    else:
-                        logger.error("Loi luu token!")
-                        auth = ""
-            tiktok_menu(auth)
+            # TikTok menu
+            if not cred_manager.has_any_token():
+                # Chưa có token nào, yêu cầu nhập ngay tại chỗ
+                label = input(colored("Nhap nhan cho token moi: ", "green")).strip()
+                while not label:
+                    label = input(colored("Nhan khong duoc de trong. Nhap lai: ", "green")).strip()
+                token = input(colored("Nhap authorization token: ", "green")).strip()
+                while not validator.validate_auth_token(token):
+                    print(colored("Token khong hop le! Phai tu 10-500 ky tu", "red"))
+                    token = input(colored("Nhap lai authorization token: ", "green")).strip()
+                cred_manager.save_auth(label, token)
+                auth_token = token
+                print(colored(f"[✔] Da luu token voi nhan '{label}' va dang su dung!", "green"))
+            else:
+                labels = cred_manager.get_auth_labels()
+                if len(labels) == 1:
+                    auth_token = cred_manager.get_auth_by_label(labels[0])
+                else:
+                    # Nhiều token, yêu cầu chọn
+                    print(colored("\nChon token de su dung cho TikTok:", "cyan"))
+                    for i, label in enumerate(labels, 1):
+                        token = cred_manager.get_auth_by_label(label)
+                        if token and len(token) > 14:
+                            masked = token[:10] + "..." + token[-4:]
+                        else:
+                            masked = token
+                        print(f"  [{i}] {label} ({masked})")
+                    choice_idx = input_int("Nhap lua chon: ", minval=1, maxval=len(labels))
+                    auth_token = cred_manager.get_auth_by_label(labels[choice_idx-1])
+            tiktok_menu(auth_token)
         elif choose == "2":
-            auth = cred_manager.get_auth()
-            while not auth:
-                auth = input(colored("📢 Nhap Authorization: ", "green")).strip()
-                # Validate TRƯỚC sanitize để không làm mất dữ liệu hợp lệ
-                if not validator.validate_auth_token(auth):
-                    logger.warning("Token khong hop le! Phai tu 10-500 ky tu")
-                    auth = ""
-                    continue
-                # Sanitize sau khi validate thành công
-                auth = validator.sanitize_string(auth, 500)
-                if auth:
-                    if cred_manager.save_auth(auth):
-                        logger.info("Da luu authorization token")
-                        print(colored("✅ Da luu token an toan!", "green"))
-                    else:
-                        logger.error("Loi luu token!")
-                        auth = ""
-            facebook_menu(auth)
+            # Facebook menu
+            if not cred_manager.has_any_token():
+                # Chưa có token nào, yêu cầu nhập ngay tại chỗ
+                label = input(colored("Nhap nhan cho token moi: ", "green")).strip()
+                while not label:
+                    label = input(colored("Nhan khong duoc de trong. Nhap lai: ", "green")).strip()
+                token = input(colored("Nhap authorization token: ", "green")).strip()
+                while not validator.validate_auth_token(token):
+                    print(colored("Token khong hop le! Phai tu 10-500 ky tu", "red"))
+                    token = input(colored("Nhap lai authorization token: ", "green")).strip()
+                cred_manager.save_auth(label, token)
+                auth_token = token
+                print(colored(f"[✔] Da luu token voi nhan '{label}' va dang su dung!", "green"))
+            else:
+                labels = cred_manager.get_auth_labels()
+                if len(labels) == 1:
+                    auth_token = cred_manager.get_auth_by_label(labels[0])
+                else:
+                    # Nhiều token, yêu cầu chọn
+                    print(colored("\nChon token de su dung cho Facebook:", "cyan"))
+                    for i, label in enumerate(labels, 1):
+                        token = cred_manager.get_auth_by_label(label)
+                        if token and len(token) > 14:
+                            masked = token[:10] + "..." + token[-4:]
+                        else:
+                            masked = token
+                        print(f"  [{i}] {label} ({masked})")
+                    choice_idx = input_int("Nhap lua chon: ", minval=1, maxval=len(labels))
+                    auth_token = cred_manager.get_auth_by_label(labels[choice_idx-1])
+            facebook_menu(auth_token)
         else:
             logger.warning("Lua chon khong hop le!")
 
