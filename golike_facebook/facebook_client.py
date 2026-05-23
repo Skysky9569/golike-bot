@@ -298,7 +298,12 @@ class FacebookJobProcessor:
 
 
         # Thực hiện job với retry
-        for attempt in range(1, max_retries + 1):
+        attempt = 0
+        rate_limit_count = 0
+        rate_limit_delays = [3, 8, 15]
+
+        while attempt < max_retries:
+            attempt += 1
             try:
                 if handler == self._comment:
                     # Comment cần content
@@ -335,6 +340,15 @@ class FacebookJobProcessor:
                         time.sleep(1)
                     else:
                         break
+                elif result.get("rate_limited"):
+                    rate_limit_count += 1
+                    if rate_limit_count >= 3:
+                        logger.error("Rate limit exceeded after 3 attempts with exponential backoff. Stopping.")
+                        break
+                    delay = rate_limit_delays[rate_limit_count - 1]
+                    logger.warning(f"Rate limited, waiting {delay}s (retry {rate_limit_count}/3)...")
+                    time.sleep(delay)
+                    attempt -= 1
                 elif attempt < max_retries and retry_on_fail:
                     logger.warning(f"Thực hiện job thất bại lần {attempt}, retrying...")
                     time.sleep(1)

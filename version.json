@@ -1,5 +1,5 @@
 {
-  "version": "1.9.1",
-  "release_date": "2026-05-22",
-  "changelog": "v1.9.1: Fix MAX JOB gửi Telegram + tự chuyển acc. Fix golike_uid vs FB uid"
+  "version": "1.9.2",
+  "release_date": "2026-05-23",
+  "changelog": "v1.9.2: Fix HTTP 429 rate limit handling with exponential backoff\n- Them phan biet loi rate limit (HTTP 429) trong fb_web_api.py\n- Ap dung exponential backoff (3s, 8s, 15s) khi gap rate limit thay vi fixed 1s delay\n- Gioi han toi da 3 lan retry khi bi rate limit, sau do dung va log ro rang\n- Cac loi khong phai 429 giu nguyen hanh vi retry cu"
 }

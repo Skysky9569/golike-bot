@@ -28,6 +28,7 @@ node_modules/
 .claude/
 
 # === FILE ĐỊA PHƯƠNG ===
+multi_accounts.json
 .env
 .env.local
 *.local.json
@@ -47,3 +48,14 @@ Authorization.txt
 demo_config.json
 testing_demo.py
 golike_token.enc
+AUDIT_REPORT.md
+facebook-tool-analyzer.md
+main_restructured.py
+golike_core/modules/example_usage.py
+golike_core/modules/golike_handler_updated.py
+golike_core/modules/main_restructured.py
+golike_core/modules/main_system.py
+
+# === CODE ANALYSIS ===
+.codegraph/
+openai_search_results.png

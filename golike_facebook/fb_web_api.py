@@ -291,6 +291,8 @@ class FB_API:
                     return {"success": True, "error": None, "feedback_id": str(feedback_id), "reaction_count": str(reaction_count)}
                 else:
                     return {"success": False, "error": str(response.json())}
+            elif response.status_code == 429:
+                return {"success": False, "error": "429", "rate_limited": True}
             else:
                 return {"success": False, "error": str(response.status_code)}
         except Exception as e:
@@ -326,6 +328,8 @@ class FB_API:
                     return {"success": True, "error": None, "total_count": total_count, "comment_url": comment_url}
                 else:
                     return {"success": False, "error": str(response.json())}
+            elif response.status_code == 429:
+                return {"success": False, "error": "429", "rate_limited": True}
             else:
                 return {"success": False, "error": str(response.status_code)}
         except Exception as e:
@@ -352,6 +356,8 @@ class FB_API:
                     return {"success": True, "error": None, "id": match.group(1)}
                 else:
                     return {"success": False, "error": str(response.json())}
+            elif response.status_code == 429:
+                return {"success": False, "error": "429", "rate_limited": True}
             else:
                 return {"success": False, "error": str(response.status_code)}
         except Exception as e:
@@ -373,6 +379,8 @@ class FB_API:
             
             if response.status_code == 200:
                 return {"success": True, "error": None, "id": PAGE_ID}
+            elif response.status_code == 429:
+                return {"success": False, "error": "429", "rate_limited": True}
             else:
                 return {"success": False, "error": str(response.status_code)}
         except Exception as e:
