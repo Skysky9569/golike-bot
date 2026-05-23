@@ -1,5 +1,6 @@
 {
-  "version": "1.9.2",
+  "version": "1.9.3",
   "release_date": "2026-05-23",
-  "changelog": "v1.9.2: Fix HTTP 429 rate limit handling with exponential backoff\n- Them phan biet loi rate limit (HTTP 429) trong fb_web_api.py\n- Ap dung exponential backoff (3s, 8s, 15s) khi gap rate limit thay vi fixed 1s delay\n- Gioi han toi da 3 lan retry khi bi rate limit, sau do dung va log ro rang\n- Cac loi khong phai 429 giu nguyen hanh vi retry cu"
+  "changelog": "v1.9.3: Refactor golikefb_sele.py direct import integration\n- Bo subprocess.run, import golikefb_sele.direc trực tiếp từ main.py\n- Gom cleanup guard, signal handler vào setup_lifecycle()\n- Tạo sele_menu() function, user chọn 'exit' thoát hẳn tool\n- User chọn 'm' return về menu main.py (qua STOP_FLAG)",
+  "previous_version": "1.9.2"
 }

@@ -5,7 +5,6 @@ Termux/Android compatible
 """
 import os
 import sys
-import subprocess
 
 # ============================================================================
 # TERMUX/ANDROID COMPATIBILITY
@@ -93,24 +92,25 @@ from ui.facebook_flow import facebook_menu
 
 
 def run_facebook_selenium_bot() -> None:
-    """Chay tool GoLike Facebook Selenium (ho tro API + DOM Click mode)"""
+    """Chay tool GoLike Facebook Selenium (ho tro API + DOM Click mode) - Import directly instead of subprocess."""
     print(colored("\n════════════════════════════════════════════════", "cyan"))
     print(colored("🚀 KHOI DONG TOOL GOLIKE FACEBOOK SELENIUM", "yellow"))
     print(colored("════════════════════════════════════════════════", "cyan"))
-    print(colored("Tool Facebook Selenium dang khoi dong...", "white"))
 
     try:
-        result = subprocess.run([sys.executable, "golikefb_sele.py"])
-        if result.returncode != 0:
-            logger.error(f"Golikefb_sele.py da thoat voi ma loi: {result.returncode}")
+        # Import golikefb_sele as module directly so sys.exit() works properly
+        import importlib
+        import golikefb_sele
+        golikefb_sele.sele_menu()
+    except SystemExit:
+        # User chose 'exit' - propagate to exit main program
+        raise
     except KeyboardInterrupt:
         print(colored("\n👋 Da dong Tool Facebook Selenium.", "yellow"))
     except Exception as e:
         logger.error(f"Loi khi chay golikefb_sele.py: {e}")
         print(colored(f"❌ Da xay ra loi: {e}", "red"))
-
-    print(colored("\n════════════════════════════════════════════════", "cyan"))
-    input(colored("Nhan Enter de quay lai...", "white"))
+        input(colored("Nhan Enter de quay lai...", "white"))
 
 
 def auth_manager_menu() -> None:

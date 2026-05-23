@@ -40,7 +40,6 @@ import requests
 import json
 from datetime import datetime
 from time import sleep
-import atexit
 import threading
 
 # Helper to detect the "job limit" toast
@@ -240,10 +239,17 @@ if sys.platform == 'win32':
 # Quản lý bộ trình duyệt đang chạy
 active_drivers = []
 drivers_lock = threading.Lock()
+_cleanup_done = False
 
 def cleanup():
+    """Đóng tất cả trình duyệt Selenium và dọn dẹp tiến trình Chrome."""
+    global _cleanup_done
+    if _cleanup_done:
+        return
+    _cleanup_done = True
+
     print("\n[!] Đang dọn dẹp và tắt hoàn toàn trình duyệt (tránh chạy nền)...")
-    
+
     # 1. Duyệt qua danh sách driver đang chạy để đóng nhẹ nhàng giải phóng RAM
     with drivers_lock:
         for drv in active_drivers:
@@ -257,17 +263,21 @@ def cleanup():
     if sys.platform == 'win32':
         import subprocess
         try:
-            # Dùng PowerShell quét và tắt THẬT SẠCH các chrome.exe tự động do Selenium bật 
-            # (Dựa vào cổng remote-debugging-port) -> Đảm bảo TUYỆT ĐỐI KHÔNG TẮT NHẦM Chrome cá nhân của bạn!
+            # Chỉ diệt chrome.exe được spawn bởi chromedriver.exe hoặc có --remote-debugging-port
+            # -> TUYỆT ĐỐI không đụng vào Chrome cá nhân của user
             ps_cmd = (
-                "Get-WmiObject Win32_Process -Filter \"Name = 'chrome.exe'\" | "
-                "Where-Object { $_.CommandLine -like '*--remote-debugging-port*' } | "
-                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+                "$cdPids = (Get-CimInstance Win32_Process -Filter \"Name='chromedriver.exe'\" | "
+                "ForEach-Object { $_.ProcessId }); "
+                "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
+                "Where-Object { "
+                "($_.CommandLine -like '*--remote-debugging-port*') -or "
+                "($cdPids -contains $_.ParentProcessId) "
+                "} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
             )
             subprocess.run(["powershell", "-Command", ps_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
-            
+
         # Tắt driver
         os.system("taskkill /f /im chromedriver.exe /T >nul 2>&1")
 
@@ -300,16 +310,15 @@ def handle_exit_signal(signum, frame):
     STOP_FLAG = True
     raise KeyboardInterrupt
 
-# Đăng ký dọn dẹp khi tắt tool thông thường
-atexit.register(cleanup)
-
-# Đăng ký dọn dẹp cưỡng bức khi ấn Ctrl+C hoặc bị đóng đột ngột
 import signal
-try:
-    signal.signal(signal.SIGINT, handle_exit_signal)
-    signal.signal(signal.SIGTERM, handle_exit_signal)
-except ValueError:
-    pass
+
+def setup_lifecycle():
+    """Đăng ký signal handler cho Ctrl+C và SIGTERM."""
+    try:
+        signal.signal(signal.SIGINT, handle_exit_signal)
+        signal.signal(signal.SIGTERM, handle_exit_signal)
+    except ValueError:
+        pass
 
 # ================== HỆ THỐNG TỰ ĐỘNG CẬP NHẬT ==================
 def _load_sele_version() -> str:
@@ -330,9 +339,6 @@ def kiem_tra_cap_nhat():
         updater.run_version_check(CURRENT_VERSION)
     except Exception as e:
         print(f"[!] Không thể kiểm tra cập nhật: {e}")
-
-# Bật auto-update
-kiem_tra_cap_nhat()
 
 # ================= PROXY PARSING =================
 
@@ -1998,15 +2004,19 @@ def _switch_to_next_account(driver, bot, cookie_list, current_idx, proxy_arg, sa
 # ======================================================================
 # ==================== MENU KHỞI CHẠY HỆ THỐNG CHÍNH ==================
 # ======================================================================
-if __name__ == "__main__":
-    # Load config delay khi khởi động
+def sele_menu():
+    """Menu chinh cua golikefb_sele. Duoc goi tu main.py hoac chay doc lap."""
+    global STOP_FLAG
+
+    setup_lifecycle()
+    kiem_tra_cap_nhat()
     load_delay_config()
-    # Hỏi user về thông báo Telegram
     setup_telegram_notify()
-    # Hiển thị config và hỏi user có muốn thay đổi
     show_config_summary()
 
     while True:
+        STOP_FLAG = False
+
         print("\n" + "="*65)
         print("🔥        HỆ THỐNG AUTO CÀY COIN GOLIKE & FACEBOOK v" + CURRENT_VERSION + "        🔥")
         print("="*65)
@@ -2025,14 +2035,20 @@ if __name__ == "__main__":
                 break
             elif lua_chon == "3":
                 setup_delay_config()
-                load_delay_config()  # Reload sau khi setup
+                load_delay_config()
                 continue
             elif lua_chon == "2":
                 run_parallel_mode()
-
             else:
                 run_single_mode()
+
+            if STOP_FLAG:
+                return
         except KeyboardInterrupt:
             print("\n[!] Đã nhận Ctrl+C. Không thoát, vui lòng chọn menu...")
         except Exception as e:
             print(f"\n🚨 Lỗi hệ thống khởi chạy: {e}")
+
+
+if __name__ == "__main__":
+    sele_menu()
