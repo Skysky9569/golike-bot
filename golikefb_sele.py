@@ -1786,9 +1786,36 @@ def run_parallel_mode():
 
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
-            profiles = json.load(f)
+            raw = json.load(f)
     except Exception as e:
         print(f"❌ Lỗi phân tích file cấu hình: {e}")
+        return
+
+    # Hỗ trợ 2 format:
+    # Format 1 (list): [{profile1}, {profile2}, ...]
+    # Format 2 (dict): {"parallel_accounts": [...], "delay_between_jobs": ..., ...}
+    if isinstance(raw, list):
+        profiles = raw
+    elif isinstance(raw, dict):
+        profiles = raw.get("parallel_accounts", [])
+        # Nếu dict có delay config -> load vào CONFIG_DELAY
+        delay_keys = ["delay_between_jobs", "delay_after_api_call", "delay_after_complete",
+                      "delay_after_report_error", "delay_on_job_hunt_retry", "delay_between_accounts",
+                      "timeout_driver_load", "timeout_wait_element", "sleep_on_reset",
+                      "sleep_on_cool_down", "delay_after_reset_click", "sleep_on_hunt_retry",
+                      "switch_server_minutes", "default_proxy"]
+        for k in delay_keys:
+            if k in raw:
+                CONFIG_DELAY[k] = raw[k]
+        if any(k in raw for k in delay_keys):
+            print(f"[✓] Đã load delay config từ config_parallel.json")
+    else:
+        print(f"❌ config_parallel.json có định dạng không hợp lệ (cần list hoặc dict).")
+        return
+
+    if not profiles:
+        print("❌ Không tìm thấy tài khoản nào trong config_parallel.json!")
+        print("   Hãy thêm danh sách vào key 'parallel_accounts' hoặc dùng format list.")
         return
 
     print(f"\n🚀 PHÁT HIỆN {len(profiles)} TÀI KHOẢN ĐĂNG KÝ CHẠY SONG SONG!")

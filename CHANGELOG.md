@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v1.9.6] - 2026-05-24
+
+### Sửa Lỗi (Fixed)
+- **Fix chế độ Song Song lỗi `'str' object has no attribute 'get'`**:
+  - Nguyên nhân: `config_parallel.json` có cấu trúc **dict** (chứa key `parallel_accounts` + các delay config), nhưng code đang `json.load()` rồi iterate thẳng kết quả như **list** → mỗi phần tử iterate ra là **string** (tên key của dict) → crash ngay khi gọi `.get()`.
+  - Đã sửa: Thêm logic **tự động phát hiện format**:
+    - Nếu JSON là **list** → dùng trực tiếp (format cũ).
+    - Nếu JSON là **dict** → lấy `parallel_accounts` làm danh sách profile, đồng thời load các delay config vào `CONFIG_DELAY` nếu có.
+  - Hiển thị thông báo rõ ràng nếu `parallel_accounts` rỗng hoặc format sai.
+
 ## [v1.9.5] - 2026-05-24
 
 ### Sửa Lỗi (Fixed)
