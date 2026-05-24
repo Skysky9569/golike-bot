@@ -165,7 +165,7 @@ class GenData:
         self.session = session
         self.request_counter = 0
     
-    def build_REACTION(self, reaction: str, ID_POST: str) -> Dict[str, Any]:
+    def build_REACTION(self, reaction: str, ID_POST: str, doc_id: str = 'null') -> Dict[str, Any]:
         self.request_counter += 1
         reaction_id_map = {
             'LIKE':  1635855486666999,
@@ -186,8 +186,11 @@ class GenData:
         _rand = random.randint(100000, 999999)
         _attr = f'CometHomeRoot.react,comet.home,via_cold_start,{_ts},{_rand},4748854339,,'
 
-        # doc_id: lấy từ session (đã fetch động khi authenticate)
-        doc_id = getattr(self.session, 'reaction_doc_id', None) or '9397136836967873'
+        # Nếu truyền doc_id thì dùng, ngược lại lấy từ session
+        if doc_id != 'null':
+            used_doc_id = doc_id
+        else:
+            used_doc_id = getattr(self.session, 'reaction_doc_id', None) or '9397136836967873'
 
         # Gửi form-encoded data= với doc_id — cách Facebook bắt buộc yêu cầu
         payload = {
@@ -217,7 +220,7 @@ class GenData:
                 'useDefaultActor': False,
                 '__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider': False,
             }, separators=(',', ':')),
-            'doc_id': doc_id,
+            'doc_id': used_doc_id,
         }
         return payload
 
@@ -473,12 +476,13 @@ class FB_API:
         except Exception:
             return f'HTTP {response.status_code}: {response.text[:200]}'
 
-    def REACTION(self, REACTION: str, Id_post: str):
+    def REACTION(self, REACTION: str, Id_post: str, doc_id: str = 'null'):
         """
         Gửi reaction cho bài viết.
 
         :param REACTION: Loại reaction (LIKE, LOVE, HAHA, WOW, SAD, ANGRY, CARE)
         :param Id_post: ID bài viết
+        :param doc_id: Tùy chọn truyền doc_id thủ công (mặc định 'null' sẽ lấy tự động)
         """
         if not isinstance(REACTION, str):
             return {'success': False, 'error': 'Value error'}
@@ -488,7 +492,7 @@ class FB_API:
             self.login()
             if not self.ready:
                 return {'success': False, 'error': 'Not logged in'}
-            payload = self.payload_builder.build_REACTION(REACTION, Id_post)
+            payload = self.payload_builder.build_REACTION(REACTION, Id_post, doc_id)
             if isinstance(payload, dict) and 'err' in payload:
                 return payload
 
