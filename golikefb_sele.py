@@ -1431,29 +1431,22 @@ def load_cookie():
         return get_cookie_from_user()
 
 def get_golike_credentials():
-    config_file = "config_golike.json"
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            saved_user = data.get("username", "")
-            print(f"\n📁 Tìm thấy thông tin tài khoản GoLike: {saved_user}")
-            choice = input("Dùng tài khoản GoLike đã lưu? (y/n): ").strip().lower()
-            if choice in ['y', 'yes', '']:
-                return saved_user, data.get("password", "")
-        except Exception:
-            pass
+    """Lấy GoLike credentials từ .env hoặc environment variables."""
+    username = os.getenv('GOLIKE_USERNAME', '').strip()
+    password = os.getenv('GOLIKE_PASSWORD', '').strip()
+
+    if username and password:
+        print(f"\n📁 Đã tải thông tin GoLike từ .env: {username}")
+        return username, password
+
+    # Fallback: manual input if no .env
     print("\n" + "="*40)
-    print("    CẤU HÌNH TÀI KHOẢN GOLIKE BAN ĐẦU    ")
+    print(" CẤU HÌNH TÀI KHOẢN GOLIKE BAN ĐẦU ")
+    print("(Gợi ý: Tạo file .env để không cần nhập lại)")
     print("="*40)
     username = input("[?] Nhập tên đăng nhập GoLike: ").strip()
     password = input("[?] Nhập mật khẩu GoLike: ").strip()
-    try:
-        with open(config_file, 'w', encoding='utf-8') as f:
-            json.dump({"username": username, "password": password}, f, indent=4)
-    except: pass
     return username, password
-
 
 def parse_golike_uid_from_cookie(cookie_str: str) -> Optional[str]:
     """Extract GoLike UID (i_user) from cookie string."""
@@ -1667,14 +1660,21 @@ def run_single_mode():
 
         prev_max_job = False  # Flag: acc trước bị MAX_JOB
         current_account_index = 0  # Chỉ số tài khoản hiện tại
-        consecutive_failures = 0  # Biến đếm số lần thất bại liên tiếp
+        consecutive_failures = 0  # Biến đếm số lần thất bại (API, lỗi báo cáo) liên tiếp
         max_consecutive_failures = 10  # Số lần thất bại tối đa trước khi chuyển acc
+        
+        # Danh sách tài khoản đang hoạt động (chưa bị MAX JOB)
+        active_accounts = accounts_list.copy()
 
         # VÒNG LẶP CHẠY CHÍNH CỦA TÀI KHOẢN
-        while current_account_index < len(accounts_list):  # Lặp qua tất cả tài khoản trong danh sách
+        while len(active_accounts) > 0:
+            if current_account_index >= len(active_accounts):
+                current_account_index = 0
+                print("\n[🔁] Đã chạy hết vòng tài khoản, bắt đầu quay lại từ đầu...")
+                
             if STOP_FLAG: break
 
-            acc_info = accounts_list[current_account_index]
+            acc_info = active_accounts[current_account_index]
             if STOP_FLAG: break
             
             current_cookie = acc_info.get("cookie")
@@ -1687,8 +1687,10 @@ def run_single_mode():
             else:
                 Fb = None
                 
-            if current_account_index > 0:
-                print(f"\n🔄 Chuyển sang tài khoản tiếp theo (FB UID: {current_uid} | GoLike UID: {current_golike_uid})...")
+            # Chỉ hiển thị quá trình chuyển acc nếu có nhiều hơn 1 acc hoặc index thay đổi
+            print(f"\n🔄 Đang xử lý tài khoản (FB UID: {current_uid} | GoLike UID: {current_golike_uid})...")
+            if current_account_index > -1:  # Luôn điều hướng home khi vào acc để chắc chắn trang load đúng
+
                 click_home_navigation(driver)
                 sleep(2)
                 try:
@@ -1782,10 +1784,6 @@ def run_single_mode():
                         current_account_index += 1
                         consecutive_failures = 0  # Reset bộ đếm
 
-                        if current_account_index >= len(accounts_list):
-                            print(f"[⚠️] ĐÃ HẾT TẤT CẢ TÀI KHOẢN! DỪNG CHƯƠNG TRÌNH.")
-                            break
-
                         # Khởi động lại với tài khoản mới
                         continue  # Bắt đầu lại vòng lặp với tài khoản mới
 
@@ -1794,10 +1792,7 @@ def run_single_mode():
                         # Nếu không thể báo lỗi, vẫn chuyển acc để tránh treo
                         current_account_index += 1
                         consecutive_failures = 0
-                        if current_account_index < len(accounts_list):
-                            continue  # Khởi động lại với tài khoản mới
-                        else:
-                            break
+                        continue  # Khởi động lại với tài khoản mới
 
                 failed_load_count = 0 # Bộ đếm số lần không tìm thấy Job liên tiếp
                 last_server_switch_time = time.time()
@@ -1899,28 +1894,13 @@ def run_single_mode():
                             except: pass
 
                             failed_load_count += 1
-                            # Mỗi lần hụt job là một loại thấtbetrieb, tăng bộ đếm failure liên tục
-                            consecutive_failures += 1
-                            # Kiểm tra nếu quá 10 lần hụt Job
-                            if failed_load_count >= 10:
-                                print(f"\n🚨 CẢNH BÁO: Đã hụt Job {failed_load_count} lần liênitzatιδ! Thực hiện Tự Động Reset trang...")
-                                failed_load_count = 0 # Khởi tạo lại
-                                # Tăng bộ đếm thất bại liên tục khi reset do không tìm thấy job
-                                consecutive_failures += 1
-                                try:
-                                    # Quay lại menu Nhiệm vụ
-                                    nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
-                                    driver.execute_script("arguments[0].click();", nv)
-                                    sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
-                                    # Click lại Facebook để tải lại trang Job sạch sẽ
-                                    fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
-                                    driver.execute_script("arguments[0].click();", fb_btn)
-                                    print(f"✅ Đã làm mới xong trang. Đang nghỉ {round(CONFIG_DELAY.get("sleep_on_cool_down", 300)/60,2)} phút nguội hệ thống...")
-                                except Exception as e:
-                                    print(f"❌ Lỗi trong lúc tự động Reset: {e}")
-                                smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_cool_down", 300), variance=0.1))
-                                continue
-
+                            # Nếu hụt job quá 3 lần, chuyển sang tài khoản khác mà không bỏ nick
+                            if failed_load_count >= 3:
+                                print(f"\n🚨 CẢNH BÁO: Hụt Job 3 lần liên tiếp! Đang chuyển sang tài khoản khác (chưa xóa khỏi vòng lặp)...")
+                                failed_load_count = 0
+                                current_account_index += 1
+                                break  # Thoát khỏi vòng lặp lấy job để đổi tài khoản
+                            
                             try:
                                 current_sv_elem = driver.find_element(By.CSS_SELECTOR, "small.d300 span.font-bold")
                                 current_sv = current_sv_elem.text.strip().upper()
@@ -2079,10 +2059,11 @@ def run_single_mode():
                                 f"🚨 <b>GoLike MAX JOB</b>\n"
                                 f"👤 Acc: <b>{acc_name}</b>\n"
                                 f"⏰ Lúc: {now_str}\n"
-                                f"✅ Đã đủ 100 jobs/ngày. Đang chuyển sang acc tiếp theo..."
+                                f"✅ Đã đủ 100 jobs/ngày. Đã bỏ acc khỏi vòng lặp và chuyển acc tiếp theo..."
                             )
                             send_tg_notify(tg_msg)
                             print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Tự động chuyển acc tiếp theo...")
+                            active_accounts.pop(current_account_index)
                             prev_max_job = True
                             break
                         smart_sleep(smart_random_delay(CONFIG_DELAY.get("delay_between_jobs", 10)))
@@ -2095,12 +2076,13 @@ def run_single_mode():
                                 f"🚨 <b>GoLike MAX JOB</b>\n"
                                 f"👤 Acc: <b>{acc_name}</b>\n"
                                 f"⏰ Lúc: {now_str}\n"
-                                f"✅ Đã đủ 100 jobs/ngày. Đang chuyển sang acc tiếp theo..."
+                                f"✅ Đã đủ 100 jobs/ngày. Đã bỏ acc khỏi vòng lặp và chuyển acc tiếp theo..."
                             )
                             send_tg_notify(tg_msg)
-                            print("[⚠️] Đã đạt giới hạn 100 jobs/ngày.")
+                            print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Bỏ acc này khỏi vòng lặp.")
+                            active_accounts.pop(current_account_index)
                             prev_max_job = True
-                            break  # Thoát while -> for loop xử lý chuyển acc
+                            break  # Thoát while -> loop xử lý chuyển acc
                         print(f"Lỗi vòng lặp chạy (chờ 5s): {e}")
                         sleep(5)  # Keep as error retry - not configurable
             except Exception as e:

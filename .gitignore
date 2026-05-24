@@ -32,12 +32,13 @@ multi_accounts.json
 .env
 .env.local
 *.local.json
-config_golike.json
 config_parallel.json
 settings.local.json
 settings.local.json
 *_config.json
 !*_config.json.example
+# File config chứa credentials - untrack để tránh commit nhầm
+config_golike.json
 ADB/
 
 # === FILE NHẠY CẢM - AUTH / TOKEN ===

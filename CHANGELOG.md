@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v1.10.4] - 2026-05-25
+
+### Sửa Lỗi & Tối Ưu (Fixed & Optimized)
+- **Tối ưu hóa logic tự động chuyển tài khoản ở chế độ Đơn Lẻ (Single Mode)**:
+  - Trước đây: Tool sẽ chờ 5 phút ngủ nguội sau đó mới đổi tài khoản hoặc báo lỗi sai mục đích nếu hụt job nhiều lần.
+  - Đã sửa: Khi hụt job 3 lần liên tiếp, tool sẽ lập tức chuyển sang tài khoản tiếp theo một cách gọn gàng, không cần ngủ 5 phút và không thao tác báo lỗi thừa thãi.
+  - Quản lý xoay vòng thông minh: Tài khoản hụt job vẫn được giữ trong danh sách xoay vòng. Chỉ khi nào tài khoản báo chạm mốc "MAX JOB" (100 jobs/ngày) thì mới bị loại bỏ vĩnh viễn khỏi danh sách xoay vòng trong phiên chạy đó.
+- **Sửa lỗi SyntaxError tiềm ẩn**: Cập nhật lại format chuỗi hiển thị khi khởi tạo cấu hình từ file `.env` giúp ngăn chặn khả năng bị văng ứng dụng lúc vừa mở lên.
+
 ## [v1.10.3] - 2026-05-24
 
 ### Sửa Lỗi (Fixed)

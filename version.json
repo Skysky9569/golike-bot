@@ -1,6 +1,6 @@
 {
-  "version": "1.10.3",
-  "release_date": "2026-05-24",
-  "changelog": "v1.10.3 - Fix lỗi inject 2Captcha cho Vue.js (Golike): Ép đè window.grecaptcha.getResponse, tự động ẩn giao diện image challenge và click Đăng nhập bằng mã vật lý.",
-  "previous_version": "1.10.2"
+  "version": "1.10.4",
+  "release_date": "2026-05-25",
+  "changelog": "v1.10.4 - Tối ưu logic chuyển acc Single Mode: Hụt job 3 lần tự động xoay vòng không cần ngủ 5 phút. Chỉ bỏ acc khi bị MAX JOB. Sửa lỗi cú pháp khởi tạo.",
+  "previous_version": "1.10.3"
 }

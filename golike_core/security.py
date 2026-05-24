@@ -8,19 +8,23 @@ import base64
 import re
 from typing import Optional, Dict, List
 
-# Removed cryptography dependency for Termux compatibility
-# Always use simple XOR encryption
-HAS_CRYPTO = False
-Fernet = None
-hashes = None
-PBKDF2HMAC = None
+# Cryptography support with fallback to XOR for Termux compatibility
+try:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+    Fernet = None
+    hashes = None
+    PBKDF2HMAC = None
 
 
 class CredentialManager:
-    """Quản lý credential với mã hóa
+    """Quản lý credential với mã hóa Fernet (hoặc XOR fallback)
 
-    Sử dụng XOR encryption với Base64 encoding để bảo vệ
-    authorization token và cookie.
+    Sử dụng Fernet encryption để bảo vệ authorization token và cookie.
     Lưu trữ nhiều token trong file JSON: {label: encrypted_token}
     """
 
@@ -35,8 +39,7 @@ class CredentialManager:
         self.old_credential_file = "secure_credentials.enc"
         self._migrate_old_credential()
 
-    @staticmethod
-    def _generate_key() -> str:
+    def _generate_key(self) -> str:
         """Tạo khóa mã hóa từ machine ID
 
         Returns:
@@ -46,15 +49,39 @@ class CredentialManager:
         machine_id = platform.node() + platform.machine()
         return hashlib.sha256(machine_id.encode()).hexdigest()[:32]
 
+    def _get_fernet_key(self, key: str) -> bytes:
+        """Tạo Fernet key từ password string
+
+        Args:
+            key: Key string
+
+        Returns:
+            bytes: Fernet-compatible 32-byte key
+        """
+        # Pad to 32 bytes for Fernet
+        key_bytes = key.encode()
+        if len(key_bytes) < 32:
+            key_bytes = key_bytes + (b'\x00' * (32 - len(key_bytes)))
+        return base64.urlsafe_b64encode(key_bytes[:32])
+
     def _encrypt(self, data: str) -> str:
-        """Mã hóa dữ liệu (XOR + Base64)
+        """Mã hóa dữ liệu bằng Fernet (ưu tiên) hoặc XOR fallback
 
         Args:
             data: Dữ liệu cần mã hóa
 
         Returns:
-            str: Dữ liệu đã mã hóa (Base64)
+            str: Dữ liệu đã mã hóa
         """
+        if HAS_CRYPTO:
+            try:
+                fernet_key = self._get_fernet_key(self.key)
+                f = Fernet(fernet_key)
+                return f.encrypt(data.encode()).decode()
+            except Exception:
+                pass
+
+        # Fallback to XOR encryption
         key_bytes = self.key.encode()
         data_bytes = data.encode()
         encrypted = bytes([b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(data_bytes)])
@@ -69,6 +96,16 @@ class CredentialManager:
         Returns:
             str: Dữ liệu gốc hoặc chuỗi rỗng nếu thất bại
         """
+        # Try Fernet first if available
+        if HAS_CRYPTO:
+            try:
+                fernet_key = self._get_fernet_key(self.key)
+                f = Fernet(fernet_key)
+                return f.decrypt(encrypted.encode()).decode()
+            except Exception:
+                pass
+
+        # Fallback to XOR decryption
         try:
             key_bytes = self.key.encode()
             encrypted_bytes = base64.b64decode(encrypted)
@@ -88,11 +125,11 @@ class CredentialManager:
         try:
             with open(self.credential_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                if isinstance(data, dict):
-                    # Ensure all values are strings
-                    return {k: str(v) for k, v in data.items()}
-                else:
-                    return {}
+            if isinstance(data, dict):
+                # Ensure all values are strings
+                return {k: str(v) for k, v in data.items()}
+            else:
+                return {}
         except (json.JSONDecodeError, IOError):
             return {}
 
