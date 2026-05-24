@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v1.10.0] - 2026-05-24
+
+### Cải thiện Chạy Song Song (Parallel Mode)
+- **Fix lỗi `CRITICAL` khi Reaction ở chế độ song song**:
+  - Nguyên nhân: Facebook có thể trả về các phiên bản JS (A/B testing) khác nhau cho từng tài khoản/IP. Việc dùng chung `doc_id` giữa các tài khoản (class-level cache) khiến acc này dùng nhầm `doc_id` của acc kia → Facebook từ chối mutation.
+  - Đã sửa: Xóa cache `doc_id` toàn cục. Giờ đây, mỗi tài khoản sẽ tự fetch `doc_id` từ chính phiên bản Facebook của nó, đảm bảo an toàn 100% khi chạy song song.
+- **Hiển thị lỗi rõ ràng hơn**:
+  - Khi Facebook trả về lỗi GraphQL (thiếu `code`, `api_error_code`), script trước đây chỉ in ra các giá trị `None`.
+  - Đã thêm việc trích xuất `message` gốc từ Facebook để bạn biết chính xác tại sao hành động bị chặn (VD: "You can't perform this action right now").
+
 ## [v1.9.9] - 2026-05-24
 
 ### Sửa Lỗi Gốc Rễ (Root Fix)

@@ -74,9 +74,6 @@ class HTMLExtractor:
         pattern = r'jazoest=(\d+)'
         return HTMLExtractor.find_pattern(html, pattern)
 class FacebookSession:
-    # Cache doc_id dùng chung giữa mọi instance trong cùng tiến trình
-    _cached_reaction_doc_id: Optional[str] = None
-
     # Danh sách doc_id fallback — cập nhật thủ công khi FB thay đổi
     _FALLBACK_DOC_IDS = [
         '9397136836967873',
@@ -143,18 +140,14 @@ class FacebookSession:
             if not self.token or not self.user_id:
                 return {'err': 'Không thể lấy token hoặc user_id - cookie có thể hết hạn'}
 
-            # Tìm doc_id từ JS bundle (dùng cache nếu đã có)
-            if FacebookSession._cached_reaction_doc_id:
-                self.reaction_doc_id = FacebookSession._cached_reaction_doc_id
+            # Tìm doc_id từ JS bundle (fetch riêng cho từng acc để tránh sai lệch do FB A/B testing)
+            found = self._find_doc_id_from_html(html, self.proxies)
+            if found:
+                self.reaction_doc_id = found
+                print(f'[✓] Tìm thấy doc_id REACTION: {found}')
             else:
-                found = self._find_doc_id_from_html(html, self.proxies)
-                if found:
-                    FacebookSession._cached_reaction_doc_id = found
-                    self.reaction_doc_id = found
-                    print(f'[✓] Tìm thấy doc_id REACTION: {found}')
-                else:
-                    self.reaction_doc_id = self._FALLBACK_DOC_IDS[0]
-                    print(f'[!] Không tìm thấy doc_id từ JS, dùng fallback: {self.reaction_doc_id}')
+                self.reaction_doc_id = self._FALLBACK_DOC_IDS[0]
+                print(f'[!] Không tìm thấy doc_id từ JS, dùng fallback: {self.reaction_doc_id}')
 
             return {
                 "token": self.token,
@@ -467,12 +460,14 @@ class FB_API:
             if errors:
                 err = errors[0]
                 return {
+                    'message': err.get('message'),
                     'code': err.get('code'),
                     'api_error_code': err.get('api_error_code'),
                     'severity': err.get('severity'),
                     'summary': err.get('summary'),
                     'description': err.get('description'),
                     'fbtrace_id': err.get('fbtrace_id'),
+                    'raw': str(err)
                 }
             return str(data)
         except Exception:
@@ -510,8 +505,6 @@ class FB_API:
             if response.status_code == 200:
                 resp_text = response.text.strip()
                 if not resp_text:
-                    # doc_id có thể hết hạn — xóa cache để lần sau fetch lại
-                    FacebookSession._cached_reaction_doc_id = None
                     return {'success': False, 'error': f'Empty response (doc_id {doc_id_used} có thể hết hạn)'}
                 try:
                     resp_json = response.json()
@@ -529,10 +522,6 @@ class FB_API:
                     }
                 else:
                     err = self._format_error(response)
-                    # Nếu lỗi 1675030 = doc_id hết hạn -> xóa cache
-                    if isinstance(err, dict) and err.get('code') == 1675030:
-                        FacebookSession._cached_reaction_doc_id = None
-                        err['hint'] = f'doc_id {doc_id_used} hết hạn, sẽ tự fetch lại lần sau'
                     return {'success': False, 'error': err}
             else:
                 return {'success': False, 'error': f'HTTP {response.status_code}: {response.text[:200]}'}
