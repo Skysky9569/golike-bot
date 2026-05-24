@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v1.10.1] - 2026-05-24
+
+### Sửa Lỗi (Fixed)
+- **Fix Regex tìm JS Bundle bị miss 100%**:
+  - Nguyên nhân: Facebook trả về mã HTML với các URL bị escape dấu slash (`https:\/\/static.xx.fbcdn.net\/...`). Regex cũ viết là `https://static...` nên **không tìm được bất kỳ file JS nào** → Dẫn đến luôn dùng `doc_id` dự phòng đã cũ kỹ.
+  - Đã sửa: Cập nhật regex để bắt cả các URL bị escape, sau đó `replace('\\/', '/')` để tải file về quét. Đồng thời tăng số lượng quét lên 50 files. Đảm bảo fetch được `doc_id` mới nhất thành công.
+- **Thêm lại tham số `doc_id` cho `Fb.REACTION`**:
+  - Cho phép gọi `Fb.REACTION("LIKE", uid)` (tự động lấy doc_id) hoặc `Fb.REACTION("LIKE", uid, "1234...")` (ép buộc dùng doc_id truyền vào). Tương thích ngược với file gốc.
+
 ## [v1.10.0] - 2026-05-24
 
 ### Cải thiện Chạy Song Song (Parallel Mode)

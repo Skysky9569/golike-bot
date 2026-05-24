@@ -95,8 +95,16 @@ class FacebookSession:
     def _find_doc_id_from_html(cls, html: str, proxies=None) -> Optional[str]:
         """Quét JS bundle của FB để tìm doc_id của CometUFIFeedbackReactMutation."""
         ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        js_urls = re.findall(r'"(https://static\.xx\.fbcdn\.net/rsrc\.php/[^"]{10,}\.js)"', html)
-        for url in js_urls[:25]:
+        # JS URL có thể bị escape kiểu https:\/\/static.xx.fbcdn.net...
+        js_urls_raw = re.findall(r'"(https:\\/\\/static\.xx\.fbcdn\.net\\/rsrc\.php\\/[^"]{10,}\.js)"', html)
+        if not js_urls_raw:
+            # Dự phòng trường hợp không bị escape
+            js_urls_raw = re.findall(r'"(https://static\.xx\.fbcdn\.net/rsrc\.php/[^"]{10,}\.js)"', html)
+            
+        js_urls = [url.replace('\\/', '/') for url in js_urls_raw]
+
+        # Lặp qua 50 file JS đầu tiên (thay vì 25 vì FB có rất nhiều bundle)
+        for url in js_urls[:50]:
             try:
                 r = requests.get(url, headers={'user-agent': ua}, timeout=8, proxies=proxies)
                 text = r.text

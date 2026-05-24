@@ -1,6 +1,6 @@
 {
-  "version": "1.10.0",
+  "version": "1.10.1",
   "release_date": "2026-05-24",
-  "changelog": "v1.10.0: Fix loi Reaction o che do song song (CRITICAL error)\n- Xoa doc_id cache o cap class, fetch doc_id rieng biet cho tung acc vi FB co the tra ve ban JS khac nhau cho tung acc (A/B testing)\n- Them message vao _format_error de hien thi loi goc tu FB thay vi toan None",
-  "previous_version": "1.9.9"
+  "changelog": "v1.10.1: Fix regex tim doc_id tu JS (FB escape URL) va ho tro truyen doc_id thu cong\n- Sua regex `https:\\/\\/static...` do FB tra ve html bi escape -> Truoc do quet duoc 0 file JS dan toi dung fallback\n- Tra lai tham so doc_id='null' cho Fb.REACTION va build_REACTION cho phep truyen doc_id cung neu muon",
+  "previous_version": "1.10.0"
 }
