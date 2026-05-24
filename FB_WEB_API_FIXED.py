@@ -74,6 +74,16 @@ class HTMLExtractor:
         pattern = r'jazoest=(\d+)'
         return HTMLExtractor.find_pattern(html, pattern)
 class FacebookSession:
+    # Cache doc_id dùng chung giữa mọi instance trong cùng tiến trình
+    _cached_reaction_doc_id: Optional[str] = None
+
+    # Danh sách doc_id fallback — cập nhật thủ công khi FB thay đổi
+    _FALLBACK_DOC_IDS = [
+        '9397136836967873',
+        '7060390147320811',
+        '6734090496742587',
+    ]
+
     def __init__(self, cookie: str, proxies: dict = None):
         self.cookie = cookie
         self.proxies = proxies
@@ -82,6 +92,28 @@ class FacebookSession:
         self.revision = None
         self.jazoest = None
         self.lsd = None
+        self.reaction_doc_id: Optional[str] = None  # Được set sau authenticate()
+
+    @classmethod
+    def _find_doc_id_from_html(cls, html: str, proxies=None) -> Optional[str]:
+        """Quét JS bundle của FB để tìm doc_id của CometUFIFeedbackReactMutation."""
+        ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        js_urls = re.findall(r'"(https://static\.xx\.fbcdn\.net/rsrc\.php/[^"]{10,}\.js)"', html)
+        for url in js_urls[:25]:
+            try:
+                r = requests.get(url, headers={'user-agent': ua}, timeout=8, proxies=proxies)
+                text = r.text
+                # Pattern 1: CometUFIFeedbackReactMutation","123456789"
+                m = re.search(r'CometUFIFeedbackReactMutation[^\d]{0,30}(\d{15,20})', text)
+                if not m:
+                    # Pattern 2: "123456789","CometUFIFeedbackReactMutation"
+                    m = re.search(r'(\d{15,20})[^\d]{0,30}CometUFIFeedbackReactMutation', text)
+                if m:
+                    return m.group(1)
+            except Exception:
+                continue
+        return None
+
     def authenticate(self) -> dict:
         headers = {
             "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -102,7 +134,6 @@ class FacebookSession:
                 timeout=30,
                 proxies=self.proxies,
             )
-            
             html = response.text
             self.token = HTMLExtractor.extract_token(html)
             self.user_id = HTMLExtractor.extract_user_id(html)
@@ -111,16 +142,31 @@ class FacebookSession:
             self.lsd = HTMLExtractor.extract_lsd(html) or "0"
             if not self.token or not self.user_id:
                 return {'err': 'Không thể lấy token hoặc user_id - cookie có thể hết hạn'}
+
+            # Tìm doc_id từ JS bundle (dùng cache nếu đã có)
+            if FacebookSession._cached_reaction_doc_id:
+                self.reaction_doc_id = FacebookSession._cached_reaction_doc_id
+            else:
+                found = self._find_doc_id_from_html(html, self.proxies)
+                if found:
+                    FacebookSession._cached_reaction_doc_id = found
+                    self.reaction_doc_id = found
+                    print(f'[✓] Tìm thấy doc_id REACTION: {found}')
+                else:
+                    self.reaction_doc_id = self._FALLBACK_DOC_IDS[0]
+                    print(f'[!] Không tìm thấy doc_id từ JS, dùng fallback: {self.reaction_doc_id}')
+
             return {
                 "token": self.token,
                 "user_id": self.user_id,
                 "revision": self.revision,
                 "jazoest": self.jazoest,
-                "lsd" : self.lsd,
+                "lsd": self.lsd,
+                "reaction_doc_id": self.reaction_doc_id,
             }
         except Exception as e:
-            return {'err' : f'Lỗi {str(e)}'}
-        
+            return {'err': f'Lỗi {str(e)}'}
+
 class GenData:
     def __init__(self, session: FacebookSession):
         self.session = session
@@ -143,14 +189,15 @@ class GenData:
 
         s = 'feedback:' + str(ID_POST)
         feedback_id_b64 = base64.b64encode(s.encode('utf-8')).decode('utf-8')
-
-        # Sinh timestamp động — không hardcode
         _ts = int(time.time() * 1000)
         _rand = random.randint(100000, 999999)
         _attr = f'CometHomeRoot.react,comet.home,via_cold_start,{_ts},{_rand},4748854339,,'
 
-        # Gửi dạng JSON body (không cần doc_id, Facebook luôn chấp nhận)
-        body = {
+        # doc_id: lấy từ session (đã fetch động khi authenticate)
+        doc_id = getattr(self.session, 'reaction_doc_id', None) or '9397136836967873'
+
+        # Gửi form-encoded data= với doc_id — cách Facebook bắt buộc yêu cầu
+        payload = {
             'av': self.session.user_id,
             '__user': self.session.user_id,
             '__req': NumberEncoder.to_base36(self.request_counter),
@@ -161,7 +208,7 @@ class GenData:
             '__spin_r': self.session.revision,
             'fb_api_caller_class': 'RelayModern',
             'fb_api_req_friendly_name': 'CometUFIFeedbackReactMutation',
-            'server_timestamps': True,
+            'server_timestamps': 'true',
             'variables': json.dumps({
                 'input': {
                     'attribution_id_v2': _attr,
@@ -177,19 +224,9 @@ class GenData:
                 'useDefaultActor': False,
                 '__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider': False,
             }, separators=(',', ':')),
-            'query': (
-                'mutation CometUFIFeedbackReactMutation('
-                '$input:FeedbackReactInput!'
-                '$useDefaultActor:Boolean!'
-                '$__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider:Boolean!'
-                '){'
-                'feedback_react(input:$input){'
-                'feedback{id i18n_reaction_count}'
-                '}'
-                '}'
-            ),
+            'doc_id': doc_id,
         }
-        return body
+        return payload
 
     def build_PiC(self,filename):
         try:
@@ -456,26 +493,30 @@ class FB_API:
             self.login()
             if not self.ready:
                 return {'success': False, 'error': 'Not logged in'}
-            body = self.payload_builder.build_REACTION(REACTION, Id_post)
-            if isinstance(body, dict) and 'err' in body:
-                return body
+            payload = self.payload_builder.build_REACTION(REACTION, Id_post)
+            if isinstance(payload, dict) and 'err' in payload:
+                return payload
 
-            # Gửi dưới dạng JSON body (Content-Type: application/json)
+            doc_id_used = payload.get('doc_id', '?')
+
+            # Gửi form-encoded data= với doc_id (cách Facebook yêu cầu)
             response = requests.post(
                 'https://www.facebook.com/api/graphql/',
-                headers=self.json_header,
-                json=body,
+                headers=self.header,
+                data=payload,
                 proxies=self.proxies
             )
 
             if response.status_code == 200:
                 resp_text = response.text.strip()
                 if not resp_text:
-                    return {'success': False, 'error': 'Empty response from Facebook'}
+                    # doc_id có thể hết hạn — xóa cache để lần sau fetch lại
+                    FacebookSession._cached_reaction_doc_id = None
+                    return {'success': False, 'error': f'Empty response (doc_id {doc_id_used} có thể hết hạn)'}
                 try:
                     resp_json = response.json()
                 except Exception:
-                    return {'success': False, 'error': f'Non-JSON response: {resp_text[:200]}'}
+                    return {'success': False, 'error': f'Non-JSON: {resp_text[:200]}'}
 
                 feedback_get_id = resp_json.get('data', {}).get('feedback_react', {})
                 if feedback_get_id:
@@ -487,7 +528,12 @@ class FB_API:
                         'reaction_count': str(fb_data.get('i18n_reaction_count', '')),
                     }
                 else:
-                    return {'success': False, 'error': self._format_error(response)}
+                    err = self._format_error(response)
+                    # Nếu lỗi 1675030 = doc_id hết hạn -> xóa cache
+                    if isinstance(err, dict) and err.get('code') == 1675030:
+                        FacebookSession._cached_reaction_doc_id = None
+                        err['hint'] = f'doc_id {doc_id_used} hết hạn, sẽ tự fetch lại lần sau'
+                    return {'success': False, 'error': err}
             else:
                 return {'success': False, 'error': f'HTTP {response.status_code}: {response.text[:200]}'}
         except Exception as e:

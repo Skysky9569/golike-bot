@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [v1.9.9] - 2026-05-24
+
+### Sửa Lỗi Gốc Rễ (Root Fix)
+- **Fix REACTION `Empty response from Facebook` — nguyên nhân thật sự**:
+  - Facebook `/api/graphql/` **bắt buộc phải có `doc_id` hợp lệ** khi dùng `data=` form-encoded.
+  - Gửi `query` field (dù form-encoded hay JSON body) đều bị Facebook **silent reject** → body rỗng.
+  - Đã sửa: Quay lại `data=` form-encoded với `doc_id`, nhưng **tự động fetch `doc_id` mới nhất** từ JS bundle mỗi khi khởi tạo session.
+
+### Thêm Mới (Added)
+- **`FacebookSession._find_doc_id_from_html()`**: Quét tối đa 25 JS bundle từ `static.xx.fbcdn.net`, tìm `doc_id` của `CometUFIFeedbackReactMutation` bằng 2 regex pattern.
+- **Class-level cache `_cached_reaction_doc_id`**: Dùng chung giữa mọi FB_API instance trong cùng tiến trình → chỉ fetch 1 lần duy nhất.
+- **Fallback list `_FALLBACK_DOC_IDS`**: 3 doc_id dự phòng khi không tìm được từ JS bundle.
+- **Tự động xóa cache** khi gặp lỗi `1675030` hoặc empty response → lần gọi tiếp theo sẽ fetch lại doc_id mới.
+
 ## [v1.9.8] - 2026-05-24
 
 ### Sửa Lỗi (Fixed)
