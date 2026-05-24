@@ -1480,34 +1480,100 @@ def setup_bot_profile(profile_data, idx):
         doiacc = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account")))
         driver.execute_script("arguments[0].click();", doiacc)
         sleep(2.5)
-        
-        accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
+
+        # ── Thử nhiều selector để tìm danh sách acc ──────────────────────
+        ACC_CARD_SELECTORS = [
+            "div.card.shadow-200.mt-1",
+            "div.card.mt-1",
+            "div.card.shadow",
+            "div.account-item",
+            "div.select-account div.card",
+            "div.list-account div.card",
+        ]
+        accounts = []
+        for sel in ACC_CARD_SELECTORS:
+            accounts = driver.find_elements(By.CSS_SELECTOR, sel)
+            if accounts:
+                log_thread(p_name, f"[DEBUG] Tìm thấy {len(accounts)} acc với selector: {sel}")
+                break
+
+        if not accounts:
+            # Fallback: lấy tất cả card trong vùng dropdown
+            try:
+                dropdown = driver.find_element(By.CSS_SELECTOR, "div.select-account")
+                accounts = dropdown.find_elements(By.CSS_SELECTOR, "div.card")
+                log_thread(p_name, f"[DEBUG] Fallback: tìm thấy {len(accounts)} card trong select-account")
+            except Exception:
+                pass
+
+        # ── Lấy golike_uid để ưu tiên match chính xác ────────────────────
+        golike_uid = str(profile_data.get("golike_uid", profile_data.get("target_fb_uid", ""))).strip()
+        target_uid = str(profile_data.get("target_fb_uid", "")).strip()
+        target_name = str(profile_data.get("target_fb_name", "")).strip().lower()
+
+        # ── Name extractors: thử nhiều selector con khác nhau ────────────
+        NAME_SELECTORS = ["div.col-8 span", "span.name", "div.name", "p.name", "span", "div.info span"]
+        UID_ATTRS      = ["id", "data-id", "data-uid", "data-user-id"]
+
+        def extract_acc_info(card):
+            """Trả về (name, uid_str) từ card element."""
+            name = ""
+            uid_str = ""
+            for ns in NAME_SELECTORS:
+                try:
+                    name = card.find_element(By.CSS_SELECTOR, ns).text.strip()
+                    if name:
+                        break
+                except Exception:
+                    pass
+            for ua in UID_ATTRS:
+                try:
+                    uid_str = (card.get_attribute(ua) or "").strip()
+                    if uid_str:
+                        break
+                except Exception:
+                    pass
+            return name, uid_str
+
+        # ── In danh sách acc tìm được để debug ───────────────────────────
+        log_thread(p_name, f"[ACC LIST] golike_uid='{golike_uid}' | target_uid='{target_uid}' | target_name='{target_name}'")
+        for i, acc in enumerate(accounts):
+            try:
+                nm, uid_acc = extract_acc_info(acc)
+                log_thread(p_name, f"  [{i}] name='{nm}' | uid='{uid_acc}'")
+            except Exception:
+                pass
+
+        # ── Match theo thứ tự ưu tiên: golike_uid > target_uid > name ────
         selected = False
-        
         for acc in accounts:
             try:
-                nm = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
-                uid_acc = acc.get_attribute("id") or ""
-                
-                is_match = False
-                if target_uid and str(target_uid).strip() == str(uid_acc).strip(): is_match = True
-                elif target_fb and target_fb.lower().strip() in nm.lower().strip(): is_match = True
-                
-                if is_match:
+                nm, uid_acc = extract_acc_info(acc)
+
+                match_uid   = golike_uid and uid_acc and golike_uid == uid_acc
+                match_tuid  = target_uid and uid_acc and target_uid == uid_acc
+                match_name  = target_name and nm and target_name in nm.lower()
+
+                if match_uid or match_tuid or match_name:
                     driver.execute_script("arguments[0].click();", acc)
-                    print(f"🚀 [OK] ĐÃ CHỌN XONG ACC: {nm} | UID: {uid_acc}")
+                    reason = "golike_uid" if match_uid else ("target_uid" if match_tuid else "target_name")
+                    log_thread(p_name, f"✅ Đã chọn acc: '{nm}' (uid='{uid_acc}') — match by {reason}")
                     selected = True
                     break
-            except: pass
-            
+            except Exception:
+                pass
+
         if not selected:
-            print(f"⚠️ Cảnh báo: Không tìm thấy UID/Tên khớp cho [{p_name}]. Chọn nick đầu tiên!")
-            if len(accounts) > 0: 
+            log_thread(p_name, f"⚠️ Không tìm thấy acc khớp cho [{p_name}]!")
+            log_thread(p_name, f"   Hãy kiểm tra 'golike_uid'/'target_fb_uid'/'target_fb_name' trong config.")
+            if accounts:
+                nm0, uid0 = extract_acc_info(accounts[0])
                 driver.execute_script("arguments[0].click();", accounts[0])
-            else: 
-                print("❌ Không tìm thấy nick FB nào liên kết!")
+                log_thread(p_name, f"⚠️ Tạm thời chọn acc đầu tiên: '{nm0}' (uid='{uid0}')")
+            else:
+                log_thread(p_name, "❌ Không tìm thấy acc FB nào liên kết!")
                 return None, None
-            
+
         sleep(3)
         print(f"✅ Đã thiết lập thành công tài khoản [{p_name}]!")
         return driver, Fb

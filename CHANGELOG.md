@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [v1.9.7] - 2026-05-24
+
+### Sửa Lỗi (Fixed)
+- **Fix chế độ Song Song luôn chọn acc đầu tiên**:
+  - Nguyên nhân: selector `div.card.shadow-200.mt-1` cứng không tìm được card đúng trên Golike → `accounts` rỗng hoặc sai → fallback chọn `accounts[0]` cho mọi profile.
+  - Đã sửa: Thêm **6 CSS selector dự phòng** tự động thử lần lượt cho đến khi tìm được danh sách acc.
+  - Thêm **fallback cuối**: tìm mọi `div.card` bên trong `div.select-account` nếu tất cả selector trước thất bại.
+
+### Cải Tiến (Improved)
+- **Thứ tự ưu tiên match acc**: `golike_uid` → `target_fb_uid` → `target_fb_name` (chính xác hơn, rõ lý do match).
+- **Extract tên/uid dự phòng**: thử 6 selector con khác nhau để lấy tên, thử 4 attribute khác nhau để lấy uid.
+- **Log debug chi tiết**: in ra danh sách toàn bộ acc tìm được (index, name, uid) trước khi chọn → dễ chẩn đoán khi không khớp.
+- **Thông báo rõ ràng** khi không match: chỉ dẫn user kiểm tra `golike_uid`/`target_fb_uid`/`target_fb_name` trong config thay vì im lặng chọn acc sai.
+
 ## [v1.9.6] - 2026-05-24
 
 ### Sửa Lỗi (Fixed)
