@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v1.9.5] - 2026-05-24
+
+### Sửa Lỗi (Fixed)
+- **Fix FB API REACTION lỗi 1675030 — `doc_id` hardcode hết hạn**:
+  - Nguyên nhân: Facebook thường xuyên thay đổi `doc_id` (Relay persisted query ID). `doc_id: '24198888476452283'` đã bị vô hiệu hóa → FB trả về `api_error_code: 1675030` (Lỗi truy vấn CRITICAL).
+  - Đã sửa: **Bỏ hoàn toàn `doc_id`** ra khỏi payload, thay bằng field **`query`** chứa full GraphQL mutation text (`CometUFIFeedbackReactMutation`). Cách này không bị ràng buộc vào bất kỳ version nào của FB Comet.
+  - Gọi vẫn giữ nguyên: `fb.REACTION("LIKE", uid)` — không phá vỡ API hiện tại.
+
+### Cải Tiến (Improved)
+- **`attribution_id_v2` sinh động theo thời gian thực**:
+  - Trước: hardcode timestamp cũ từ năm 2025 → FB có thể từ chối.
+  - Nay: timestamp = `int(time.time() * 1000)` + random nonce sinh mỗi request.
+- **`variables` dùng `json.dumps()` chuẩn**:
+  - Thay thế string concatenation thủ công dễ sinh JSON không hợp lệ.
+
 ## [v1.9.1] - 2026-05-22
 
 ### Sửa Lỗi (Fixed)

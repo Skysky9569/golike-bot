@@ -1,6 +1,6 @@
 {
-  "version": "1.9.4",
-  "release_date": "2026-05-23",
-  "changelog": "v1.9.4: Fix SV2 max job detection reliability\n- Fix exception handling: log errors instead of silent pass\n- Add config type validation for max_job_limit (int fallback to 100)\n- Add SV2 pattern detection: regex matching số job hôm này\n- Close popup auto when max job detected",
-  "previous_version": "1.9.3"
+  "version": "1.9.5",
+  "release_date": "2026-05-24",
+  "changelog": "v1.9.5: Fix FB API REACTION lỗi 1675030 (doc_id hết hạn)\n- Bỏ hoàn toàn doc_id hardcode khỏi payload REACTION\n- Dùng full GraphQL query string thay thế — không bao giờ bị FB deprecated\n- Sinh attribution_id_v2 timestamp động thay vì hardcode timestamp cũ\n- Dùng json.dumps() chuẩn cho variables thay vì string concatenation",
+  "previous_version": "1.9.4"
 }
