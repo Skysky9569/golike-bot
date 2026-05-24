@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [v1.10.3] - 2026-05-24
+
+### Sửa Lỗi (Fixed)
+- **Fix hoàn toàn lỗi tự động giải Captcha bằng 2Captcha trên Golike (Vue.js)**:
+  - Tình trạng: Trình duyệt bị văng lỗi (crash) khi cố click vào checkbox của reCAPTCHA, hoặc nếu điền token ẩn thì trang web không tự động đăng nhập và bị kẹt.
+  - Đã sửa: 
+    - Ép đè (override) hàm `window.grecaptcha.getResponse` của Google để ép khung Vue.js luôn nhận được token từ 2Captcha khi nó kiểm tra.
+    - Dùng Javascript giả lập gửi sự kiện (`input`, `change`) để báo hiệu cho Vue Component nhận token.
+    - Ra lệnh tắt (hide) hoàn toàn khung ảnh chọn (image challenge) của Captcha để không che khuất màn hình.
+    - Cuối cùng tự động mô phỏng click chuột vật lý vào nút Đăng nhập để kích hoạt luồng Submit form.
+
 ## [v1.10.2] - 2026-05-24
 
 ### Sửa Lỗi (Fixed)

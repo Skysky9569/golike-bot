@@ -122,6 +122,359 @@ from datetime import datetime
 from time import sleep
 import threading
 
+# ================= 2CAPTCHA CAPTCHA SOLVER =================
+_2CAPTCHA_API_BASE = "https://api.2captcha.com"
+_2CAPTCHA_POLL_INTERVAL = 5  # seconds
+
+def detect_recaptcha_v2(driver, timeout=5):
+    """
+    Tự động phát hiện reCAPTCHA v2 trên trang.
+    Returns: (has_captcha, sitekey) hoặc (False, None)
+    """
+    import time
+
+    try:
+        # Method 1: Tìm iframe reCAPTCHA trực tiếp
+        for selector in [
+            "iframe[src*='recaptcha/api2']",
+            "iframe[src*='recaptcha']",
+            "#recaptcha-anchor",
+            ".g-recaptcha",
+            "#rc-imageselect",
+            "div.rc-imageselect-target"
+        ]:
+            try:
+                elems = driver.find_elements(By.CSS_SELECTOR, selector)
+                if elems:
+                    print(f"[Captcha] Phát hiện captcha qua selector: {selector}")
+                    break
+            except Exception:
+                continue
+
+        # Try to find iframe first
+        iframes = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='recaptcha']")
+        if iframes:
+            iframe = iframes[0]
+            src = iframe.get_attribute("src") or ""
+
+            # Extract sitekey từ URL: có thể là .../anchor?...&k=SITEKEY hoặc data-sitekey
+            # Pattern 1: tìm &k= param
+            k_match = re.search(r'[?&]k=([a-zA-Z0-9]{40})', src)
+            if k_match:
+                sitekey = k_match.group(1)
+                print(f"[Captcha] ✓ Extracted sitekey từ iframe src: {sitekey}")
+                return True, sitekey
+
+        # Method 2: Tìm sitekey trong page source
+        page_source = driver.page_source
+        sitekey_matches = re.findall(r'data-sitekey="([a-zA-Z0-9]{40})"', page_source)
+        if sitekey_matches:
+            sitekey = sitekey_matches[0]
+            print(f"[Captcha] ✓ Extracted sitekey từ page source: {sitekey}")
+            return True, sitekey
+
+        # Method 3: Tìm qua JavaScript
+        try:
+            js_execute = """
+            try {
+                // Tìm trong shadow DOM
+                var sites = [];
+                var iframes = document.querySelectorAll('iframe[src*="recaptcha"]');
+                iframes.forEach(function(iframe) {
+                    var src = iframe.src || iframe.getAttribute('src');
+                    var kMatch = src.match(/[?&]k=([a-zA-Z0-9]{40})/);
+                    if (kMatch) sites.push(kMatch[1]);
+                });
+
+                // Tìm data-sitekey
+                var divs = document.querySelectorAll('[data-sitekey]');
+                divs.forEach(function(div) {
+                    var key = div.getAttribute('data-sitekey');
+                    if (key && key.length === 40) sites.push(key);
+                });
+
+                return sites.length > 0 ? sites[0] : null;
+            } catch(e) { return null; }
+            """
+            sitekey = driver.execute_script(js_execute)
+            if sitekey:
+                print(f"[Captcha] ✓ Extracted sitekey từ JS: {sitekey}")
+                return True, sitekey
+        except Exception:
+            pass
+
+        # Method 4: Check tồn tại reCAPTCHA elements
+        recaptcha_elements = driver.find_elements(By.CSS_SELECTOR, "#rc-imageselect, .rc-imageselect-target, #recaptcha-verify-button")
+        if recaptcha_elements:
+            # Có captcha nhưng không extract được sitekey - dùng default cho Golike
+            # Sitekey của Golike thường là: 6Leo5PMrAAAAAArIr7KjV49Pz4zRgLq05wIZy33w
+            print("[Captcha] ⚠ Phát hiện reCAPTCHA nhưng không extract sitekey. Dùng default login sitekey.")
+            return True, "6Leo5PMrAAAAAArIr7KjV49Pz4zRgLq05wIZy33w"
+
+    except Exception as e:
+        print(f"[Captcha] Error during detection: {e}")
+
+    return False, None
+
+def solve_2captcha_captcha(api_key, sitekey, page_url, timeout=120):
+    """
+    Gọi 2Captcha API để solve reCAPTCHA v2.
+
+    Args:
+        api_key: 2Captcha API key
+        sitekey: reCAPTCHA sitekey
+        page_url: URL của trang có captcha
+        timeout: Thời gian timeout tối đa (giây)
+
+    Returns:
+        Solution token nếu thành công, None nếu thất bại
+    """
+    session = requests.Session()
+
+    # Bước 1: Submit captcha để solve
+    try:
+        params = {
+            "key": api_key,
+            "method": "userrecaptcha",
+            "googlekey": sitekey,
+            "pageurl": page_url,
+            "json": 1
+        }
+        resp = session.get(f"{_2CAPTCHA_API_BASE}/in.php", params=params, timeout=30)
+        data = resp.json()
+
+        if data.get("status") != 1:
+            print(f"[2Captcha] Lỗi submit: {data.get('request')}")
+            return None
+
+        task_id = data.get("request")
+        print(f"[2Captcha] Đã submit captcha, ID: {task_id}")
+    except Exception as e:
+        print(f"[2Captcha] Lỗi khi submit: {e}")
+        return None
+
+    # Bước 2: Poll kết quả
+    start_time = time.time()
+    last_error = None
+
+    while time.time() - start_time < timeout:
+        try:
+            resp = session.get(f"{_2CAPTCHA_API_BASE}/res.php",
+                             params={"key": api_key, "action": "get", "id": task_id, "json": 1},
+                             timeout=30)
+            data = resp.json()
+
+            if data.get("status") == 1:
+                token = data.get("request")
+                print(f"[2Captcha] ✓ Đã giải captcha thành công!")
+                return token
+
+            error = data.get("request", "Unknown error")
+            if error != "CAPCHA_NOT_READY":
+                last_error = error
+                print(f"[2Captcha] Polling lần {int(time.time() - start_time)}: {error}")
+
+        except Exception as e:
+            last_error = str(e)
+
+        time.sleep(_2CAPTCHA_POLL_INTERVAL)
+
+    print(f"[2Captcha] ✗ Timeout sau {timeout} giây. Lỗi cuối: {last_error}")
+    return None
+
+def inject_recaptcha_solution(driver, token):
+    """
+    Inject solution token vào g-recaptcha-response.
+    """
+    try:
+        driver.switch_to.default_content()
+        # Hiển thị textarea bị ẩn để chắc chắn có thể tương tác (tuỳ chọn)
+        driver.execute_script("document.getElementById('g-recaptcha-response').style.display = 'block';")
+        
+        # Inject và trigger event cho Vue/React nhận diện, đồng thời override getResponse
+        driver.execute_script("""
+            var token = arguments[0];
+            
+            // Ép grecaptcha.getResponse luôn trả về token của chúng ta
+            if (window.grecaptcha) {
+                window.grecaptcha.getResponse = function(widgetId) {
+                    return token;
+                };
+            }
+            
+            var el = document.getElementById('g-recaptcha-response');
+            if(el) {
+                el.value = token;
+                el.innerHTML = token;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        """, token)
+        
+        # Gọi callback bằng cách duyệt sâu (BFS) vào cấu trúc của ___grecaptcha_cfg
+        js_callback = """
+        var token = arguments[0];
+        var success = false;
+        try {
+            var clients = window.___grecaptcha_cfg && window.___grecaptcha_cfg.clients;
+            if (clients) {
+                for (var clientKey in clients) {
+                    var client = clients[clientKey];
+                    var queue = [client];
+                    var visited = [];
+                    while (queue.length > 0) {
+                        var obj = queue.shift();
+                        if (visited.indexOf(obj) !== -1) continue;
+                        visited.push(obj);
+                        
+                        for (var prop in obj) {
+                            try {
+                                if (prop === 'callback' && typeof obj[prop] === 'function') {
+                                    obj[prop](token);
+                                    success = true;
+                                } else if (obj[prop] && typeof obj[prop] === 'object') {
+                                    if (!(obj[prop] instanceof HTMLElement) && !(obj[prop] instanceof Node)) {
+                                        queue.push(obj[prop]);
+                                    }
+                                }
+                            } catch(err) {}
+                        }
+                    }
+                }
+            }
+        } catch(e) {}
+        return success;
+        """
+        has_callback = driver.execute_script(js_callback, token)
+        if has_callback:
+            print("[2Captcha] Đã gọi callback của reCAPTCHA.")
+            
+        time.sleep(2)
+        return True
+    except Exception as e:
+        print(f"[2Captcha] Lỗi inject solution: {e}")
+        return False
+
+def handle_2captcha_captcha(driver, page_url, api_key=None, is_parallel=False):
+    """
+    Xử lý reCAPTCHA v2 bằng 2Captcha API.
+
+    Args:
+        driver: Selenium WebDriver
+        page_url: URL hiện tại
+        api_key: 2Captcha API key (nếu None sẽ hỏi user)
+        is_parallel: Có phải đang chạy parallel mode không
+
+    Returns:
+        True nếu đã solve captcha thành công hoặc không có captcha, False nếu manual
+    """
+    print(f"\n[Captcha] Đang quét reCAPTCHA v2 trên trang...")
+    has_captcha, sitekey = detect_recaptcha_v2(driver, timeout=5)
+
+    if not has_captcha:
+        print("[Captcha] ✓ Không phát hiện reCAPTCHA v2. Tiếp tục bình thường.")
+        return True  # Không có captcha, tiếp tục bình thường
+
+    if not sitekey:
+        print("[Captcha] ✗ Không thể extract sitekey. Chuyển manual.")
+        return False
+
+    print(f"\n{'='*60}")
+    print(f"🔒 PHÁT HIỆN reCAPTCHA v2!")
+    print(f"   Sitekey: {sitekey}")
+    print(f"   URL: {page_url}")
+    print(f"{'='*60}")
+
+    # Hỏi user có muốn dùng 2Captcha không
+    if api_key is None:
+        use_2captcha = input("\n【2Captcha】Có muốn dùng 2Captcha API để giải captcha không? (y/n): ").strip().lower()
+        if use_2captcha not in ['y', 'yes', '']:
+            print("[Captcha] Chuyển sang mode manual. Vui lòng giải captcha thủ công.")
+            return False
+
+        api_key = input("【2Captcha】Nhập 2Captcha API Key: ").strip()
+        if not api_key:
+            print("[Captcha] Không có API key. Chuyển manual.")
+            return False
+    else:
+        print(f"[2Captcha] Đang giải reCAPTCHA v2 tự động...")
+
+    # Solve captcha với retry logic
+    max_retries = 3
+    for attempt in range(max_retries):
+        print(f"[2Captcha] Thử lần {attempt + 1}/{max_retries}...")
+        token = solve_2captcha_captcha(api_key, sitekey, page_url, timeout=120)
+
+        if token:
+            # Inject token
+            if inject_recaptcha_solution(driver, token):
+                print("[2Captcha] ✓ Đã inject solution!")
+                sleep(3)  # Chờ Google validate
+                
+                # Vì dùng JS bypass UI nên không kiểm tra checkbox nữa
+                # Ẩn overlay của reCAPTCHA (image challenge) nếu nó đang mở và che màn hình
+                try:
+                    driver.execute_script("""
+                        var overlays = document.querySelectorAll('div[style*="z-index: 2000000000"]');
+                        for(var i = 0; i < overlays.length; i++){
+                            overlays[i].style.display = 'none';
+                            overlays[i].style.visibility = 'hidden';
+                            overlays[i].style.opacity = '0';
+                        }
+                        var frames = document.querySelectorAll('iframe[src*="bframe"]');
+                        for(var j = 0; j < frames.length; j++){
+                            if(frames[j].parentElement && frames[j].parentElement.parentElement) {
+                                frames[j].parentElement.parentElement.style.display = 'none';
+                            }
+                        }
+                        document.body.click(); // Click ra ngoài để đóng tooltip nếu có
+                    """)
+                    sleep(1)
+                except Exception:
+                    pass
+
+                # Nếu đang ở trang login, thử ấn lại nút Đăng nhập sau khi inject
+                try:
+                    if "login" in driver.current_url:
+                        btn = WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button'))
+                        )
+                        btn.click()  # Dùng click vật lý để đảm bảo Vue nhận sự kiện
+                        sleep(3)
+                except Exception as e:
+                    print(f"[2Captcha] Không thể ấn đăng nhập: {e}")
+                    pass
+                    
+                return True
+
+                # Retry nữa nếu chưa pass
+                if attempt < max_retries - 1:
+                    print(f"[2Captcha] Chưa pass, thử lại...")
+                    sleep(3)
+                else:
+                    print("[Captcha] Captcha đã được giải nhưng không pass validation.")
+                    print("[Captcha] Transfering manual mode.")
+                    return False
+            else:
+                if attempt < max_retries - 1:
+                    print(f"[2Captcha] Retry inject...")
+                    sleep(2)
+                else:
+                    return False
+        else:
+            # Solve thất bại
+            if attempt < max_retries - 1:
+                print(f"[2Captcha] Thất bại, thử lại lần {attempt + 2}...")
+                sleep(2)
+            else:
+                print("[Captcha] Đạt retry limit. Chuyển manual.")
+                return False
+
+    print("[Captcha] Vượt quá retry limit. Vui lòng giải captcha thủ công.")
+    return False
+
+# =================================================================
+
 # ================= API RATE LIMIT SEMAPHORE =================
 # Giới hạn tối đa N API calls đồng thời giữa tất cả threads
 MAX_CONCURRENT_API_CALLS = 3
@@ -1298,9 +1651,13 @@ def run_single_mode():
         
         dn = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button')
         dn.click()
-        
-        input("\n👉 Vui lòng tự giải Captcha trên màn hình trình duyệt (nếu có).\nSau khi giải xong, ấn phím [ENTER] tại đây để tiếp tục...")
-        
+
+        # Handle reCAPTCHA v2 với 2Captcha API
+        if not handle_2captcha_captcha(driver, "https://app.golike.net/login", is_parallel=False):
+            input("\n👉 Vui lòng tự giải Captcha trên màn hình trình duyệt (nếu có).\nSau khi giải xong, ấn phím [ENTER] tại đây để tiếp tục...")
+        else:
+            sleep(2)
+
         nhiemvu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
         driver.execute_script("arguments[0].click();", nhiemvu)
         
@@ -1309,7 +1666,15 @@ def run_single_mode():
         sleep(3)
 
         prev_max_job = False  # Flag: acc trước bị MAX_JOB
-        for acc_idx, acc_info in enumerate(accounts_list):
+        current_account_index = 0  # Chỉ số tài khoản hiện tại
+        consecutive_failures = 0  # Biến đếm số lần thất bại liên tiếp
+        max_consecutive_failures = 10  # Số lần thất bại tối đa trước khi chuyển acc
+
+        # VÒNG LẶP CHẠY CHÍNH CỦA TÀI KHOẢN
+        while current_account_index < len(accounts_list):  # Lặp qua tất cả tài khoản trong danh sách
+            if STOP_FLAG: break
+
+            acc_info = accounts_list[current_account_index]
             if STOP_FLAG: break
             
             current_cookie = acc_info.get("cookie")
@@ -1322,7 +1687,7 @@ def run_single_mode():
             else:
                 Fb = None
                 
-            if acc_idx > 0:
+            if current_account_index > 0:
                 print(f"\n🔄 Chuyển sang tài khoản tiếp theo (FB UID: {current_uid} | GoLike UID: {current_golike_uid})...")
                 click_home_navigation(driver)
                 sleep(2)
@@ -1387,6 +1752,53 @@ def run_single_mode():
                     prev_max_job = False
             
                 # VÒNG LẶP CHẠY CHÍNH
+                # BƯỚC 1: KIỂM TRA VÀ CHUYỂN TÀI KHOẢN KHI ĐẠT GỚI HẠN THẤT BẠI
+                if consecutive_failures >= max_consecutive_failures:
+                    print(f"[🔄] ĐÃ ĐẠT {max_consecutive_failures} LẦN THẤT BẠI LIÊN TIẾP! ĐANG CHUYỂN SANG TÀI KHOẢN KHÁC...")
+
+                    # Thực hiện việc báo lỗi để chuyển tài khoản
+                    try:
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
+                        driver.execute_script("arguments[0].click();", bl)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+
+                        lydo = "Báo cáo hoàn thành thất bại"
+                        c_lydo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row')][.//h6[contains(text(), '{lydo}')]]")
+                        driver.execute_script("arguments[0].click();", c_lydo)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
+
+                        gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
+                        driver.execute_script("arguments[0].click();", gui)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+
+                        try:
+                            o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                            driver.execute_script("arguments[0].click();", o_b)
+                        except: pass
+
+                        print(f"✅ ĐÃ BÁO LỖI THÀNH CÔNG. CHUYỂN SANG TÀI KHOẢN TIẾP THEO...")
+
+                        # Chuyển sang tài khoản tiếp theo
+                        current_account_index += 1
+                        consecutive_failures = 0  # Reset bộ đếm
+
+                        if current_account_index >= len(accounts_list):
+                            print(f"[⚠️] ĐÃ HẾT TẤT CẢ TÀI KHOẢN! DỪNG CHƯƠNG TRÌNH.")
+                            break
+
+                        # Khởi động lại với tài khoản mới
+                        continue  # Bắt đầu lại vòng lặp với tài khoản mới
+
+                    except Exception as e:
+                        print(f"[❌] LỖI KHI BÁO LỖI ĐỂ CHUYỂN TÀI KHOẢN: {e}")
+                        # Nếu không thể báo lỗi, vẫn chuyển acc để tránh treo
+                        current_account_index += 1
+                        consecutive_failures = 0
+                        if current_account_index < len(accounts_list):
+                            continue  # Khởi động lại với tài khoản mới
+                        else:
+                            break
+
                 failed_load_count = 0 # Bộ đếm số lần không tìm thấy Job liên tiếp
                 last_server_switch_time = time.time()
                 while not STOP_FLAG:
@@ -1487,10 +1899,14 @@ def run_single_mode():
                             except: pass
 
                             failed_load_count += 1
+                            # Mỗi lần hụt job là một loại thấtbetrieb, tăng bộ đếm failure liên tục
+                            consecutive_failures += 1
                             # Kiểm tra nếu quá 10 lần hụt Job
                             if failed_load_count >= 10:
-                                print(f"\n🚨 CẢNH BÁO: Đã hụt Job {failed_load_count} lần liên tiếp! Thực hiện Tự Động Reset trang...")
+                                print(f"\n🚨 CẢNH BÁO: Đã hụt Job {failed_load_count} lần liênitzatιδ! Thực hiện Tự Động Reset trang...")
                                 failed_load_count = 0 # Khởi tạo lại
+                                # Tăng bộ đếm thất bại liên tục khi reset do không tìm thấy job
+                                consecutive_failures += 1
                                 try:
                                     # Quay lại menu Nhiệm vụ
                                     nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
@@ -1626,6 +2042,7 @@ def run_single_mode():
                             except Exception as e:
                                 print(f"Lỗi ấn Hoàn thành: {e}")
                                 need_skip = True
+                                consecutive_failures += 1  # Lỗi khi hoàn thành, tăng bộ đếm failure
 
                         if need_skip:
                             print("🚨 Bắt đầu Báo lỗi...")
@@ -1633,15 +2050,15 @@ def run_single_mode():
                                 bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
                                 driver.execute_script("arguments[0].click();", bl)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
-                            
+
                                 lydo = "Tôi không muốn làm Job này"
                                 if not uid or uid == "0": lydo = "Không tìm thấy bài viết"
                                 else: lydo = "Báo cáo hoàn thành thất bại"
-                            
+
                                 c_lydo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row')][.//h6[contains(text(), '{lydo}')]]")
                                 driver.execute_script("arguments[0].click();", c_lydo)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
-                            
+
                                 gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
                                 driver.execute_script("arguments[0].click();", gui)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
@@ -1652,6 +2069,7 @@ def run_single_mode():
                                 print("Đã Báo lỗi thành công.")
                             except Exception as e:
                                 print(f"Lỗi khi Báo lỗi: {e}")
+                                consecutive_failures += 1  # Lỗi khi báo lỗi, tăng bộ đếm failure
                     
                         print(f"Đợi {CONFIG_DELAY.get('delay_between_jobs', 10)}s trước khi tìm job tiếp theo...")
                         if job_limit_reached(driver):
@@ -1700,7 +2118,7 @@ def log_thread(profile_name, message):
     print(f"[{ts}] [{profile_name}] {message}")
 
 # PHASE 1: CÀI ĐẶT VÀ GIẢI CAPTCHA TUẦN TỰ TRÊN LUỒNG CHÍNH
-def setup_bot_profile(profile_data, idx):
+def setup_bot_profile(profile_data, idx, global_2captcha_api_key=None):
     p_name = profile_data.get("profile_name", f"Acc-{idx}")
     gl_user = profile_data.get("golike_username", "")
     gl_pass = profile_data.get("golike_password", "")
@@ -1782,10 +2200,14 @@ def setup_bot_profile(profile_data, idx):
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input').send_keys(gl_user)
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input').send_keys(gl_pass)
         driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button').click()
-        
-        print(f"\n🔑 [BƯỚC BẮT BUỘC] Hãy nhìn vào màn hình trình duyệt của [{p_name}].")
-        input("Vui lòng tự giải Captcha trên đó. Khi đã vào được màn hình chính, quay lại đây ấn [ENTER]...")
-        
+
+        # Handle reCAPTCHA v2 với 2Captcha API
+        if not handle_2captcha_captcha(driver, "https://app.golike.net/login", api_key=global_2captcha_api_key, is_parallel=True):
+            print(f"\n🔑 [BƯỚC BẮT BUỘC] Hãy nhìn vào màn hình trình duyệt của [{p_name}].")
+            input("Vui lòng tự giải Captcha trên đó. Khi đã vào được màn hình chính, quay lại đây ấn [ENTER]...")
+        else:
+            sleep(2)
+
         nhiemvu = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
         driver.execute_script("arguments[0].click();", nhiemvu)
         
@@ -2219,11 +2641,27 @@ def run_parallel_mode():
         return
 
     print(f"\n🚀 PHÁT HIỆN {len(profiles)} TÀI KHOẢN ĐĂNG KÝ CHẠY SONG SONG!")
-    
+
+    # Hỏi 2Captcha API key cho parallel mode (shared across all threads)
+    print("\n" + "="*50)
+    print("🔒 CẤU HÌNH reCAPTCHA v2 CHO PARALLEL MODE")
+    print("="*50)
+    use_2captcha_parallel = input("Có muốn dùng 2Captcha API để tự động giải reCAPTCHA v2 không? (y/n): ").strip().lower()
+    global_2captcha_api_key = None
+    if use_2captcha_parallel in ['y', 'yes', '']:
+        global_2captcha_api_key = input("Nhập 2Captcha API Key: ").strip()
+        if global_2captcha_api_key:
+            print(f"[✓] đã cấu hình 2Captcha API")
+        else:
+            print("[!] Không có API key, sẽ chuyển manual nếu phát hiện captcha")
+    else:
+        print("[✓] Chế độ manual - sẽ yêu cầu giải captcha thủ công")
+    print("="*50 + "\n")
+
     threads = []
     print("\n--- BẮT ĐẦU QUÁ TRÌNH THIẾT LẬP & GIẢI CAPTCHA LẦN LƯỢT ---")
     for idx, profile in enumerate(profiles):
-        drv, fb_api = setup_bot_profile(profile, idx)
+        drv, fb_api = setup_bot_profile(profile, idx, global_2captcha_api_key)
         if drv and fb_api:
             # KÍCH HOẠT LUỒNG CHẠY NGAY LẬP TỨC! CHẠY NGAY KHI ENTER XONG KHÔNG CẦN CHỜ!
             t = threading.Thread(target=run_bot_loop, args=(drv, fb_api, profile, idx))

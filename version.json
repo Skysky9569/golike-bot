@@ -1,6 +1,6 @@
 {
-  "version": "1.10.2",
+  "version": "1.10.3",
   "release_date": "2026-05-24",
-  "changelog": "v1.10.2 - Magic Anti-Detection Suite: Random toàn bộ fingerprint (User-Agent, Platform, Viewport) mỗi lần chạy Chrome, inject stealth script để conceal navigator.webdriver/plugins/languages/platform, tránh bị Facebook correlate multi-accounts",
-  "previous_version": "1.10.1"
+  "changelog": "v1.10.3 - Fix lỗi inject 2Captcha cho Vue.js (Golike): Ép đè window.grecaptcha.getResponse, tự động ẩn giao diện image challenge và click Đăng nhập bằng mã vật lý.",
+  "previous_version": "1.10.2"
 }
