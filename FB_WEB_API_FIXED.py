@@ -128,68 +128,29 @@ class GenData:
     
     def build_REACTION(self, reaction: str, ID_POST: str) -> Dict[str, Any]:
         self.request_counter += 1
-        reaction_id_list = [1635855486666999, 1678524932434102, 613557422527858, 115940658764963, 478547315650144, 908563459236466, 444813342392137, 'ERR']
-        reaction_id_ = (
-            reaction_id_list[0] if reaction == "LIKE" else
-            reaction_id_list[1] if reaction == "LOVE" else
-            reaction_id_list[2] if reaction == 'CARE' else
-            reaction_id_list[3] if reaction == 'HAHA' else
-            reaction_id_list[4] if reaction == 'WOW' else
-            reaction_id_list[5] if reaction == 'SAD' else
-            reaction_id_list[6] if reaction == 'ANGRY' else
-            reaction_id_list[7]
-        )
-        if reaction_id_ == 'ERR':
+        reaction_id_map = {
+            'LIKE':  1635855486666999,
+            'LOVE':  1678524932434102,
+            'CARE':  613557422527858,
+            'HAHA':  115940658764963,
+            'WOW':   478547315650144,
+            'SAD':   908563459236466,
+            'ANGRY': 444813342392137,
+        }
+        reaction_id_ = reaction_id_map.get(reaction)
+        if reaction_id_ is None:
             return {'err': 'Không Thể Sử Dụng Loại Cảm Xúc Này'}
 
         s = 'feedback:' + str(ID_POST)
-        self.idpost = base64.b64encode(s.encode('utf-8')).decode('utf-8')
+        feedback_id_b64 = base64.b64encode(s.encode('utf-8')).decode('utf-8')
+
         # Sinh timestamp động — không hardcode
         _ts = int(time.time() * 1000)
         _rand = random.randint(100000, 999999)
         _attr = f'CometHomeRoot.react,comet.home,via_cold_start,{_ts},{_rand},4748854339,,'
-        _session_id = str(uuid.uuid4())
 
-        variables = {
-            'input': {
-                'attribution_id_v2': _attr,
-                'feedback_id': self.idpost,
-                'feedback_reaction_id': str(reaction_id_),
-                'feedback_source': 'NEWS_FEED',
-                'is_tracking_encrypted': True,
-                'tracking': [],
-                'session_id': _session_id,
-                'actor_id': self.session.user_id,
-                'client_mutation_id': '1',
-            },
-            'useDefaultActor': False,
-            '__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider': False,
-        }
-
-        # Full GraphQL mutation — không dùng doc_id nên không bao giờ bị FB deprecated
-        query = """
-        mutation CometUFIFeedbackReactMutation(
-          $input: FeedbackReactInput!
-          $useDefaultActor: Boolean!
-          $__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider: Boolean!
-        ) {
-          feedback_react(input: $input) {
-            feedback {
-              id
-              i18n_reaction_count
-              reaction_count {
-                count
-                reaction_types
-              }
-              viewer_reaction_detail @include(if: $useDefaultActor) {
-                viewer_reaction
-              }
-            }
-          }
-        }
-        """
-
-        payload = {
+        # Gửi dạng JSON body (không cần doc_id, Facebook luôn chấp nhận)
+        body = {
             'av': self.session.user_id,
             '__user': self.session.user_id,
             '__req': NumberEncoder.to_base36(self.request_counter),
@@ -200,11 +161,36 @@ class GenData:
             '__spin_r': self.session.revision,
             'fb_api_caller_class': 'RelayModern',
             'fb_api_req_friendly_name': 'CometUFIFeedbackReactMutation',
-            'server_timestamps': 'true',
-            'variables': json.dumps(variables, separators=(',', ':')),
-            'query': query,
+            'server_timestamps': True,
+            'variables': json.dumps({
+                'input': {
+                    'attribution_id_v2': _attr,
+                    'feedback_id': feedback_id_b64,
+                    'feedback_reaction_id': str(reaction_id_),
+                    'feedback_source': 'NEWS_FEED',
+                    'is_tracking_encrypted': True,
+                    'tracking': [],
+                    'session_id': str(uuid.uuid4()),
+                    'actor_id': self.session.user_id,
+                    'client_mutation_id': '1',
+                },
+                'useDefaultActor': False,
+                '__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider': False,
+            }, separators=(',', ':')),
+            'query': (
+                'mutation CometUFIFeedbackReactMutation('
+                '$input:FeedbackReactInput!'
+                '$useDefaultActor:Boolean!'
+                '$__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider:Boolean!'
+                '){'
+                'feedback_react(input:$input){'
+                'feedback{id i18n_reaction_count}'
+                '}'
+                '}'
+            ),
         }
-        return payload
+        return body
+
     def build_PiC(self,filename):
         try:
             subname = mimetypes.guess_type(filename)[0]
@@ -416,11 +402,29 @@ class FB_API:
             "cookie" : self.cookie,
             'x-fb-friendly-name': 'CometUFIFeedbackReactMutation',
         }
+        # Header riêng cho JSON body request (dùng cho REACTION)
+        self.json_header = {
+            "accept": "*/*",
+            "accept-language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+            "content-type": "application/json",
+            "origin": "https://www.facebook.com",
+            "referer": "https://www.facebook.com/",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "user-agent": self.ua,
+            "x-fb-lsd": self.session.lsd,
+            "cookie": self.cookie,
+            "x-fb-friendly-name": "CometUFIFeedbackReactMutation",
+        }
         return True
 
     @staticmethod
     def _format_error(response):
         try:
+            text = response.text.strip()
+            if not text:
+                return f'Empty response (HTTP {response.status_code})'
             data = response.json()
             errors = data.get('errors', [])
             if errors:
@@ -435,7 +439,7 @@ class FB_API:
                 }
             return str(data)
         except Exception:
-            return str(response.status_code)
+            return f'HTTP {response.status_code}: {response.text[:200]}'
 
     def REACTION(self, REACTION: str, Id_post: str):
         """
@@ -452,24 +456,40 @@ class FB_API:
             self.login()
             if not self.ready:
                 return {'success': False, 'error': 'Not logged in'}
-            payload = self.payload_builder.build_REACTION(REACTION, Id_post)
-            if isinstance(payload, dict) and 'err' in payload:
-                return payload
+            body = self.payload_builder.build_REACTION(REACTION, Id_post)
+            if isinstance(body, dict) and 'err' in body:
+                return body
+
+            # Gửi dưới dạng JSON body (Content-Type: application/json)
             response = requests.post(
                 'https://www.facebook.com/api/graphql/',
-                headers=self.header, data=payload, proxies=self.proxies
+                headers=self.json_header,
+                json=body,
+                proxies=self.proxies
             )
+
             if response.status_code == 200:
-                feedback_get_id = response.json().get('data', {}).get('feedback_react', {})
+                resp_text = response.text.strip()
+                if not resp_text:
+                    return {'success': False, 'error': 'Empty response from Facebook'}
+                try:
+                    resp_json = response.json()
+                except Exception:
+                    return {'success': False, 'error': f'Non-JSON response: {resp_text[:200]}'}
+
+                feedback_get_id = resp_json.get('data', {}).get('feedback_react', {})
                 if feedback_get_id:
-                    feedback_get_id_1 = feedback_get_id.get('feedback', {})
-                    feedback_id = feedback_get_id_1.get('id')
-                    reaction_count = feedback_get_id_1.get('i18n_reaction_count')
-                    return {'success': True, 'error': None, 'feedback_id': str(feedback_id), 'reaction_count': str(reaction_count)}
+                    fb_data = feedback_get_id.get('feedback', {})
+                    return {
+                        'success': True,
+                        'error': None,
+                        'feedback_id': str(fb_data.get('id', '')),
+                        'reaction_count': str(fb_data.get('i18n_reaction_count', '')),
+                    }
                 else:
                     return {'success': False, 'error': self._format_error(response)}
             else:
-                return {'success': False, 'error': str(response.status_code)}
+                return {'success': False, 'error': f'HTTP {response.status_code}: {response.text[:200]}'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 

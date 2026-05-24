@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v1.9.8] - 2026-05-24
+
+### Sửa Lỗi (Fixed)
+- **Fix REACTION lỗi `Expecting value: line 1 column 1 (char 0)` (empty response)**:
+  - Nguyên nhân: `query` field gửi dạng **form-encoded** (`data=`) không được Facebook chấp nhận → response body rỗng → `response.json()` crash.
+  - Đã sửa: Chuyển sang gửi **JSON body** (`json=`, `Content-Type: application/json`). Đây là cách Facebook web app thực sự dùng khi gọi GraphQL.
+  - Thêm `json_header` riêng cho REACTION request (header form-encoded và JSON là khác nhau).
+- **Cải thiện xử lý lỗi response**:
+  - `_format_error()` giờ check `response.text` trống trước khi gọi `.json()`.
+  - Log 200 ký tự đầu response khi lỗi để debug dễ hơn.
+  - Xử lý riêng trường hợp response không phải JSON.
+
 ## [v1.9.7] - 2026-05-24
 
 ### Sửa Lỗi (Fixed)
