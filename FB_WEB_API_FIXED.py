@@ -76,9 +76,9 @@ class HTMLExtractor:
 class FacebookSession:
     # Danh sách doc_id fallback — cập nhật thủ công khi FB thay đổi
     _FALLBACK_DOC_IDS = [
-        '9397136836967873',
-        '7060390147320811',
-        '6734090496742587',
+        '24198888476452283',
+        '8522301131154562',
+        '7894146167406836'
     ]
 
     def __init__(self, cookie: str, proxies: dict = None):
@@ -198,7 +198,7 @@ class GenData:
         if doc_id != 'null':
             used_doc_id = doc_id
         else:
-            used_doc_id = getattr(self.session, 'reaction_doc_id', None) or '9397136836967873'
+            used_doc_id = getattr(self.session, 'reaction_doc_id', None) or '24198888476452283'
 
         # Gửi form-encoded data= với doc_id — cách Facebook bắt buộc yêu cầu
         payload = {
