@@ -19,5 +19,8 @@ colorama>=0.4.6; sys_platform == 'win32'
 # Environment variables (optional)
 python-dotenv>=1.0.0
 
+# Memory monitoring (for circuit breaker)
+psutil>=5.9.0
+
 # Termux compatibility (auto-detect)
 # No special package needed - uses standard library

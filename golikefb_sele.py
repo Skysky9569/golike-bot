@@ -9,6 +9,7 @@ import webdriver_manager
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import os
+import random
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -16,7 +17,85 @@ load_dotenv()
 
 from golike_core.config import CONFIG
 
-# Helper for delayed waits with visual countdown when delay exceeds 20 seconds
+# ================= ANTI-DETECTION STEALTH SCRIPT =================
+# Script để conceal selenium automation và randomize fingerprint
+STEALTH_INJECTION_SCRIPT = """
+// Landmark: randomize device fingerprint on every run
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+Object.defineProperty(navigator, 'platform', { get: () => { const plats = ['Win32','MacIntel','Linux x86_64']; return plats[Math.floor(Math.random()*plats.length)]; } });
+// Per-run resolution randomization
+const XRES = Math.floor(1280 + Math.random()*800);
+const YRES = Math.floor(720 + Math.random()*480);
+Object.defineProperty(Screen.prototype, 'width', { get: () => XRES });
+Object.defineProperty(Screen.prototype, 'height', { get: () => YRES });
+Object.defineProperty(Screen.prototype, 'availWidth', { get: () => XRES - 16 });
+Object.defineProperty(Screen.prototype, 'availHeight', { get: () => YRES - 64 });
+"""
+
+# ================= RANDOMIZATION UTILS =================
+def smart_random_delay(base_delay: float, variance: float = 0.3) -> float:
+    """
+    Tạo delay với randomization Gaussian để mô phỏng timing con người.
+
+    Args:
+        base_delay: Delay cơ bản (giây)
+        variance: Method sai số tương đối (default 0.3 = ±30%)
+
+    Returns:
+        Actual delay với randomization (luôn >= 0.1s)
+    """
+    multiplier = random.gauss(1.0, variance / 2)
+    # Clamp để tránh delay quá ngắn hoặc quá dài (0.5x - 1.5x)
+    multiplier = max(0.5, min(1.5, multiplier))
+    actual = base_delay * multiplier
+    return max(0.1, actual)  # Đảm bảo tối thiểu 0.1s
+
+
+# ================= MEMORY CIRCUIT BREAKER =================
+MEMORY_LIMIT_PERCENT = 90  # Ngưỡng RAM % tối đa
+MEMORY_AVAILABLE_MIN = 1000  # RAM tối thiểu cần giữ (MB)
+
+
+def check_system_memory():
+    """
+    Kiểm tra RAM hệ thống hiện tại.
+
+    Returns:
+        tuple: (used_percent, available_mb)
+    """
+    try:
+        import psutil
+        mem = psutil.virtual_memory()
+        return mem.percent, mem.available / (1024 * 1024)
+    except ImportError:
+        # psutil không có - skip memory check
+        return 0, float('inf')
+    except Exception:
+        # Lỗi khi đọc memory - giả định OK để không block bot
+        return 0, float('inf')
+
+
+def wait_for_memory(frequency: float = 5.0):
+    """
+    Chờ RAM giải phóng khi vượt ngưỡng.
+
+    Args:
+        frequency: Tần số kiểm tra lại (giây)
+    """
+    while True:
+        used_percent, available_mb = check_system_memory()
+
+        if used_percent < MEMORY_LIMIT_PERCENT and available_mb > MEMORY_AVAILABLE_MIN:
+            # RAM đã đủ thấp - thoát
+            print(f"[✓] RAM ổn: {used_percent:.1f}% used, {available_mb:.0f}MB available")
+            return
+
+        # Vẫn quá cao - tiếp tục chờ
+        print(f"⏳ Chờ RAM giải phóng... ({used_percent:.1f}% used, {available_mb:.0f}MB available)")
+        time.sleep(frequency)
+
 
 def smart_sleep(seconds: int):
     """Sleep for *seconds* seconds.
@@ -42,20 +121,116 @@ from datetime import datetime
 from time import sleep
 import threading
 
+# ================= API RATE LIMIT SEMAPHORE =================
+# Giới hạn tối đa N API calls đồng thời giữa tất cả threads
+MAX_CONCURRENT_API_CALLS = 3
+GLOBAL_API_SEMAPHORE = threading.Semaphore(MAX_CONCURRENT_API_CALLS)
+
+
+def throttled_api_call(api_obj, method_name, *args, **kwargs):
+    """
+    Gọi Facebook API với rate limiting semaphore.
+
+    Args:
+        api_obj: Đối tượng FB_API
+        method_name: Tên method (REACTION, FOLLOW, LIKE_PAGE)
+        *args, **kwargs: Tham số cho method
+
+    Returns:
+        Kết quả từ API call
+    """
+    with GLOBAL_API_SEMAPHORE:
+        # Small random delay trước khi call để tránh synchronized timing
+        time.sleep(random.uniform(0.3, 1.0))
+
+        # Gọi API
+        method = getattr(api_obj, method_name, None)
+        if method:
+            return method(*args, **kwargs)
+        else:
+            print(f"[!] Không tìm thấy method {method_name} trong FB_API")
+            return {"success": False}
+
+
+# ================= USER-AGENT POOL =================
+# Pool các User-Agent mobile để tránh fingerprint trùng giữa các acc
+MOBILE_UA_POOL = [
+    {
+        "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+        "platform": "iPhone",
+        "width": 390,
+        "height": 844,
+    },
+    {
+        "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1",
+        "platform": "iPhone",
+        "width": 390,
+        "height": 844,
+    },
+    {
+        "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "platform": "iPhone",
+        "width": 390,
+        "height": 844,
+    },
+    {
+        "ua": "Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+        "platform": "iPad",
+        "width": 768,
+        "height": 1024,
+    },
+    {
+        "ua": "Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36",
+        "platform": "Android",
+        "width": 360,
+        "height": 800,
+    },
+    {
+        "ua": "Mozilla/5.0 (Linux; Android 14; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36",
+        "platform": "Android",
+        "width": 360,
+        "height": 800,
+    },
+    {
+        "ua": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36",
+        "platform": "Android",
+        "width": 393,
+        "height": 851,
+    },
+]
+
+
+def get_random_device_profile():
+    """Random toàn bộ device profile (UA + platform + viewport)."""
+    profile = random.choice(MOBILE_UA_POOL)
+    # Thêm slight variation vào viewport
+    width_var = random.randint(-10, 10)
+    height_var = random.randint(-20, 20)
+    return {
+        "user_agent": profile["ua"],
+        "platform": profile["platform"],
+        "viewport_width": max(320, profile["width"] + width_var),
+        "viewport_height": max(500, profile["height"] + height_var),
+    }
+
+
 # Helper to detect the "job limit" toast
 def job_limit_reached(driver):
     """Return True if a toast or popup appears indicating the max jobs limit."""
     try:
-        # 1. Check Toast messages
+        # 1. Check Toast messages with fresh lookup each time
         toast_elems = driver.find_elements(By.CSS_SELECTOR, "div.toast-message")
-        for elem in toast_elems:
+        for i, _ in enumerate(toast_elems):
             try:
+                # Re-find element fresh each iteration to avoid stale reference
+                elem = driver.find_elements(By.CSS_SELECTOR, "div.toast-message")[i]
                 msg = elem.get_attribute("textContent").lower()
                 if "100 job" in msg or ("tối đa" in msg and "job" in msg) or ("giới hạn" in msg and "job" in msg) or "đã làm quá" in msg or "max job" in msg:
                     print(f"🚨 Phát hiện giới hạn Job: {elem.get_attribute('textContent').strip()}")
                     return True
             except Exception as e:
-                print(f'[!] Lỗi kiểm tra toast element: {type(e).__name__}: {e}')
+                # Skip stale element silently - this is expected in parallel mode
+                # only log if we can't access any elements
                 continue
 
         # 2. Check SweetAlert popups
@@ -170,39 +345,80 @@ def check_rate_limit_on_page(driver):
         if kw in page_text:
             print(f"\n⚠️ PHÁT HIỆN RATE LIMIT: '{kw}' trong nội dung trang")
             return True
-    # Kiểm tra Swal2 popup
+    # Kiểm tra Swal2 popup và toast - với xử lý StaleElement cho song song
     for selector, label in [
         ("#swal2-title", "Swal2 title"),
         ("#swal2-content", "Swal2 content"),
         ("div.toast-message", "toast message"),
     ]:
         try:
-            elem_text = driver.find_element(By.CSS_SELECTOR, selector).text.lower()
-            for kw in RATE_LIMIT_KEYWORDS:
-                if kw in elem_text:
-                    print(f"\n⚠️ PHÁT HIỆN RATE LIMIT: '{kw}' trong {label}")
-                    return True
+            # Dùng find_elements + loop để tránh StaleElement khi chạy song song
+            elems = driver.find_elements(By.CSS_SELECTOR, selector)
+            for elem in elems:
+                try:
+                    elem_text = elem.text.lower()
+                    for kw in RATE_LIMIT_KEYWORDS:
+                        if kw in elem_text:
+                            print(f"\n⚠️ PHÁT HIỆN RATE LIMIT: '{kw}' trong {label}")
+                            return True
+                except Exception:
+                    # Stale element - bỏ qua và chuyển element tiếp theo
+                    continue
         except Exception:
             pass
     return False
 
 
 def handle_rate_limit(driver, context_name="tool"):
-    """Xử lý khi phát hiện rate limit: chờ 45s rồi refresh trang.
+    """Xử lý khi phát hiện rate limit: về home -> chờ delay -> kiếm xu -> facebook -> tiếp tục.
     Returns: True nếu đã xử lý, False nếu không cần.
     """
     if not check_rate_limit_on_page(driver):
         return False
-    print(f"[{context_name}] ⏳ Phát hiện 'quá nhanh' — tạm nghỉ 45 giây...")
-    for remaining in range(45, 0, -1):
-        print(f"⏳ Nghỉ rate limit {remaining}s...", end="\r", flush=True)
-        time.sleep(1)
-    print(" " * 50, end="\r")
+
+    print(f"[{context_name}] ⏳ Phát hiện 'thao tác quá nhanh' — đang về Home...")
+
+    # Bước 1: Về Home (nút Trang chủ)
     try:
-        driver.refresh()
-        print(f"[{context_name}] ✅ Đã refresh trang sau rate limit")
+        home_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[1]'))
+        )
+        driver.execute_script("arguments[0].click();", home_btn)
+        sleep(smart_random_delay(2, variance=0.2))
+        print(f"[{context_name}] ✅ Đã về Home")
     except Exception as e:
-        print(f"[{context_name}] ❌ Lỗi khi refresh: {e}")
+        print(f"[{context_name}] ❌ Không thể về Home: {e}")
+        driver.refresh()
+        sleep(smart_random_delay(3, variance=0.2))
+
+    # Bước 2: Chờ delay config
+    delay = CONFIG_DELAY.get("sleep_on_reset", 30)
+    print(f"[{context_name}] ⏳ Nghỉ ngơi {delay} giây...")
+    wait_for_memory()  # Check memory trước khi chờ dài
+    smart_sleep(smart_random_delay(delay, variance=0.15))
+
+    # Bước 3: Ấn Kiếm xu
+    try:
+        kiem_xu_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]'))
+        )
+        driver.execute_script("arguments[0].click();", kiem_xu_btn)
+        sleep(smart_random_delay(1, variance=0.2))
+        print(f"[{context_name}] ✅ Đã ấn Kiếm xu")
+    except Exception as e:
+        print(f"[{context_name}] ❌ Không thể ấn Kiếm xu: {e}")
+
+    # Bước 4: Ấn Facebook
+    try:
+        fb_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div'))
+        )
+        driver.execute_script("arguments[0].click();", fb_btn)
+        sleep(smart_random_delay(2, variance=0.2))
+        print(f"[{context_name}] ✅ Đã ấn Facebook - sẵn sàng quét job")
+    except Exception as e:
+        print(f"[{context_name}] ❌ Không thể ấn Facebook: {e}")
+
     return True
 
 # ======== ĐẢM BẢO SCRIPT DIRECTORY TRONG PYTHON PATH ========
@@ -962,12 +1178,22 @@ def run_single_mode():
 
     print("\nĐang khởi động Chrome...", flush=True)
     options = Options()
+
+    # ================= RANDOMIZE ALL FINGERPRINTS =================
+    # Lấy device profile ngẫu nhiên (UA + platform + viewport)
+    device_profile = get_random_device_profile()
+
     options.add_argument("--lang=en-US")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
     options.add_argument("--no-sandbox")
-    options.add_argument("user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
+    options.add_argument(f"user-agent={device_profile['user_agent']}")
+    options.add_argument(f"--window-size={device_profile['viewport_width']},{device_profile['viewport_height']}")
+    print(f"[+] Fingerprint random:")
+    print(f"     • UA: {device_profile['user_agent'][:50]}...")
+    print(f"     • Platform: {device_profile['platform']}")
+    print(f"     • Viewport: {device_profile['viewport_width']}x{device_profile['viewport_height']}")
 
     if proxy_info:
         options.add_argument("--proxy-server=%s" % proxy_info["chrome_arg"])
@@ -981,9 +1207,10 @@ def run_single_mode():
         active_drivers.append(driver)
     driver.set_window_position(100, 100)
     driver.set_window_size(500, 750)
-    
+
+    # Inject stealth script để conceal automation và randomize navigator properties
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
+        "source": STEALTH_INJECTION_SCRIPT
     })
 
     try:
@@ -1095,6 +1322,12 @@ def run_single_mode():
                         # ---- Kiểm tra rate limit ----
                         handle_rate_limit(driver, name_run)
 
+                        # ---- Kiểm tra RAM (Memory Circuit Breaker) ----
+                        used_percent, available_mb = check_system_memory()
+                        if used_percent >= MEMORY_LIMIT_PERCENT or available_mb <= MEMORY_AVAILABLE_MIN:
+                            print(f"[⚠️] RAM cao: {used_percent:.1f}% used, {available_mb:.0f}MB available - đang chờ...")
+                            wait_for_memory()
+
                         # ---- Kiểm tra đổi server ----
                         if target_server:
                             try:
@@ -1168,7 +1401,7 @@ def run_single_mode():
                                         try:
                                             nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                             driver.execute_script("arguments[0].click();", nv)
-                                            sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
+                                            sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                                         
                                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                             driver.execute_script("arguments[0].click();", fb_btn)
@@ -1176,7 +1409,7 @@ def run_single_mode():
                                             print(f"❌ Lỗi thao tác Reset: {err}")
                                     
                                         print("⏳ Nghỉ ngơi 30 giây trước khi thử quét tiếp...")
-                                        smart_sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
+                                        smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_reset", 30), variance=0.15))
                                         failed_load_count = 0 # Reset đếm
                                         continue
                             except: pass
@@ -1190,14 +1423,14 @@ def run_single_mode():
                                     # Quay lại menu Nhiệm vụ
                                     nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                     driver.execute_script("arguments[0].click();", nv)
-                                    sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
+                                    sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                                     # Click lại Facebook để tải lại trang Job sạch sẽ
                                     fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                     driver.execute_script("arguments[0].click();", fb_btn)
                                     print(f"✅ Đã làm mới xong trang. Đang nghỉ {round(CONFIG_DELAY.get("sleep_on_cool_down", 300)/60,2)} phút nguội hệ thống...")
                                 except Exception as e:
                                     print(f"❌ Lỗi trong lúc tự động Reset: {e}")
-                                smart_sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
+                                smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_cool_down", 300), variance=0.1))
                                 continue
 
                             try:
@@ -1210,7 +1443,7 @@ def run_single_mode():
                                 try:
                                     reload_btn = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
                                     driver.execute_script("arguments[0].click();", reload_btn)
-                                    sleep(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12))
+                                    sleep(smart_random_delay(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12), variance=0.2))
                                 except: pass
                             else:
                                 print(f"Không thấy Job nào ({current_sv} - Lần {failed_load_count}/10). Đứng chờ auto-push...")
@@ -1258,19 +1491,19 @@ def run_single_mode():
                     
                         if uid and uid and uid != "0":
                             print(f"=> Phân tích UID thành công: {uid}. Đang gọi API...")
-                            sleep(CONFIG_DELAY.get("delay_after_api_call", 1.5))
+                            sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_api_call", 1.5), variance=0.2))
                             try:
                                 if j_type == "follow":
-                                    res = Fb.FOLLOW(uid)
+                                    res = throttled_api_call(Fb, "FOLLOW", uid)
                                     print(f"API Follow: {res}")
                                     success = res.get("success", False)
                                 elif j_type == "lik_page":
-                                    res = Fb.LIKE_PAGE(uid)
+                                    res = throttled_api_call(Fb, "LIKE_PAGE", uid)
                                     print(f"API Like Page: {res}")
                                     success = res.get("success", False)
                                 elif j_type in ["like", "love", "haha", "wow", "sad", "angry", "care"]:
                                     reaction = j_type.upper()
-                                    res = Fb.REACTION(reaction, uid)
+                                    res = throttled_api_call(Fb, "REACTION", reaction, uid)
                                     print(f"API Reaction ({reaction}): {res}")
                                     success = res.get("success", False)
                                 else:
@@ -1291,21 +1524,27 @@ def run_single_mode():
                             try:
                                 ht = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
                                 driver.execute_script("arguments[0].click();", ht)
-                                sleep(CONFIG_DELAY.get("delay_after_complete", 4))
+                                sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_complete", 4), variance=0.2))
                                 try:
                                     t_p = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
                                     c_p = driver.find_element(By.ID, "swal2-content").text
                                     print(f"GoLike báo: [{t_p}] {c_p}")
                                     # Kiểm tra rate limit từ popup
                                     popup_text = f"{t_p} {c_p}".lower()
+                                    rate_limit_detected = False
                                     for kw in RATE_LIMIT_KEYWORDS:
                                         if kw in popup_text:
-                                            print(f"⚠️ GoLike báo rate limit: '{kw}' — tạm nghỉ 10s...")
-                                            ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                                            driver.execute_script("arguments[0].click();", ok_c)
-                                            sleep(1)
-                                            handle_rate_limit(driver, name_run)
+                                            print(f"⚠️ GoLike báo rate limit: '{kw}' — đang xử lý...")
+                                            rate_limit_detected = True
                                             break
+
+                                    if rate_limit_detected:
+                                        ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                        driver.execute_script("arguments[0].click();", ok_c)
+                                        sleep(1)
+                                        handle_rate_limit(driver, name_run)
+                                        # After handling rate limit, continue to next job scan
+                                        need_skip = True
                                     else:
                                         ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
                                         driver.execute_script("arguments[0].click();", ok_c)
@@ -1356,7 +1595,7 @@ def run_single_mode():
                             print("[⚠️] Đã đạt giới hạn 100 jobs/ngày. Tự động chuyển acc tiếp theo...")
                             prev_max_job = True
                             break
-                        smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+                        smart_sleep(smart_random_delay(CONFIG_DELAY.get("delay_between_jobs", 10)))
 
                     except Exception as e:
                         if str(e) == "MAX_JOB":
@@ -1424,11 +1663,21 @@ def setup_bot_profile(profile_data, idx):
 
     print(f"[*] Đang bật trình duyệt Chrome cho [{p_name}]...")
     options = Options()
+
+    # ================= RANDOMIZE ALL FINGERPRINTS =================
+    # Lấy device profile ngẫu nhiên (UA + platform + viewport) per account
+    device_profile = get_random_device_profile()
+
     options.add_argument("--lang=en-US")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
-    options.add_argument("user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
+    options.add_argument(f"user-agent={device_profile['user_agent']}")
+    options.add_argument(f"--window-size={device_profile['viewport_width']},{device_profile['viewport_height']}")
+    print(f"[+] [{p_name}] Fingerprint random:")
+    print(f"     • UA: {device_profile['user_agent'][:50]}...")
+    print(f"     • Platform: {device_profile['platform']}")
+    print(f"     • Viewport: {device_profile['viewport_width']}x{device_profile['viewport_height']}")
 
     if proxy_info:
         options.add_argument("--proxy-server=%s" % proxy_info["chrome_arg"])
@@ -1449,8 +1698,9 @@ def setup_bot_profile(profile_data, idx):
     driver.set_window_position(px, py)
     driver.set_window_size(w, h)
 
+    # Inject stealth script để conceal automation và randomize navigator properties
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
+        "source": STEALTH_INJECTION_SCRIPT
     })
 
     try:
@@ -1598,6 +1848,12 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 # ---- Kiểm tra rate limit ----
                 handle_rate_limit(driver, p_name)
 
+                # ---- Kiểm tra RAM (Memory Circuit Breaker) ----
+                used_percent, available_mb = check_system_memory()
+                if used_percent >= MEMORY_LIMIT_PERCENT or available_mb <= MEMORY_AVAILABLE_MIN:
+                    log_thread(p_name, f"[⚠️] RAM cao: {used_percent:.1f}% used, {available_mb:.0f}MB available - đang chờ...")
+                    wait_for_memory()
+
                 # ---- Kiểm tra đổi server ----
                 switch_mins = CONFIG_DELAY.get("switch_server_minutes", 0)
                 if switch_mins > 0 and (time.time() - last_server_switch_time) > switch_mins * 60:
@@ -1648,7 +1904,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                 try:
                                     nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                     driver.execute_script("arguments[0].click();", nv)
-                                    sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
+                                    sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                                     
                                     fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                     driver.execute_script("arguments[0].click();", fb_btn)
@@ -1657,7 +1913,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                 
                                 log_thread(p_name, "⏳ Bắt đầu nghỉ ngơi 30 giây nguội máy...")
                                 failed_load_count = 0 # Reset bộ đếm
-                                smart_sleep(CONFIG_DELAY.get("sleep_on_reset", 30))
+                                smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_reset", 30), variance=0.15))
                                 continue
                     except: pass
 
@@ -1668,20 +1924,20 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                         try:
                             nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                             driver.execute_script("arguments[0].click();", nv)
-                            sleep(CONFIG_DELAY.get("delay_after_reset_click", 3.5))
+                            sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                             driver.execute_script("arguments[0].click();", fb_btn)
                             log_thread(p_name, "✅ Reset trang xong. Đang chờ 5 phút nguội hệ thống...")
                         except Exception as e:
                             log_thread(p_name, f"❌ Lỗi khi tự động Reset: {e}")
-                        smart_sleep(CONFIG_DELAY.get("sleep_on_cool_down", 300))
+                        smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_cool_down", 300), variance=0.1))
                         continue
 
                     log_thread(p_name, f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
                     try:
                         reload = driver.find_element(By.CSS_SELECTOR, "button.loader-new")
                         driver.execute_script("arguments[0].click();", reload)
-                        sleep(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12))
+                        sleep(smart_random_delay(CONFIG_DELAY.get("delay_on_job_hunt_retry", 12), variance=0.2))
                     except: pass
                     continue
 
@@ -1723,18 +1979,18 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 uid = getidpost(fb_url)
                 ok = False
                 if uid and uid != "0":
-                    sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+                    sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_report_error", 1.5), variance=0.2))
                     try:
                         if j_t == "follow":
-                            res = Fb.FOLLOW(uid)
+                            res = throttled_api_call(Fb, "FOLLOW", uid)
                             ok = res.get("success", False)
                             log_thread(p_name, f"API Follow: {res}")
                         elif j_t == "lik_page":
-                            res = Fb.LIKE_PAGE(uid)
+                            res = throttled_api_call(Fb, "LIKE_PAGE", uid)
                             ok = res.get("success", False)
                             log_thread(p_name, f"API LikePage: {res}")
                         elif j_t in ["like", "love", "haha", "wow", "sad", "angry", "care"]:
-                            res = Fb.REACTION(j_t.upper(), uid)
+                            res = throttled_api_call(Fb, "REACTION", j_t.upper(), uid)
                             ok = res.get("success", False)
                             log_thread(p_name, f"API Reaction ({j_t}): {res}")
                         else:
@@ -1743,28 +1999,34 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                         log_thread(p_name, f"❌ Lỗi API tương tác: {api_e}")
                 else:
                     log_thread(p_name, f"⚠️ Không trích xuất được UID từ Link: {fb_url}")
-                
+
                 need_skip = not ok
-                sleep(CONFIG_DELAY.get("delay_after_api_call", 3.5))
+                sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_api_call", 3.5), variance=0.2))
                 if ok:
                     try:
                         ht = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
                         driver.execute_script("arguments[0].click();", ht)
-                        sleep(CONFIG_DELAY.get("delay_after_complete", 4))
+                        sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_complete", 4), variance=0.2))
                         try:
                             tp = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
                             cp = driver.find_element(By.ID, "swal2-content").text
                             log_thread(p_name, f"GoLike: [{tp}] {cp}")
                             # Kiểm tra rate limit từ popup
                             popup_text = f"{tp} {cp}".lower()
+                            rate_limit_detected = False
                             for kw in RATE_LIMIT_KEYWORDS:
                                 if kw in popup_text:
-                                    log_thread(p_name, f"⚠️ Rate limit: '{kw}' — tạm nghỉ 10s...")
-                                    ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                                    driver.execute_script("arguments[0].click();", ok_c)
-                                    sleep(1)
-                                    handle_rate_limit(driver, p_name)
+                                    log_thread(p_name, f"⚠️ Rate limit: '{kw}' — đang xử lý...")
+                                    rate_limit_detected = True
                                     break
+
+                            if rate_limit_detected:
+                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                driver.execute_script("arguments[0].click();", ok_c)
+                                sleep(1)
+                                handle_rate_limit(driver, p_name)
+                                # After handling rate limit, continue to next job scan
+                                need_skip = True
                             else:
                                 ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
                                 driver.execute_script("arguments[0].click();", ok_c)
@@ -1806,7 +2068,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     send_tg_notify(tg_msg)
                     log_thread(p_name, "[⚠️] Đã đạt giới hạn 100 jobs/ngày. Dừng luồng.")
                     break
-                smart_sleep(CONFIG_DELAY.get("delay_between_jobs", 10))
+                smart_sleep(smart_random_delay(CONFIG_DELAY.get("delay_between_jobs", 10)))
             except Exception as ex:
                 log_thread(p_name, f"Lỗi chu kỳ: {ex}")
                 sleep(5)

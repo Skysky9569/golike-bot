@@ -1,6 +1,6 @@
 {
-  "version": "1.10.1",
+  "version": "1.10.2",
   "release_date": "2026-05-24",
-  "changelog": "v1.10.1: Fix regex tim doc_id tu JS (FB escape URL) va ho tro truyen doc_id thu cong\n- Sua regex `https:\\/\\/static...` do FB tra ve html bi escape -> Truoc do quet duoc 0 file JS dan toi dung fallback\n- Tra lai tham so doc_id='null' cho Fb.REACTION va build_REACTION cho phep truyen doc_id cung neu muon",
-  "previous_version": "1.10.0"
+  "changelog": "v1.10.2 - Magic Anti-Detection Suite: Random toàn bộ fingerprint (User-Agent, Platform, Viewport) mỗi lần chạy Chrome, inject stealth script để conceal navigator.webdriver/plugins/languages/platform, tránh bị Facebook correlate multi-accounts",
+  "previous_version": "1.10.1"
 }
