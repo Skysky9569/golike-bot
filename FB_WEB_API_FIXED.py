@@ -174,35 +174,20 @@ class GenData:
         self.request_counter = 0
     
     def build_REACTION(self, reaction: str, ID_POST: str, doc_id: str = 'null') -> Dict[str, Any]:
-        self.request_counter += 1
-        reaction_id_map = {
-            'LIKE':  1635855486666999,
-            'LOVE':  1678524932434102,
-            'CARE':  613557422527858,
-            'HAHA':  115940658764963,
-            'WOW':   478547315650144,
-            'SAD':   908563459236466,
-            'ANGRY': 444813342392137,
-        }
-        reaction_id_ = reaction_id_map.get(reaction)
-        if reaction_id_ is None:
-            return {'err': 'Không Thể Sử Dụng Loại Cảm Xúc Này'}
-
-        s = 'feedback:' + str(ID_POST)
-        feedback_id_b64 = base64.b64encode(s.encode('utf-8')).decode('utf-8')
-        _ts = int(time.time() * 1000)
-        _rand = random.randint(100000, 999999)
-        _attr = f'CometHomeRoot.react,comet.home,via_cold_start,{_ts},{_rand},4748854339,,'
-
-        # Nếu truyền doc_id thì dùng, ngược lại lấy từ session
-        if doc_id != 'null':
-            used_doc_id = doc_id
+        if doc_id == 'null':
+            self.docid = '24198888476452283'
         else:
-            used_doc_id = getattr(self.session, 'reaction_doc_id', None) or 'null'
+            self.docid = doc_id
+        self.request_counter += 1
+        reaction_id_list = [1635855486666999,1678524932434102,613557422527858,115940658764963,478547315650144,908563459236466,444813342392137,'ERR']
+        reaction_id_= reaction_id_list[0] if reaction == "LIKE" else reaction_id_list[1] if reaction == "LOVE" else reaction_id_list[2] if reaction == 'CARE' else  reaction_id_list[3] if reaction  == 'HAHA' else reaction_id_list[4] if reaction == 'WOW' else reaction_id_list[5] if reaction == 'SAD' else reaction_id_list[6] if reaction == 'ANGRY' else reaction_id_list[7]
+        if reaction_id_ == "ERR" :
+            return {'err' : 'Không Thể Sử Dụng Loại Cảm Xúc Này'}
 
-        # Gửi form-encoded data= với doc_id — cách Facebook bắt buộc yêu cầu
+        s = "feedback:"+str(ID_POST)
+        self.idpost = base64.b64encode(s.encode("utf-8")).decode("utf-8")
         payload = {
-            'av': self.session.user_id,
+           'av': self.session.user_id,
             '__user': self.session.user_id,
             '__req': NumberEncoder.to_base36(self.request_counter),
             '__rev': self.session.revision,
@@ -213,22 +198,8 @@ class GenData:
             'fb_api_caller_class': 'RelayModern',
             'fb_api_req_friendly_name': 'CometUFIFeedbackReactMutation',
             'server_timestamps': 'true',
-            'variables': json.dumps({
-                'input': {
-                    'attribution_id_v2': _attr,
-                    'feedback_id': feedback_id_b64,
-                    'feedback_reaction_id': str(reaction_id_),
-                    'feedback_source': 'NEWS_FEED',
-                    'is_tracking_encrypted': True,
-                    'tracking': [],
-                    'session_id': str(uuid.uuid4()),
-                    'actor_id': self.session.user_id,
-                    'client_mutation_id': '1',
-                },
-                'useDefaultActor': False,
-                '__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider': False,
-            }, separators=(',', ':')),
-            'doc_id': used_doc_id,
+            'variables': '{"input":{"attribution_id_v2":"CometHomeRoot.react,comet.home,via_cold_start,1765901136948,422377,4748854339,,","feedback_id":"'+self.idpost+'","feedback_reaction_id":"'+str(reaction_id_)+'","feedback_source":"NEWS_FEED","is_tracking_encrypted":true,"tracking":[],"session_id":"'+str(uuid.uuid4())+'","actor_id":"'+self.session.user_id+'","client_mutation_id":"1"},"useDefaultActor":false,"__relay_internal__pv__CometUFIReactionsEnableShortNamerelayprovider":false}',
+            'doc_id': self.docid,
         }
         return payload
 

@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [v1.10.2] - 2026-05-24
+
+### Sửa Lỗi (Fixed)
+- **Fix Single Mode không tự chọn được account**:
+  - Sự cố: Khi chạy chế độ đơn lẻ (Sequential Single Mode), tool yêu cầu nhập UID Facebook nhưng dropdown GoLike hiển thị GoLike UID (`i_user`) thay vì Facebook UID (`c_user`) → Không match được, bắt user phải chọn số thủ công.
+  - Đã sửa: Tự động extract cả `i_user` (GoLike UID) và `c_user` (Facebook UID) từ cookie khi nhập, tool match đúng UID hiển thị trong dropdown GoLike.
+
+### Cải Thiện (Enhanced)
+- **Thêm config file riêng cho Single Mode** (`single_mode_accounts.json`):
+  - Lưu trữ rõ ràng: `profile_name`, `cookie`, `golike_uid` (i_user), `facebook_uid` (c_user)
+  - Hỗ trợ 2 cách quản lý: sửa file config hoặc nhập từ tool
+  - Fallback về `multi_accounts.json` (format cũ) để tương thích ngược
+- **Tự động phát hiện UID khi nhập cookie**:
+  - Tool tự extract `i_user` và hiển thị, user có thể ấn Enter để dùng UID tự động
+  - Yêu cầu nhập `profile_name` để dễ nhận biết account
+
 ## [v1.10.1] - 2026-05-24
 
 ### Sửa Lỗi (Fixed)

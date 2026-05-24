@@ -5,6 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from typing import Optional
 import webdriver_manager
 from webdriver_manager.chrome import ChromeDriverManager
 import time
@@ -1101,22 +1102,64 @@ def get_golike_credentials():
     return username, password
 
 
+def parse_golike_uid_from_cookie(cookie_str: str) -> Optional[str]:
+    """Extract GoLike UID (i_user) from cookie string."""
+    import re
+    match = re.search(r'i_user=(\d+)', cookie_str)
+    if match:
+        return match.group(1)
+    match = re.search(r'c_user=(\d+)', cookie_str)
+    return match.group(1) if match else None
+
+def parse_facebook_uid_from_cookie(cookie_str: str) -> Optional[str]:
+    """Extract Facebook UID (c_user) from cookie string."""
+    import re
+    match = re.search(r'c_user=(\d+)', cookie_str)
+    return match.group(1) if match else None
+
+def extract_fb_name_from_config(profile_name: str) -> str:
+    """Return profile name directly (already extracted)."""
+    return profile_name if profile_name else ""
+
 def setup_multi_accounts():
     import os, json
-    file_path = "multi_accounts.json"
-    if os.path.exists(file_path):
+    # Ưu tiên file mới, fallback về file cũ
+    file_path_new = "single_mode_accounts.json"
+    file_path_old = "multi_accounts.json"
+
+    # Thử load file mới trước
+    if os.path.exists(file_path_new):
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path_new, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            accounts_list = data.get("accounts", [])
+            if accounts_list:
+                print("\n--- TÌM THẤY DANH SÁCH TÀI KHOẢN ĐÃ LƯU (single_mode_accounts.json) ---")
+                for i, acc in enumerate(accounts_list, 1):
+                    name = acc.get("profile_name", f"Acc {i}")
+                    golike_uid = acc.get("golike_uid", acc.get("uid", "N/A"))
+                    print(f"{i}. {name} | GoLike UID: {golike_uid}")
+                ans = input("Bạn có muốn chạy danh sách này không? (y/n): ").strip().lower()
+                if ans in ['y', 'yes', '']:
+                    # Chuyển về format đơn giản cho tool xử lý
+                    return [{"cookie": a.get("cookie"), "uid": a.get("golike_uid") or a.get("uid")} for a in accounts_list]
+        except Exception as e:
+            print(f"[!] Lỗi khi load file config: {e}")
+
+    # Fallback về file cũ nếu file mới không có
+    if os.path.exists(file_path_old):
+        try:
+            with open(file_path_old, "r", encoding="utf-8") as f:
                 accounts = json.load(f)
             if accounts and isinstance(accounts, list):
-                print("\n--- TÌM THẤY DANH SÁCH TÀI KHOẢN ĐÃ LƯU ---")
+                print("\n--- TÌM THẤY DANH SÁCH TÀI KHOẢN ĐÃ LƯU (multi_accounts.json) ---")
                 for i, acc in enumerate(accounts, 1):
                     print(f"{i}. UID: {acc.get('uid', 'N/A')}")
                 ans = input("Bạn có muốn chạy danh sách này không? (y/n): ").strip().lower()
                 if ans in ['y', 'yes', '']:
                     return accounts
         except: pass
-        
+
     print("\n--- NHẬP DANH SÁCH TÀI KHOẢN MỚI ---")
     print("Nhấn Enter để trống tại phần nhập Cookie khi bạn muốn kết thúc.")
     accounts = []
@@ -1125,16 +1168,44 @@ def setup_multi_accounts():
         c = input(f"Nhập Cookie cho Acc {idx}: ").strip()
         if not c:
             break
-        u = input(f"Nhập UID cho Acc {idx}: ").strip()
-        accounts.append({"cookie": c, "uid": u})
+
+        # Tự động extract GoLike UID (i_user) từ cookie
+        auto_uid = parse_golike_uid_from_cookie(c)
+        if auto_uid:
+            print(f"   ✓ Tự động phát hiện GoLike UID: {auto_uid}")
+
+        u = input(f"Nhập UID cho Acc {idx} (Enter để tự động: {auto_uid or 'N/A'}): ").strip()
+
+        # Dùng UID tự động nếu user để trống
+        if not u and auto_uid:
+            u = auto_uid
+
+        # Yêu cầu nhập tên profile
+        pname = input(f"   Tên mô tả cho Acc {idx} (ví dụ: Acc chính): ").strip() or f"Acc {idx}"
+
+        accounts.append({"profile_name": pname, "cookie": c, "uid": u, "golike_uid": u})
         idx += 1
-        
+
     if accounts:
+        # Lưu vào file mới với format đầy đủ
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(accounts, f, indent=4)
-        except: pass
-            
+            config_data = {
+                "accounts": [
+                    {
+                        "profile_name": a.get("profile_name", f"Acc {i}"),
+                        "cookie": a.get("cookie"),
+                        "golike_uid": a.get("golike_uid") or a.get("uid"),
+                        "facebook_uid": parse_facebook_uid_from_cookie(a.get("cookie", "")) or "N/A"
+                    }
+                    for i, a in enumerate(accounts, 1)
+                ]
+            }
+            with open(file_path_new, "w", encoding="utf-8") as f:
+                json.dump(config_data, f, indent=4, ensure_ascii=False)
+            print(f"\n[✓] Đã lưu config vào {file_path_new}")
+        except Exception as e:
+            print(f"\n[!] Lỗi khi lưu config: {e}")
+
     return accounts
 
 def run_single_mode():
@@ -1158,7 +1229,8 @@ def run_single_mode():
             return
     else:
         cookie_fb = load_cookie()
-        accounts_list = [{"cookie": cookie_fb, "uid": None}]
+        uid_fb = parse_golike_uid_from_cookie(cookie_fb) or None
+        accounts_list = [{"cookie": cookie_fb, "uid": uid_fb}]
 
     # Hoi proxy
     default_proxy = CONFIG_DELAY.get("default_proxy", "")
