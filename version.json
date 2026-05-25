@@ -1,6 +1,6 @@
 {
-  "version": "1.10.6",
+  "version": "1.10.7",
   "release_date": "2026-05-25",
-  "changelog": "v1.10.6 - Đại tu hệ thống Anti-Detect: Tích hợp hàm mô phỏng thao tác click người thật (Random offset + ActionChains). Khóa triệt để rò rỉ WebRTC qua Proxy. Tiêm mã CDP làm nhiễu thông số WebGL và Canvas Fingerprint nhằm chống nhận diện thiết bị.",
-  "previous_version": "1.10.5"
+  "changelog": "v1.10.7 - Sửa lỗi Crash hệ thống (văng ra menu) khi mạng yếu hoặc Golike tải quá chậm sau khi giải Captcha thành công. Sửa lỗi kẹt lệnh đệ quy trong module human_click.",
+  "previous_version": "1.10.6"
 }

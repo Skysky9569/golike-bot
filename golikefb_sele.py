@@ -88,11 +88,9 @@ def human_click(driver, element):
     except Exception:
         # Fallback to JS click if element not interactable or out of bounds
         try:
-            human_click(driver, element)
+            driver.execute_script("arguments[0].click();", element)
         except:
             pass
-
-
 # ================= MEMORY CIRCUIT BREAKER =================
 MEMORY_LIMIT_PERCENT = 90  # Ngưỡng RAM % tối đa
 MEMORY_AVAILABLE_MIN = 1000  # RAM tối thiểu cần giữ (MB)
@@ -1717,14 +1715,23 @@ def run_single_mode():
         if not handle_2captcha_captcha(driver, "https://app.golike.net/login", is_parallel=False):
             input("\n👉 Vui lòng tự giải Captcha trên màn hình trình duyệt (nếu có).\nSau khi giải xong, ấn phím [ENTER] tại đây để tiếp tục...")
         else:
-            sleep(2)
+            sleep(3)
 
-        nhiemvu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
-        human_click(driver, nhiemvu)
-        
-        fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
-        human_click(driver, fb_btn)
-        sleep(3)
+        try:
+            nhiemvu = WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+            human_click(driver, nhiemvu)
+            
+            fb_btn = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+            human_click(driver, fb_btn)
+            sleep(3)
+        except TimeoutException:
+            print("❌ Lỗi: Chờ trang Nhiệm vụ load quá lâu sau khi đăng nhập. Có thể mạng chậm hoặc Golike đang lag.")
+            driver.quit()
+            return
+        except Exception as e:
+            print(f"❌ Lỗi khởi tạo trang Nhiệm vụ: {e}")
+            driver.quit()
+            return
 
         prev_max_job = False  # Flag: acc trước bị MAX_JOB
         current_account_index = 0  # Chỉ số tài khoản hiện tại
@@ -2412,6 +2419,11 @@ def setup_bot_profile(profile_data, idx, global_2captcha_api_key=None):
         print(f"✅ Đã thiết lập thành công tài khoản [{p_name}]!")
         return driver, Fb
         
+    except TimeoutException:
+        print(f"❌ Lỗi [{p_name}]: Chờ tải trang hoặc tìm tài khoản quá lâu (Timeout).")
+        try: driver.quit()
+        except: pass
+        return None, None
     except Exception as e:
         print(f"❌ Lỗi trong quá trình Setup tài khoản [{p_name}]: {e}")
         try: driver.quit()
