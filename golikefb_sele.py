@@ -1857,12 +1857,12 @@ def run_single_mode():
 
                     # Thực hiện việc báo lỗi để chuyển tài khoản
                     try:
-                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')][1]")))
                         human_click(driver, bl)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
 
                         lydo = "Báo cáo hoàn thành thất bại"
-                        c_lydo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row')][.//h6[contains(text(), '{lydo}')]]")
+                        c_lydo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{lydo}')]/ancestor::div[contains(@class, 'row')][1]")
                         human_click(driver, c_lydo)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
 
@@ -2155,7 +2155,7 @@ def run_single_mode():
                         if need_skip:
                             print("🚨 Bắt đầu Báo lỗi...")
                             try:
-                                bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
+                                bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')][1]")))
                                 human_click(driver, bl)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
 
@@ -2163,7 +2163,7 @@ def run_single_mode():
                                 if not uid or uid == "0": lydo = "Không tìm thấy bài viết"
                                 else: lydo = "Báo cáo hoàn thành thất bại"
 
-                                c_lydo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row')][.//h6[contains(text(), '{lydo}')]]")
+                                c_lydo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{lydo}')]/ancestor::div[contains(@class, 'row')][1]")
                                 human_click(driver, c_lydo)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
 
@@ -2678,12 +2678,12 @@ def run_bot_loop(driver, Fb, profile_data, idx):
 
                 if need_skip:
                     try:
-                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'row')][.//h6[contains(text(), 'Báo lỗi')]]")))
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')][1]")))
                         human_click(driver, bl)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                         ldo = "Báo cáo hoàn thành thất bại"
                         if not uid or uid == "0": ldo = "Không tìm thấy bài viết"
-                        c_ldo = driver.find_element(By.XPATH, f"//div[contains(@class, 'row')][.//h6[contains(text(), '{ldo}')]]")
+                        c_ldo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{ldo}')]/ancestor::div[contains(@class, 'row')][1]")
                         human_click(driver, c_ldo)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
                         gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
