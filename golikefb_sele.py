@@ -1427,7 +1427,19 @@ def getidpost(lk: str):
         
     return "0"
 
+def close_da_hieu_popup(driver):
+    try:
+        btns = driver.find_elements(By.XPATH, "//button[contains(text(), 'Đã hiểu')]")
+        for btn in btns:
+            if btn.is_displayed() and btn.is_enabled():
+                human_click(driver, btn)
+                print("Đã đóng popup [Đã hiểu] chặn màn hình")
+                sleep(1)
+    except:
+        pass
+
 def click_home_navigation(driver):
+    close_da_hieu_popup(driver)
     try:
         home = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[1]')))
         human_click(driver, home)
@@ -1435,6 +1447,7 @@ def click_home_navigation(driver):
         print(f"Lỗi click Trang chủ: {e}")
 
 def click_kiem_xu_navigation(driver):
+    close_da_hieu_popup(driver)
     try:
         nhiemvu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
         human_click(driver, nhiemvu)
@@ -1972,8 +1985,7 @@ def run_single_mode():
                                         
                                         print("🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
                                         try:
-                                            nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
-                                            human_click(driver, nv)
+                                            click_kiem_xu_navigation(driver)
                                             sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                                             
                                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
@@ -2008,8 +2020,7 @@ def run_single_mode():
                                 
                                 print("🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
                                 try:
-                                    nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
-                                    human_click(driver, nv)
+                                    click_kiem_xu_navigation(driver)
                                     sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                                     
                                     fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
@@ -2526,8 +2537,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                 
                                 log_thread(p_name, "🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
                                 try:
-                                    nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
-                                    human_click(driver, nv)
+                                    click_kiem_xu_navigation(driver)
                                     sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                                     
                                     fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
@@ -2554,8 +2564,7 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                         
                         log_thread(p_name, "🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
                         try:
-                            nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
-                            human_click(driver, nv)
+                            click_kiem_xu_navigation(driver)
                             sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
                             
                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
