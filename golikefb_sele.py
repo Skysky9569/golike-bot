@@ -385,8 +385,11 @@ def handle_2captcha_captcha(driver, page_url, api_key=None, is_parallel=False):
     print(f"   URL: {page_url}")
     print(f"{'='*60}")
 
-    # Hỏi user có muốn dùng 2Captcha không
-    if api_key is None:
+    # Ưu tiên lấy API key từ CONFIG_DELAY nếu api_key là None hoặc trống
+    if not api_key:
+        api_key = CONFIG_DELAY.get("2captcha_api_key", "").strip()
+
+    if not api_key:
         use_2captcha = input("\n【2Captcha】Có muốn dùng 2Captcha API để giải captcha không? (y/n): ").strip().lower()
         if use_2captcha not in ['y', 'yes', '']:
             print("[Captcha] Chuyển sang mode manual. Vui lòng giải captcha thủ công.")
@@ -396,8 +399,11 @@ def handle_2captcha_captcha(driver, page_url, api_key=None, is_parallel=False):
         if not api_key:
             print("[Captcha] Không có API key. Chuyển manual.")
             return False
-    else:
-        print(f"[2Captcha] Đang giải reCAPTCHA v2 tự động...")
+        
+        # Save tạm để không hỏi lại (muốn lưu cứng thì user tự vào setup config)
+        CONFIG_DELAY["2captcha_api_key"] = api_key
+    
+    print(f"[2Captcha] Đang giải reCAPTCHA v2 tự động...")
 
     # Solve captcha với retry logic
     max_retries = 3
@@ -592,10 +598,13 @@ def job_limit_reached(driver):
         popup_contents = driver.find_elements(By.CSS_SELECTOR, "div#swal2-content")
         
         full_text = ""
-        for t in popup_titles:
-            if t.is_displayed(): full_text += t.text.lower() + " "
-        for c in popup_contents:
-            if c.is_displayed(): full_text += c.text.lower() + " "
+        try:
+            for t in popup_titles:
+                if t.is_displayed(): full_text += t.text.lower() + " "
+            for c in popup_contents:
+                if c.is_displayed(): full_text += c.text.lower() + " "
+        except Exception:
+            pass # Ignore stale elements or DOM changes during check
 
         # Check SV2 pattern: số job hôm này X
         job_match = re.search(r"số job hôm này\s*(\d+)", full_text)
@@ -618,7 +627,9 @@ def job_limit_reached(driver):
             return True
 
     except Exception as e:
-        print(f'[ERROR] Lỗi kiểm tra job limit: {type(e).__name__}: {e}')
+        # Bỏ qua lỗi DOM refresh
+        if "StaleElementReference" not in type(e).__name__ and "stale element" not in str(e).lower():
+            print(f'[ERROR] Lỗi kiểm tra job limit: {type(e).__name__}: {e}')
 
     return False
 
@@ -880,14 +891,14 @@ def handle_exit_signal(signum, frame):
         if user_input == 'exit':
             print("[✅] Đang đóng trình duyệt và thoát chương trình...")
             cleanup()
-            sys.exit(0)
+            os._exit(0)
         else:  # 'm' hoặc bất kỳ phím nào khác
             print("[🔴] Đang đóng trình duyệt...")
             cleanup()
             print("[✓] Đang trở về menu chính...")
     except (EOFError, KeyboardInterrupt):
         cleanup()
-        sys.exit(0)
+        os._exit(0)
 
     STOP_FLAG = True
     raise KeyboardInterrupt
@@ -1069,6 +1080,7 @@ def load_delay_config(filepath: str = "config_golike_sele.json"):
         "delay_after_reset_click": 3.5,
         "sleep_on_hunt_retry": 10,
         "switch_server_minutes": 0,
+        "max_job_hunt_fail": 3,
         "default_proxy": ""
     }
 
@@ -1096,22 +1108,24 @@ def send_tg_notify(message: str):
         if not CONFIG_DELAY.get("telegram_enabled", False):
             return
 
-    # Lấy token từ env var, fallback vào config (sau khi resolve placeholder)
-    token = os.getenv('TELEGRAM_BOT_TOKEN', '')
-    if not token:
-        cfg_token = CONFIG_DELAY.get("telegram_bot_token", "")
-        # Nếu là placeholder ${VAR}, lấy từ env
-        if cfg_token.startswith('${') and cfg_token.endswith('}'):
-            token = os.getenv(cfg_token[2:-1], "")
-        else:
-            token = cfg_token
+    # Ưu tiên lấy token từ config trước
+    token = CONFIG_DELAY.get("telegram_bot_token", "").strip()
+    if token.startswith('${') and token.endswith('}'):
+        token = os.getenv(token[2:-1], "").strip()
+        
+    if not token or token == "your_bot_token_here":
+        token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
+        if token == "your_bot_token_here":
+            token = ""
 
     if not token:
         return
 
-    chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
-    if not chat_id:
-        chat_id = CONFIG_DELAY.get("telegram_chat_id", "")
+    chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
+    if not chat_id or chat_id == "your_chat_id_here":
+        chat_id = os.getenv('TELEGRAM_CHAT_ID', '').strip()
+        if chat_id == "your_chat_id_here":
+            chat_id = ""
 
     if not chat_id:
         return
@@ -1127,58 +1141,33 @@ def setup_telegram_notify():
     """Hỏi user có muốn nhận thông báo Telegram không, và cấu hình chat_id."""
     config_path = os.path.join(SCRIPT_DIR, "config_golike_sele.json")
 
-    # Ưu tiên env var, fallback vào config
-    token = os.getenv('TELEGRAM_BOT_TOKEN', '')
-    if not token:
-        cfg_token = CONFIG_DELAY.get("telegram_bot_token", "")
-        if cfg_token.startswith('${') and cfg_token.endswith('}'):
-            token = os.getenv(cfg_token[2:-1], '')
-        else:
-            token = cfg_token
+    # Ưu tiên lấy token từ config trước
+    token = CONFIG_DELAY.get("telegram_bot_token", "").strip()
+    if token.startswith('${') and token.endswith('}'):
+        token = os.getenv(token[2:-1], "").strip()
+        
+    if not token or token == "your_bot_token_here":
+        token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
+        if token == "your_bot_token_here":
+            token = ""
 
-    if not token:
-        # Hướng dẫn user cách setup
-        print("\n[!] Chua co bot token. Day phil set trong .env file:")
-        print("    TELEGRAM_BOT_TOKEN=your_bot_token")
-        print("    TELEGRAM_CHAT_ID=your_chat_id")
-        return  # Không có bot token thì bỏ qua
-
-    # Lấy chat_id từ env hoặc config
-    saved_chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
-    if not saved_chat_id:
-        saved_chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
+    saved_chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
+    if not saved_chat_id or saved_chat_id == "your_chat_id_here":
+        saved_chat_id = os.getenv('TELEGRAM_CHAT_ID', '').strip()
+        if saved_chat_id == "your_chat_id_here":
+            saved_chat_id = ""
 
     was_enabled   = os.getenv('TELEGRAM_ENABLED', '').lower() in ('true', '1', 'yes')
     if not was_enabled:
         was_enabled = CONFIG_DELAY.get("telegram_enabled", False)
 
-    print("\n" + "─"*55)
-    print("🔔  CẤU HÌNH THÔNG BÁO TELEGRAM")
-    print("─"*55)
-    ans = input("Bạn có muốn nhận thông báo từ Telegram bot không? (y/n): ").strip().lower()
-
-    if ans not in ["y", "yes", ""]:
+    if not token or not saved_chat_id:
         CONFIG_DELAY["telegram_enabled"] = False
-        print("[✓] Đã tắt thông báo Telegram.")
-        _save_tg_config(config_path)
         return
 
-    # Hỏi dùng chat_id cũ hay nhập mới
-    if saved_chat_id:
-        print(f"[*] Chat ID đã lưu: {saved_chat_id}")
-        reuse = input("Dùng ID cũ (Enter/y) hay nhập ID mới (n)? ").strip().lower()
-        if reuse in ["n", "no"]:
-            saved_chat_id = input("👉 Nhập Chat ID mới: ").strip()
-    else:
-        print("[*] Chưa có Chat ID nào được lưu.")
-        saved_chat_id = input("👉 Nhập Chat ID của bạn: ").strip()
-
-    if not saved_chat_id:
-        print("[!] Không nhập Chat ID, bỏ qua cấu hình Telegram.")
-        return
-
-    # Gửi tin nhắn test
-    print("[*] Đang gửi tin nhắn kiểm tra...")
+    print("\n" + "─"*55)
+    print("🔔  ĐANG KIỂM TRA KẾT NỐI TELEGRAM BOT...")
+    
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         r = requests.post(url, json={
@@ -1187,28 +1176,22 @@ def setup_telegram_notify():
             "parse_mode": "HTML"
         }, timeout=10)
         if r.status_code == 200:
-            print("[✅] Gửi thành công! Bot Telegram đã hoạt động.")
-            # Lưu config (không lưu token vì đã dùng env var)
+            print("[✅] Bot Telegram đã kết nối thành công và sẵn sàng gửi thông báo.")
             CONFIG_DELAY["telegram_enabled"] = True
-            CONFIG_DELAY["telegram_chat_id"] = saved_chat_id
             _save_tg_config(config_path)
         else:
-            print(f"[❌] Gửi thất bại (HTTP {r.status_code}). Kiểm tra lại Chat ID.")
+            print(f"[❌] Gửi tin test thất bại (HTTP {r.status_code}). Vui lòng kiểm tra lại Chat ID và Bot Token trong Menu Config.")
             CONFIG_DELAY["telegram_enabled"] = False
     except Exception as ex:
-        print(f"[❌] Lỗi kết nối: {ex}")
-        CONFIG_DELAY["telegram_enabled"] = False
         print(f"[❌] Lỗi kết nối Telegram: {ex}")
         CONFIG_DELAY["telegram_enabled"] = False
+    print("─"*55)
 
 
 def _save_tg_config(config_path: str):
     """Lưu lại config_golike_sele.json sau khi cập nhật telegram settings."""
     try:
-        # Xóa sensitive data trước khi lưu để tránh commit
         config_to_save = CONFIG_DELAY.copy()
-        config_to_save.pop('telegram_bot_token', None)
-        config_to_save.pop('telegram_chat_id', None)
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config_to_save, f, indent=2, ensure_ascii=False)
     except Exception:
@@ -1246,6 +1229,7 @@ def show_config_summary():
         ("delay_after_reset_click",  "Delay click khi reset"),
         ("sleep_on_hunt_retry",      "Sleep khi retry hunt job"),
         ("switch_server_minutes",    "Tự động đổi server"),
+        ("max_job_hunt_fail",        "Số lần hụt Job thì đổi Acc"),
     ]
 
     for i, (key, label) in enumerate(delay_keys):
@@ -1254,12 +1238,15 @@ def show_config_summary():
 
         if key == "sleep_on_cool_down" and val:
             suffix = f"  ({round(val / 60, 1)} phút)"
-        elif key == "switch_server_minutes":
+        elif key in ["switch_server_minutes", "max_job_hunt_fail"]:
             suffix = "  (tắt)" if val == 0 else ""
         else:
             suffix = ""
 
-        unit = " phút" if key == "switch_server_minutes" else "s"
+        if key == "switch_server_minutes": unit = " phút"
+        elif key == "max_job_hunt_fail": unit = " lần"
+        else: unit = "s"
+        
         print(f"    {color}{label + ' ':.<40s}{C_RESET} {C_YELLOW}{val}{unit}{suffix}{C_RESET}")
 
     # ── Nhóm Proxy ────────────────────────────────────────────────
@@ -1267,6 +1254,12 @@ def show_config_summary():
     proxy_val = CONFIG_DELAY.get("default_proxy", "")
     proxy_display = proxy_val if proxy_val else "(không đặt)"
     print(f"    {C_MAGENTA}{'Default proxy':.<40s}{C_RESET} {C_YELLOW}{proxy_display}{C_RESET}")
+    
+    # ── Nhóm Mở rộng ────────────────────────────────────────────────
+    print(f"\n  {C_BOLD}🔌 MỞ RỘNG (API/TELEGRAM){C_RESET}")
+    print(f"    {C_MAGENTA}{'Telegram Bot Token':.<40s}{C_RESET} {C_YELLOW}{CONFIG_DELAY.get('telegram_bot_token', '(không đặt)')}{C_RESET}")
+    print(f"    {C_MAGENTA}{'Telegram Chat ID':.<40s}{C_RESET} {C_YELLOW}{CONFIG_DELAY.get('telegram_chat_id', '(không đặt)')}{C_RESET}")
+    print(f"    {C_MAGENTA}{'2Captcha API Key':.<40s}{C_RESET} {C_YELLOW}{CONFIG_DELAY.get('2captcha_api_key', '(không đặt)')}{C_RESET}")
     print("─" * 55)
 
     ans = input("\n👉 Bạn có muốn thay đổi config không? (Enter để bỏ qua): ").strip().lower()
@@ -1278,37 +1271,65 @@ def setup_delay_config():
     """Menu setup delay lần đầu"""
     config_path = os.path.join(SCRIPT_DIR, "config_golike_sele.json")
 
-    print("\n" + "="*60)
-    print("CẤU HÌNH DELAY CHO GOLIKE FACEBOOK SELENIUM")
-    print("="*60)
-    print(f"[File lưu tại: {os.path.abspath(config_path)}]\n")
-
-    key_names = {
-        "delay_between_jobs": "Delay giữa các job (giây)",
-        "delay_after_api_call": "Delay sau API call (giây)",
-        "delay_after_complete": "Delay sau khi nhấn Hoàn thành (giây)",
-        "delay_after_report_error": "Delay sau khi báo lỗi (giây)",
-        "delay_on_job_hunt_retry": "Delay khi tải lại job (giây)",
-        "delay_between_accounts": "Delay khi đổi acc (giây)",
-        "timeout_driver_load": "Timeout tải driver (giây)",
-        "timeout_wait_element": "Timeout chờ element (giây)",
-        "sleep_on_reset": "Sleep khi reset trang (giây)",
-        "sleep_on_cool_down": "Sleep khi nguội hệ thống (giây)",
-        "delay_after_reset_click": "Delay click khi reset (giây)",
-        "sleep_on_hunt_retry": "Sleep khi retry hunt job (giây)",
-        "switch_server_minutes": "Thời gian tự động đổi Server (phút, 0 để tắt)"
-    }
+    key_names = [
+        ("delay_between_jobs", "Delay giữa các job (giây)", float),
+        ("delay_after_api_call", "Delay sau API call (giây)", float),
+        ("delay_after_complete", "Delay sau khi nhấn Hoàn thành (giây)", float),
+        ("delay_after_report_error", "Delay sau khi báo lỗi (giây)", float),
+        ("delay_on_job_hunt_retry", "Delay khi tải lại job (giây)", float),
+        ("delay_between_accounts", "Delay khi đổi acc (giây)", float),
+        ("timeout_driver_load", "Timeout tải driver (giây)", float),
+        ("timeout_wait_element", "Timeout chờ element (giây)", float),
+        ("sleep_on_reset", "Sleep khi reset trang (giây)", float),
+        ("sleep_on_cool_down", "Sleep khi nguội hệ thống (giây)", float),
+        ("delay_after_reset_click", "Delay click khi reset (giây)", float),
+        ("sleep_on_hunt_retry", "Sleep khi retry hunt job (giây)", float),
+        ("switch_server_minutes", "Thời gian tự động đổi Server (phút, 0 để tắt)", float),
+        ("max_job_hunt_fail", "Số lần hụt Job liên tiếp thì đổi Acc (lần, 0 để tắt)", float),
+        ("telegram_bot_token", "Telegram Bot Token", str),
+        ("telegram_chat_id", "Telegram Chat ID", str),
+        ("2captcha_api_key", "2Captcha API Key (để trống nếu không dùng)", str),
+        ("default_proxy", "Proxy mặc định (VD: IP:PORT:USER:PASS)", str)
+    ]
 
     config = CONFIG_DELAY.copy() if CONFIG_DELAY else {}
 
-    for key, label in key_names.items():
-        default = config.get(key, 10)
-        user_input = input(f"{label} [mặc định: {default}]: ").strip()
-        if user_input:
-            try:
-                config[key] = float(user_input)
-            except ValueError:
-                print(f"[!] Giá trị không hợp lệ, giữ mặc định: {default}")
+    while True:
+        print("\n" + "="*60)
+        print("CẤU HÌNH DELAY CHO GOLIKE FACEBOOK SELENIUM")
+        print("="*60)
+        print(f"[File lưu tại: {os.path.abspath(config_path)}]\n")
+        
+        for i, (key, label, type_func) in enumerate(key_names, 1):
+            val = config.get(key, 10 if type_func == float else "(trống)")
+            print(f"  {i}. {label}: {C_YELLOW}{val}{C_RESET}")
+
+        print("\n  0. Lưu lại và Thoát")
+        
+        choice = input(f"\n👉 Chọn số thứ tự để thay đổi (0-{len(key_names)}, Enter để thoát): ").strip()
+        
+        if not choice or choice == "0":
+            break
+            
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(key_names):
+                key, label, type_func = key_names[idx]
+                current_val = config.get(key, 10 if type_func == float else "")
+                new_val = input(f"Nhập giá trị mới cho '{label}' [hiện tại: {current_val}]: ").strip()
+                if new_val or type_func == str:
+                    try:
+                        if type_func == float and not new_val:
+                            pass
+                        else:
+                            config[key] = type_func(new_val) if new_val else ""
+                            print(f"[✓] Đã cập nhật {key} = {config[key]}")
+                    except ValueError:
+                        print(f"[!] Giá trị không hợp lệ, giữ nguyên: {current_val}")
+            else:
+                print("[!] Lựa chọn không hợp lệ!")
+        except ValueError:
+            print("[!] Lựa chọn không hợp lệ!")
 
     # Lưu file
     try:
@@ -1875,31 +1896,64 @@ def run_single_mode():
                                         except: pass
                                         sleep(2)
                                     
-                                        # Thực hiện Reset: Ấn lại Nhiệm vụ -> Facebook và chờ 30s nguội
-                                        print("🔄 Đang thực hiện làm mới trang: Quay lại Nhiệm vụ -> Facebook...")
+                                        # Thực hiện Reset: Về Trang chủ nghỉ rồi quay lại
+                                        print("🔄 Lỗi tải Job: Đang về Trang Chủ (Home) để nghỉ tạm thời...")
+                                        try:
+                                            home_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[1]')))
+                                            driver.execute_script("arguments[0].click();", home_btn)
+                                        except Exception as err:
+                                            print(f"❌ Lỗi khi về Trang chủ: {err}")
+                                    
+                                        print("⏳ Đang nghỉ ngơi trên Trang Chủ trước khi thử quét tiếp...")
+                                        smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_reset", 30), variance=0.15))
+                                        
+                                        print("🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
                                         try:
                                             nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                             driver.execute_script("arguments[0].click();", nv)
                                             sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
-                                        
+                                            
                                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                             driver.execute_script("arguments[0].click();", fb_btn)
                                         except Exception as err:
-                                            print(f"❌ Lỗi thao tác Reset: {err}")
-                                    
-                                        print("⏳ Nghỉ ngơi 30 giây trước khi thử quét tiếp...")
-                                        smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_reset", 30), variance=0.15))
+                                            print(f"❌ Lỗi quay lại Nhiệm vụ: {err}")
+
                                         failed_load_count = 0 # Reset đếm
                                         continue
                             except: pass
 
                             failed_load_count += 1
-                            # Nếu hụt job quá 3 lần, chuyển sang tài khoản khác mà không bỏ nick
-                            if failed_load_count >= 3:
-                                print(f"\n🚨 CẢNH BÁO: Hụt Job 3 lần liên tiếp! Đang chuyển sang tài khoản khác (chưa xóa khỏi vòng lặp)...")
+                            # Nếu hụt job quá max_job_hunt_fail lần, chuyển sang tài khoản khác mà không bỏ nick
+                            max_job_hunt_fail = int(CONFIG_DELAY.get("max_job_hunt_fail", 3))
+                            if max_job_hunt_fail > 0 and failed_load_count >= max_job_hunt_fail:
+                                print(f"\n🚨 CẢNH BÁO: Hụt Job {max_job_hunt_fail} lần liên tiếp! Đang chuyển sang tài khoản khác (chưa xóa khỏi vòng lặp)...")
                                 failed_load_count = 0
                                 current_account_index += 1
                                 break  # Thoát khỏi vòng lặp lấy job để đổi tài khoản
+
+                            # Giữ cơ chế tự động về Home nghỉ sau mỗi 10 lần hụt job liên tiếp (không reset biến count)
+                            if failed_load_count > 0 and failed_load_count % 10 == 0:
+                                print(f"🚨 ĐÃ HỤT JOB {failed_load_count} LẦN! Đang về TRANG CHỦ nghỉ tạm thời...")
+                                try:
+                                    home_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[1]')))
+                                    driver.execute_script("arguments[0].click();", home_btn)
+                                except Exception as err:
+                                    print(f"❌ Lỗi khi về Trang chủ: {err}")
+                                
+                                print("⏳ Bắt đầu nghỉ ngơi trên Trang Chủ...")
+                                smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_reset", 30), variance=0.15))
+                                
+                                print("🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
+                                try:
+                                    nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+                                    driver.execute_script("arguments[0].click();", nv)
+                                    sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
+                                    
+                                    fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+                                    driver.execute_script("arguments[0].click();", fb_btn)
+                                except Exception as err:
+                                    print(f"❌ Lỗi quay lại Nhiệm vụ: {err}")
+                                continue
                             
                             try:
                                 current_sv_elem = driver.find_element(By.CSS_SELECTOR, "small.d300 span.font-bold")
@@ -2376,7 +2430,17 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                 except: pass
                                 sleep(2)
                                 
-                                log_thread(p_name, "🔄 Tự động Reset trang: Quay lại Nhiệm vụ -> Facebook...")
+                                log_thread(p_name, "🔄 Lỗi tải Job: Đang về Trang Chủ (Home) để nghỉ tạm thời...")
+                                try:
+                                    home_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[1]')))
+                                    driver.execute_script("arguments[0].click();", home_btn)
+                                except Exception as err:
+                                    log_thread(p_name, f"❌ Lỗi khi về Trang chủ: {err}")
+                                
+                                log_thread(p_name, "⏳ Bắt đầu nghỉ ngơi trên Trang Chủ nguội máy...")
+                                smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_reset", 30), variance=0.15))
+                                
+                                log_thread(p_name, "🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
                                 try:
                                     nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                                     driver.execute_script("arguments[0].click();", nv)
@@ -2385,28 +2449,35 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                     fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                                     driver.execute_script("arguments[0].click();", fb_btn)
                                 except Exception as err:
-                                    log_thread(p_name, f"❌ Lỗi khi Reset: {err}")
-                                
-                                log_thread(p_name, "⏳ Bắt đầu nghỉ ngơi 30 giây nguội máy...")
+                                    log_thread(p_name, f"❌ Lỗi quay lại Nhiệm vụ: {err}")
+
                                 failed_load_count = 0 # Reset bộ đếm
-                                smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_reset", 30), variance=0.15))
                                 continue
                     except: pass
 
                     failed_load_count += 1
                     if failed_load_count >= 10:
-                        log_thread(p_name, f"🚨 ĐÃ HỤT JOB {failed_load_count} LẦN! Thực hiện Tự động Reset trang Nhiệm vụ -> Facebook...")
+                        log_thread(p_name, f"🚨 ĐÃ HỤT JOB {failed_load_count} LẦN! Đang về TRANG CHỦ nghỉ tạm thời...")
                         failed_load_count = 0
+                        try:
+                            home_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[1]')))
+                            driver.execute_script("arguments[0].click();", home_btn)
+                        except Exception as err:
+                            log_thread(p_name, f"❌ Lỗi khi về Trang chủ: {err}")
+                        
+                        log_thread(p_name, "✅ Về Trang chủ xong. Đang chờ nghỉ ngơi nguội hệ thống...")
+                        smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_cool_down", 300), variance=0.1))
+                        
+                        log_thread(p_name, "🔄 Đang quay lại trang làm việc (Nhiệm vụ -> Facebook)...")
                         try:
                             nv = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
                             driver.execute_script("arguments[0].click();", nv)
                             sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_reset_click", 3.5), variance=0.2))
+                            
                             fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
                             driver.execute_script("arguments[0].click();", fb_btn)
-                            log_thread(p_name, "✅ Reset trang xong. Đang chờ 5 phút nguội hệ thống...")
-                        except Exception as e:
-                            log_thread(p_name, f"❌ Lỗi khi tự động Reset: {e}")
-                        smart_sleep(smart_random_delay(CONFIG_DELAY.get("sleep_on_cool_down", 300), variance=0.1))
+                        except Exception as err:
+                            log_thread(p_name, f"❌ Lỗi quay lại Nhiệm vụ: {err}")
                         continue
 
                     log_thread(p_name, f"Không thấy Job nào (Lần {failed_load_count}/10). Đang ấn Tải lại...")
@@ -2625,20 +2696,24 @@ def run_parallel_mode():
     print(f"\n🚀 PHÁT HIỆN {len(profiles)} TÀI KHOẢN ĐĂNG KÝ CHẠY SONG SONG!")
 
     # Hỏi 2Captcha API key cho parallel mode (shared across all threads)
-    print("\n" + "="*50)
-    print("🔒 CẤU HÌNH reCAPTCHA v2 CHO PARALLEL MODE")
-    print("="*50)
-    use_2captcha_parallel = input("Có muốn dùng 2Captcha API để tự động giải reCAPTCHA v2 không? (y/n): ").strip().lower()
-    global_2captcha_api_key = None
-    if use_2captcha_parallel in ['y', 'yes', '']:
-        global_2captcha_api_key = input("Nhập 2Captcha API Key: ").strip()
-        if global_2captcha_api_key:
-            print(f"[✓] đã cấu hình 2Captcha API")
-        else:
-            print("[!] Không có API key, sẽ chuyển manual nếu phát hiện captcha")
+    global_2captcha_api_key = CONFIG_DELAY.get("2captcha_api_key", "").strip()
+    if global_2captcha_api_key:
+        print(f"\n[✓] Sử dụng 2Captcha API Key đã lưu trong config cho Parallel Mode.")
     else:
-        print("[✓] Chế độ manual - sẽ yêu cầu giải captcha thủ công")
-    print("="*50 + "\n")
+        print("\n" + "="*50)
+        print("🔒 CẤU HÌNH reCAPTCHA v2 CHO PARALLEL MODE")
+        print("="*50)
+        use_2captcha_parallel = input("Có muốn dùng 2Captcha API để tự động giải reCAPTCHA v2 không? (y/n): ").strip().lower()
+        if use_2captcha_parallel in ['y', 'yes', '']:
+            global_2captcha_api_key = input("Nhập 2Captcha API Key: ").strip()
+            if global_2captcha_api_key:
+                print(f"[✓] đã cấu hình 2Captcha API")
+                CONFIG_DELAY["2captcha_api_key"] = global_2captcha_api_key
+            else:
+                print("[!] Không có API key, sẽ chuyển manual nếu phát hiện captcha")
+        else:
+            print("[✓] Chế độ manual - sẽ yêu cầu giải captcha thủ công")
+        print("="*50 + "\n")
 
     threads = []
     print("\n--- BẮT ĐẦU QUÁ TRÌNH THIẾT LẬP & GIẢI CAPTCHA LẦN LƯỢT ---")
@@ -2870,8 +2945,8 @@ def sele_menu():
     setup_lifecycle()
     kiem_tra_cap_nhat()
     load_delay_config()
-    setup_telegram_notify()
     show_config_summary()
+    setup_telegram_notify()
 
     while True:
         STOP_FLAG = False

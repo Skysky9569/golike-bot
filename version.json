@@ -1,6 +1,6 @@
 {
-  "version": "1.10.4",
+  "version": "1.10.5",
   "release_date": "2026-05-25",
-  "changelog": "v1.10.4 - Tối ưu logic chuyển acc Single Mode: Hụt job 3 lần tự động xoay vòng không cần ngủ 5 phút. Chỉ bỏ acc khi bị MAX JOB. Sửa lỗi cú pháp khởi tạo.",
-  "previous_version": "1.10.3"
+  "changelog": "v1.10.5 - Bổ sung các thông số mở rộng vào menu Delay (Telegram, 2Captcha, Proxy). Cải thiện cơ chế tự động về Trang chủ nghỉ ngơi. Ẩn spam lỗi StaleElementReferenceException. Xử lý triệt để lỗi không đóng trình duyệt khi exit.",
+  "previous_version": "1.10.4"
 }
