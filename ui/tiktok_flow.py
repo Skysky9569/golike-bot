@@ -8,6 +8,7 @@ import time
 import json
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
+import random
 
 import requests
 
@@ -82,7 +83,8 @@ def _process_single_job(
     job_type: str,
     ui_automator,
     job_processor,
-    delay: int,
+    delay_min: int,
+    delay_max: int,
     open_method: str,
     search_mode: bool,
     stt: int = 0,
@@ -99,7 +101,8 @@ def _process_single_job(
         job_type: Loai job (follow/like)
         ui_automator: TikTokUIAutomator instance hoac None
         job_processor: JobProcessor instance
-        delay: Thoi gian delay giua cac job
+        delay_min: Thoi gian delay toi thieu
+        delay_max: Thoi gian delay toi da
         open_method: Phuong thuc mo link (adb/u2/search)
         search_mode: Dang o che do search khong
         stt: So thu tu job
@@ -113,7 +116,8 @@ def _process_single_job(
         username = extract_username_from_link(link)
         if not username:
             logger.warning(f"Khong extract duoc username tu link: {link[:60]}")
-            for t in range(delay, -1, -1):
+            actual_delay = random.randint(delay_min, delay_max)
+            for t in range(actual_delay, -1, -1):
                 print(colored(f"⏰ Doi {t} giay ...", "cyan"), end="\r")
                 time.sleep(1)
             return False, 0, False
@@ -126,7 +130,8 @@ def _process_single_job(
             else:
                 print(colored(f"❌ {search_msg}", "red"))
                 ui_automator.clear_search_text()
-                for t in range(delay, -1, -1):
+                actual_delay = random.randint(delay_min, delay_max)
+                for t in range(actual_delay, -1, -1):
                     print(colored(f"⏰ Doi {t} giay ...", "cyan"), end="\r")
                     time.sleep(1)
                 return False, 0, False
@@ -161,9 +166,19 @@ def _process_single_job(
             print(colored(f"⚠️ UI automation canh bao: {ui_message}", "yellow"))
 
     # Doi theo delay
-    for t in range(delay, -1, -1):
-        print(colored(f"⏰ Doi {t} giay ...", "cyan"), end="\r")
+    actual_delay = random.randint(delay_min, delay_max)
+    
+    # Random mot thoi diem trong luc cho de vuot xem video khac
+    # Thuong la vao khoang 1/3 hoac 2/3 thoi gian cho
+    vuot_luc = random.choice([actual_delay // 3, actual_delay * 2 // 3])
+    
+    for t in range(actual_delay, -1, -1):
+        print(colored(f"⏰ Doi {t} giay ...       ", "cyan"), end="\r")
         time.sleep(1)
+        # Hanh vi nguoi dung: Trong luc doi thi luot sang xem video khac
+        if ui_automator and t == vuot_luc:
+            print(colored(f"⏰ Doi {t} giay (Dang vuot luot xem video tiep theo...)    ", "cyan"), end="\r")
+            ui_automator.scroll_down_only()
 
     # Xoa text search neu search mode
     if search_mode and ui_automator:
@@ -223,10 +238,14 @@ def _claim_payment(
                 ok = True
                 reward = nhantien["data"].get("prices", 0)
                 job_type = nhantien['data'].get('type', '')
-                message = nhantien['data'].get('message', 'Success')
+                message = nhantien['data'].get('message')
                 now = datetime.now(tz).strftime("%H:%M:%S") if tz else time.strftime("%H:%M:%S")
-                print(colored(f"| {stt} | {now} | success | {job_type} | +{reward} | {tong + reward} | {message}", "green", bold=True))
-                logger.info(f"Job hoan thanh: {job_type}, +{reward} xu - {message}")
+                
+                print(colored(f"| {stt} | {now} | success | {job_type} | +{reward} | {tong + reward} |", "green", bold=True))
+                if message:
+                    print(colored(f"   └── Thong bao tu he thong: {message}", "cyan"))
+                
+                logger.info(f"Job hoan thanh: {job_type}, +{reward} xu" + (f" - {message}" if message else ""))
                 break
             elif lan == 1:
                 print(colored("⚠️ Lan 1 that bai - Dang thu lan 2...", "yellow"), end="\r")
@@ -419,7 +438,27 @@ def tiktok_menu(auth_token: str) -> None:
         else:
             logger.warning("Vui long nhap so thu tu hoac ID hop le!")
 
-    delay = input_int("👀 Nhap thoi gian lam job : ")
+    print(colored("════════════════════════════════════════════════", "white"))
+    print(colored("⏳ CAU HINH GIA LAP HANH VI (CHONG BAN):", "cyan", bold=True))
+    
+    # Delay giua cac thao tac
+    try:
+        v = input(colored("⏱️  Delay giua cac thao tac (giay, nhap '18-28' hoac Enter de dung mac dinh): ", "green")).strip()
+        if not v: v = "18-28"
+        delay_action_min, delay_action_max = map(int, v.split("-"))
+    except Exception:
+        delay_action_min, delay_action_max = 18, 28
+        
+    # Delay giua 2 nhiem vu
+    try:
+        v = input(colored("⏱️  Delay giua 2 nhiem vu (giay, nhap '25-45' hoac Enter de dung mac dinh): ", "green")).strip()
+        if not v: v = "25-45"
+        delay_job_min, delay_job_max = map(int, v.split("-"))
+    except Exception:
+        delay_job_min, delay_job_max = 25, 45
+
+    logger.info(f"Cau hinh delay: Action ({delay_action_min}-{delay_action_max}s), Job ({delay_job_min}-{delay_job_max}s)")
+    print(colored("════════════════════════════════════════════════", "white"))
 
     doiacc = input_int("📆 So job fail de doi acc TikTok (nhap 1 neu k muon dung) : ")
     while True:
@@ -465,6 +504,7 @@ def tiktok_menu(auth_token: str) -> None:
 
     # Bat dau vong lap lam job
     dem = tong = checkdoiacc = 0
+    jobs_completed_for_break = 0
     print(colored("════════════════════════════════════════════════", "white"))
     print(colored("|🆔| ⏱️ ┊ Status | So Jos | ID Acc | Xu | Tong", "cyan"))
     print(colored("════════════════════════════════════════════════", "white"))
@@ -504,7 +544,8 @@ def tiktok_menu(auth_token: str) -> None:
     while True:
         # Doi acc neu vuot gioi han fail
         if checkdoiacc >= doiacc:
-            _select_new_account(data, account_id, checkdoiacc)
+            account_id = _select_new_account(data, account_id, checkdoiacc)
+            checkdoiacc = 0
 
         # Nhan job
         print(colored("🔎 Dang Tim Nhiem vu:>        ", "pink"), end="\r")
@@ -512,11 +553,17 @@ def tiktok_menu(auth_token: str) -> None:
             nhanjob = api_client.get(f'/api/advertising/publishers/tiktok/jobs?account_id={account_id}&data=null')
         except Exception as e:
             logger.error(f"Loi lay job: {e}")
-            time.sleep(10)
+            no_job_wait = random.randint(22, 30)
+            for t in range(no_job_wait, -1, -1):
+                print(colored(f"⏳ Khong co job. Doi {t}s de thu lai...    ", "yellow"), end="\r")
+                time.sleep(1)
             continue
 
         if not nhanjob or not nhanjob.get("data"):
-            time.sleep(10)
+            no_job_wait = random.randint(22, 30)
+            for t in range(no_job_wait, -1, -1):
+                print(colored(f"⏳ Khong co job. Doi {t}s de thu lai...    ", "yellow"), end="\r")
+                time.sleep(1)
             continue
 
         # Check job trung
@@ -534,7 +581,10 @@ def tiktok_menu(auth_token: str) -> None:
             object_id = job_data.get("object_id")
             job_type = job_data.get("type")
         else:
-            time.sleep(10)
+            no_job_wait = random.randint(22, 30)
+            for t in range(no_job_wait, -1, -1):
+                print(colored(f"⏳ Khong co job. Doi {t}s de thu lai...    ", "yellow"), end="\r")
+                time.sleep(1)
             continue
 
         if not link:
@@ -553,7 +603,7 @@ def tiktok_menu(auth_token: str) -> None:
         ok, reward, not_found = _process_single_job(
             api_client, ads_id, link, object_id, account_id,
             job_type, ui_automator, job_processor,
-            delay, open_method, search_mode,
+            delay_action_min, delay_action_max, open_method, search_mode,
             stt=dem + 1, tong=tong
         )
 
@@ -565,6 +615,22 @@ def tiktok_menu(auth_token: str) -> None:
             dem += 1
             tong += reward
             checkdoiacc = 0
+            jobs_completed_for_break += 1
+            
+            # Kiem tra nghi giai lao
+            if jobs_completed_for_break >= 40:
+                print(colored("\n💤 Da lam 40 nhiem vu. Cho he thong nghi giai lao 5 phut de tranh bi quét...", "yellow", bold=True))
+                for t in range(300, -1, -1):
+                    print(colored(f"⏰ Nghỉ ngơi: Doi {t} giay ...    ", "cyan"), end="\r")
+                    time.sleep(1)
+                print(" " * 50, end="\r")
+                jobs_completed_for_break = 0
+            else:
+                job_wait = random.randint(delay_job_min, delay_job_max)
+                for t in range(job_wait, -1, -1):
+                    print(colored(f"⏰ Chuan bi nhan job tiep theo: Doi {t} giay ...    ", "cyan"), end="\r")
+                    time.sleep(1)
+                print(" " * 50, end="\r")
         else:
             logger.warning("Nhan tien that bai sau 2 lan retry → Skip job")
             _skip_job(api_client, ads_id, object_id, account_id, job_type)

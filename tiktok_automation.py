@@ -80,11 +80,9 @@ class TikTokUIAutomator:
         {"text": "Follow"},
         {"text": "Theo dõi"},
         # Resource-id selectors (nút Follow thường có resource-id đặc biệt)
-        {"resourceId": "com.zhiliaoapp.musically:id/title"},
         {"resourceId": "com.zhiliaoapp.musically:id/follow_button"},
         {"resourceId": "com.zhiliaoapp.musically:id/follow_btn"},
         {"resourceId": "com.zhiliaoapp.musically:id/follow"},
-        {"resourceId": "com.ss.android.ugc.trill:id/title"},
         {"resourceId": "com.ss.android.ugc.trill:id/follow_button"},
         {"resourceId": "com.ss.android.ugc.trill:id/follow_btn"},
         {"resourceId": "com.ss.android.ugc.trill:id/follow"},
@@ -362,15 +360,78 @@ class TikTokUIAutomator:
                 logger.warning("Bounds không hợp lệ - chứa giá trị chuỗi")
                 return False
 
-            center_x = (left + right) // 2
-            center_y = (top + bottom) // 2
+            # Tinh toan toa do random trong pham vi cua nut de tranh click cung 1 diem
+            import random
+            
+            # Tao ra mot vung an toan (padding) de tranh click vao mep nut
+            width = right - left
+            height = bottom - top
+            safe_margin_x = int(width * 0.2)
+            safe_margin_y = int(height * 0.2)
+            
+            # Neu nut qua nho, van click o giua, nguoc lai thi random
+            if safe_margin_x > 0 and safe_margin_y > 0:
+                click_x = random.randint(left + safe_margin_x, right - safe_margin_x)
+                click_y = random.randint(top + safe_margin_y, bottom - safe_margin_y)
+            else:
+                click_x = (left + right) // 2
+                click_y = (top + bottom) // 2
 
-            logger.debug(f"Click vào tọa độ ({center_x}, {center_y})")
-            self._u2.click(center_x, center_y)
+            logger.debug(f"Click random vao toa do ({click_x}, {click_y}) thuoc vung [{left},{top},{right},{bottom}]")
+            self._u2.click(click_x, click_y)
             return True
         except Exception as e:
-            logger.error(f"Lỗi click element: {e}")
+            logger.error(f"Loi click element: {e}")
             return False
+
+    def random_swipe(self) -> None:
+        """Vuốt ngẫu nhiên lên hoặc xuống để giả lập người dùng thật"""
+        if not self._connected or not self._u2:
+            return
+            
+        try:
+            import random
+            w, h = self._u2.window_size()
+            
+            # Xac suat 70% vuot xuong, 30% vuot len, kem theo Do Lech random tren truc Y
+            # Giam bien do vuot de tranh lam mat nut Follow khoi man hinh
+            if random.random() < 0.7:
+                # Vuot xuong mot xiu
+                start_y = int(h * random.uniform(0.55, 0.65))
+                end_y = int(h * random.uniform(0.40, 0.45))
+            else:
+                # Vuot len mot xiu
+                start_y = int(h * random.uniform(0.40, 0.45))
+                end_y = int(h * random.uniform(0.55, 0.65))
+                
+            # Do lech random tren truc X de duong vuot khong bi thang tăp
+            start_x = w // 2 + random.randint(-40, 40)
+            end_x = start_x + random.randint(-20, 20)
+            
+            logger.debug(f"Thuc hien vuot ngau nhien (tu {start_y} den {end_y})")
+            self._u2.swipe(start_x, start_y, end_x, end_y, duration=random.uniform(0.1, 0.3))
+            
+            # Vuot nguoc lai de tra ve vi tri cu (dam bao khong bi mat nut Follow/Like)
+            time.sleep(random.uniform(0.2, 0.5))
+            self._u2.swipe(end_x, end_y, start_x, start_y, duration=random.uniform(0.1, 0.3))
+            
+            time.sleep(random.uniform(0.5, 1.0))
+        except Exception as e:
+            logger.debug(f"Loi vuot ngau nhien: {e}")
+
+    def scroll_down_only(self) -> None:
+        """Chi vuot xuong de chuyen sang video khac (xem them) trong thoi gian cho."""
+        try:
+            w, h = self._u2.window_size()
+            start_y = int(h * random.uniform(0.70, 0.85))
+            end_y = int(h * random.uniform(0.15, 0.30))
+            start_x = w // 2 + random.randint(-40, 40)
+            end_x = start_x + random.randint(-20, 20)
+            
+            logger.debug("Dang vuot xem video khac...")
+            self._u2.swipe(start_x, start_y, end_x, end_y, duration=random.uniform(0.15, 0.4))
+        except Exception as e:
+            logger.debug(f"Loi vuot video: {e}")
 
     def find_and_click_follow(self, retry_count: int = 2, retry_delay: float = 2.0) -> Tuple[bool, str, bool]:
         """Tìm và click nút Follow
@@ -427,6 +488,15 @@ class TikTokUIAutomator:
                 - message: Mô tả kết quả
                 - not_found: True nếu không tìm thấy nút (cần skip job)
         """
+        import random
+        # Xem video 5-12s trươc khi tha tim
+        watch_time = random.randint(5, 12)
+        logger.info(f"Giả lập xem video: Đợi {watch_time}s trước khi thả tim...")
+        for t in range(watch_time, -1, -1):
+            print(f"\r\033[36m👀 Đang xem video: Doi {t}s ...\033[0m", end="")
+            time.sleep(1)
+        print("\r" + " " * 50 + "\r", end="") # Clear line
+
         not_found_count = 0
         for attempt in range(1, retry_count + 1):
             logger.info(f"Tìm nút Like (lần {attempt}/{retry_count})...")
@@ -439,11 +509,14 @@ class TikTokUIAutomator:
                 try:
                     # Lấy kích thước màn hình hiện tại
                     w, h = self._u2.window_size()
-                    cx, cy = w // 2, h // 2
+                    # Random 1 diem vung trung tam de tha tim
+                    import random
+                    cx = (w // 2) + random.randint(-100, 100)
+                    cy = (h // 2) + random.randint(-150, 150)
 
                     # Thực hiện click 2 lần rất nhanh để kích hoạt double tap thả tim
                     self._u2.click(cx, cy)
-                    time.sleep(0.15)
+                    time.sleep(random.uniform(0.1, 0.18))
                     self._u2.click(cx, cy)
 
                     logger.info("Đã kích hoạt thả tim bằng Double Tap thành công")
@@ -486,6 +559,10 @@ class TikTokUIAutomator:
         if not self._connected:
             if not self.connect():
                 return False, "Không thể kết nối đến thiết bị", False
+
+        # Thuc hien vuot ngau nhien truoc khi tuong tac
+        logger.info("Thuc hien thao tac vuot ngau nhien (Human-like behavior)")
+        self.random_swipe()
 
         if job_type == "follow":
             return self.find_and_click_follow()

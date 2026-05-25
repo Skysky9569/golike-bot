@@ -15,7 +15,9 @@
   "max_job_limit": 100,
   "default_proxy": "",
   "telegram_enabled": true,
-  "telegram_bot_token": "${TELEGRAM_BOT_TOKEN}",
-  "telegram_chat_id": "${TELEGRAM_CHAT_ID}",
-  "telegram_setup_done": true
+  "telegram_bot_token": "8767570032:AAGzzL1Uv7djP5ICNv13cBc4D3TQzNVux0s",
+  "telegram_chat_id": "6104653970",
+  "telegram_setup_done": true,
+  "max_job_hunt_fail": 0.0,
+  "2captcha_api_key": "0"
 }

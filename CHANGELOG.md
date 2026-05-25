@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v1.11.0] - 2026-05-25
+
+### Thêm Mới & Nâng Cấp (Added & Upgraded)
+- **Cải tiến hệ thống Anti-ban (Giả lập hành vi) cực mạnh cho TikTok ADB**:
+  - **Tự động vuốt ngẫu nhiên (Random Swipe)**: Tự động vuốt xem thêm video khác trên Feed hoặc lướt trang cá nhân trong thời gian chờ (delay) để giả lập người dùng thật đang xem TikTok.
+  - **Xem video trước khi thả tim**: Tool tự động dừng từ 5-12s để xem video trước khi nhấp đúp thả tim, tránh bị TikTok đánh dấu spam.
+  - **Nghỉ giải lao thông minh**: Tự động cho hệ thống nghỉ 5 phút sau mỗi 40 nhiệm vụ để chống bị quét checkpoint.
+  - **Đa dạng hóa mốc Delay**: Các mốc thời gian chờ (Action, Job, Empty) đều được cấu hình ngẫu nhiên trong khoảng Min-Max an toàn thay vì cố định một con số.
+  - **Random tọa độ (Click/Swipe Jitter)**: Các thao tác nhấp đúp, bấm nút Follow hay đường vuốt màn hình đều được gắn thêm các độ lệch ngẫu nhiên về tọa độ X, Y, triệt tiêu hoàn toàn khả năng bị nhận diện là Bot do click cứng ở một điểm.
+
+### Sửa Lỗi (Fixed)
+- **Fix lỗi bấm nhầm nút Follow**: Xóa bỏ các selector nhận diện lỗi (`id/title`) để tool không bao giờ bấm nhầm vào Tiêu đề/Tên người dùng thay vì bấm Follow.
+- **Fix lỗi trượt mất nút Follow khi vuốt**: Tự động vuốt ngược về vị trí ban đầu (đỉnh trang cá nhân) sau khi lướt xem nội dung để đảm bảo không bị mất dấu nút Follow đỏ.
+- **Fix bug kẹt account khi đổi tài khoản TikTok**: Đảm bảo ID account mới được lưu trữ và sử dụng ngay lập tức khi chức năng tự động đổi account (do fail nhiều lần) kích hoạt.
+- **Tối ưu hiển thị Console**: Dọn dẹp bảng log gọn gàng hơn, tách biệt thông báo dài từ hệ thống thành dòng riêng dễ nhìn thay vì nối vào đuôi bảng.
 ## [v1.10.4] - 2026-05-25
 
 ### Sửa Lỗi & Tối Ưu (Fixed & Optimized)
