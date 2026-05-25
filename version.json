@@ -1,6 +1,6 @@
 {
-  "version": "1.10.7",
+  "version": "1.10.8",
   "release_date": "2026-05-25",
-  "changelog": "v1.10.7 - Sửa lỗi Crash hệ thống (văng ra menu) khi mạng yếu hoặc Golike tải quá chậm sau khi giải Captcha thành công. Sửa lỗi kẹt lệnh đệ quy trong module human_click.",
-  "previous_version": "1.10.6"
+  "changelog": "v1.10.8 - Thêm tính năng tự động phát hiện và nhấn nút 'Đã hiểu' trên thông báo của Admin Golike để tránh kẹt tiến trình khởi tạo.",
+  "previous_version": "1.10.7"
 }

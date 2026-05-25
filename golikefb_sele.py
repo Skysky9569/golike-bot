@@ -1718,6 +1718,15 @@ def run_single_mode():
             sleep(3)
 
         try:
+            # Tự động tắt popup "Đã hiểu" nếu có
+            try:
+                da_hieu_btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Đã hiểu')]")))
+                human_click(driver, da_hieu_btn)
+                print("Đã đóng popup [Đã hiểu]")
+                sleep(1)
+            except:
+                pass
+
             nhiemvu = WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
             human_click(driver, nhiemvu)
             
@@ -2304,6 +2313,15 @@ def setup_bot_profile(profile_data, idx, global_2captcha_api_key=None):
             input("Vui lòng tự giải Captcha trên đó. Khi đã vào được màn hình chính, quay lại đây ấn [ENTER]...")
         else:
             sleep(2)
+
+        # Tự động tắt popup "Đã hiểu" nếu có
+        try:
+            da_hieu_btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Đã hiểu')]")))
+            human_click(driver, da_hieu_btn)
+            print(f"[{p_name}] Đã đóng popup [Đã hiểu]")
+            sleep(1)
+        except:
+            pass
 
         nhiemvu = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
         human_click(driver, nhiemvu)
