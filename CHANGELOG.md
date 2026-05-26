@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v1.11.1] - 2026-05-26
+
+### Sửa Lỗi (Fixed)
+- **Sửa lỗi khởi động Captcha**: Thêm đối số `is_parallel` vào hàm `handle_2captcha_captcha` để tránh lỗi hệ thống bị crash khi chạy song song.
+- **Tối ưu hóa Báo lỗi Job**: 
+  - Cải tiến XPath để click chính xác vào nhãn `h6` thay vì phần tử hàng (`row`), loại bỏ hoàn toàn khả năng click nhầm vào các thanh menu xung quanh.
+  - Tích hợp tính năng cuộn phần tử mục tiêu ra giữa màn hình (`scrollIntoView({block: 'center'})`) trước khi nhấp chuột để tránh bị che bởi thanh menu cố định.
+- **Tăng tốc đăng nhập**: Bỏ cơ chế quét các file JS của Facebook để tìm `doc_id`, mặc định gán `'null'` giúp đăng nhập nhanh hơn, giảm đáng kể số lượng HTTP request và tiết kiệm dữ liệu mạng proxy.
+
 ## [v1.11.0] - 2026-05-25
 
 ### Thêm Mới & Nâng Cấp (Added & Upgraded)

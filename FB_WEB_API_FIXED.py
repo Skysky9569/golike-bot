@@ -148,14 +148,8 @@ class FacebookSession:
             if not self.token or not self.user_id:
                 return {'err': 'Không thể lấy token hoặc user_id - cookie có thể hết hạn'}
 
-            # Tìm doc_id từ JS bundle (fetch riêng cho từng acc để tránh sai lệch do FB A/B testing)
-            found = self._find_doc_id_from_html(html, self.proxies)
-            if found:
-                self.reaction_doc_id = found
-                print(f'[✓] Tìm thấy doc_id REACTION: {found}')
-            else:
-                self.reaction_doc_id = self._FALLBACK_DOC_IDS[0]
-                print(f'[!] Không tìm thấy doc_id từ JS, dùng fallback: {self.reaction_doc_id}')
+            # Mặc định dùng 'null' để tránh quét JS bundle làm chậm tiến trình và tốn băng thông proxy
+            self.reaction_doc_id = 'null'
 
             return {
                 "token": self.token,

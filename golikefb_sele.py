@@ -5,9 +5,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
 from typing import Optional
-import webdriver_manager
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import os
@@ -16,8 +15,6 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
-from golike_core.config import CONFIG
 
 # ================= ANTI-DETECTION STEALTH SCRIPT =================
 # Script để conceal selenium automation và randomize fingerprint
@@ -71,10 +68,18 @@ def smart_random_delay(base_delay: float, variance: float = 0.3) -> float:
 def human_click(driver, element):
     """
     Giả lập click chuột như người thật:
+    - Cuộn phần tử vào giữa màn hình để tránh bị fixed header/footer che khuất
     - Di chuyển chuột với ActionChains có offset ngẫu nhiên
     - Click
     Nếu lỗi, fallback sang JS click.
     """
+    try:
+        # Cuộn phần tử vào giữa viewport trước khi click
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        time.sleep(0.5)
+    except:
+        pass
+
     try:
         size = element.size
         width, height = size['width'], size['height']
@@ -85,6 +90,12 @@ def human_click(driver, element):
             action.move_to_element_with_offset(element, x_offset, y_offset).click().perform()
         else:
             ActionChains(driver).move_to_element(element).click().perform()
+    except StaleElementReferenceException:
+        # Element became stale - use JS click as fallback
+        try:
+            driver.execute_script("arguments[0].click();", element)
+        except:
+            pass
     except Exception:
         # Fallback to JS click if element not interactable or out of bounds
         try:
@@ -92,8 +103,10 @@ def human_click(driver, element):
         except:
             pass
 # ================= MEMORY CIRCUIT BREAKER =================
-MEMORY_LIMIT_PERCENT = 90  # Ngưỡng RAM % tối đa
-MEMORY_AVAILABLE_MIN = 1000  # RAM tối thiểu cần giữ (MB)
+# Progressive thresholds for better memory management
+MEMORY_WARNING_PERCENT = 75  # Cảnh báo khi RAM đạt 75%
+MEMORY_LIMIT_PERCENT = 85    # Ngưỡng RAM % tối đa (giảm từ 90%)
+MEMORY_AVAILABLE_MIN = 2000  # RAM tối thiểu cần giữ (MB) (tăng từ 1000)
 
 
 def check_system_memory():
@@ -400,7 +413,6 @@ def handle_2captcha_captcha(driver, page_url, api_key=None, is_parallel=False):
         driver: Selenium WebDriver
         page_url: URL hiện tại
         api_key: 2Captcha API key (nếu None sẽ hỏi user)
-        is_parallel: Có phải đang chạy parallel mode không
 
     Returns:
         True nếu đã solve captcha thành công hoặc không có captcha, False nếu manual
@@ -489,15 +501,6 @@ def handle_2captcha_captcha(driver, page_url, api_key=None, is_parallel=False):
                     pass
                     
                 return True
-
-                # Retry nữa nếu chưa pass
-                if attempt < max_retries - 1:
-                    print(f"[2Captcha] Chưa pass, thử lại...")
-                    sleep(3)
-                else:
-                    print("[Captcha] Captcha đã được giải nhưng không pass validation.")
-                    print("[Captcha] Transfering manual mode.")
-                    return False
             else:
                 if attempt < max_retries - 1:
                     print(f"[2Captcha] Retry inject...")
@@ -914,7 +917,7 @@ def cleanup():
 # Global flag để kiểm soát việc dừng tool
 STOP_FLAG = False
 
-def handle_exit_signal(signum, frame):
+def handle_exit_signal(_signum, _frame):
     """Xử lý Ctrl+C - Tạm dừng, hỏi người dùng muốn làm gì"""
     global STOP_FLAG
 
@@ -1098,6 +1101,24 @@ def get_proxy_from_config(profile_proxy: str = None) -> dict:
 
 # ================= CẤU HÌNH DELAY =================
 CONFIG_DELAY = {}
+CONFIG_DELAY_LOCK = threading.Lock()  # Lock for thread-safe access
+
+# ================= EXTERNAL API CIRCUIT BREAKER =================
+_external_api_circuit_open = False      # Circuit breaker state
+_external_api_failures = 0              # Failure counter
+_MAX_FAILURES = 3                       # Max failures before opening circuit
+
+
+def get_config(key, default=None):
+    """Thread-safe config read."""
+    with CONFIG_DELAY_LOCK:
+        return CONFIG_DELAY.get(key, default)
+
+
+def set_config(key, value):
+    """Thread-safe config write."""
+    with CONFIG_DELAY_LOCK:
+        CONFIG_DELAY[key] = value
 
 def load_delay_config(filepath: str = "config_golike_sele.json"):
     """Load delay config từ file JSON"""
@@ -1244,6 +1265,15 @@ C_MAGENTA = "\033[95m"
 LABEL_COLORS = [C_CYAN, C_BLUE, C_MAGENTA]
 
 
+def mask_sensitive_value(value: str, visible_chars: int = 4) -> str:
+    """Mask sensitive values showing only first and last N characters."""
+    if not value or value == "(không đặt)" or value == "(trống)":
+        return "(không đặt)"
+    if len(value) <= visible_chars * 2:
+        return "*" * len(value)
+    return f"{value[:visible_chars]}{'*' * (len(value) - visible_chars * 2)}{value[-visible_chars:]}"
+
+
 def show_config_summary():
     """Hiển thị tóm tắt config đã cài và hỏi user có muốn thay đổi không."""
     print("\n" + "─" * 55)
@@ -1294,9 +1324,9 @@ def show_config_summary():
     
     # ── Nhóm Mở rộng ────────────────────────────────────────────────
     print(f"\n  {C_BOLD}🔌 MỞ RỘNG (API/TELEGRAM){C_RESET}")
-    print(f"    {C_MAGENTA}{'Telegram Bot Token':.<40s}{C_RESET} {C_YELLOW}{CONFIG_DELAY.get('telegram_bot_token', '(không đặt)')}{C_RESET}")
-    print(f"    {C_MAGENTA}{'Telegram Chat ID':.<40s}{C_RESET} {C_YELLOW}{CONFIG_DELAY.get('telegram_chat_id', '(không đặt)')}{C_RESET}")
-    print(f"    {C_MAGENTA}{'2Captcha API Key':.<40s}{C_RESET} {C_YELLOW}{CONFIG_DELAY.get('2captcha_api_key', '(không đặt)')}{C_RESET}")
+    print(f"    {C_MAGENTA}{'Telegram Bot Token':.<40s}{C_RESET} {C_YELLOW}{mask_sensitive_value(CONFIG_DELAY.get('telegram_bot_token', ''))}{C_RESET}")
+    print(f"    {C_MAGENTA}{'Telegram Chat ID':.<40s}{C_RESET} {C_YELLOW}{mask_sensitive_value(CONFIG_DELAY.get('telegram_chat_id', ''))}{C_RESET}")
+    print(f"    {C_MAGENTA}{'2Captcha API Key':.<40s}{C_RESET} {C_YELLOW}{mask_sensitive_value(CONFIG_DELAY.get('2captcha_api_key', ''))}{C_RESET}")
     print("─" * 55)
 
     ans = input("\n👉 Bạn có muốn thay đổi config không? (Enter để bỏ qua): ").strip().lower()
@@ -1336,23 +1366,32 @@ def setup_delay_config():
         print("CẤU HÌNH DELAY CHO GOLIKE FACEBOOK SELENIUM")
         print("="*60)
         print(f"[File lưu tại: {os.path.abspath(config_path)}]\n")
-        
+
+        # Sensitive keys that should be masked when displayed
+        SENSITIVE_KEYS = {"telegram_bot_token", "telegram_chat_id", "2captcha_api_key"}
+
         for i, (key, label, type_func) in enumerate(key_names, 1):
             val = config.get(key, 10 if type_func == float else "(trống)")
+            # Mask sensitive values
+            if key in SENSITIVE_KEYS and val and val != "(trống)":
+                val = mask_sensitive_value(str(val))
             print(f"  {i}. {label}: {C_YELLOW}{val}{C_RESET}")
 
         print("\n  0. Lưu lại và Thoát")
-        
+
         choice = input(f"\n👉 Chọn số thứ tự để thay đổi (0-{len(key_names)}, Enter để thoát): ").strip()
-        
+
         if not choice or choice == "0":
             break
-            
+
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(key_names):
                 key, label, type_func = key_names[idx]
                 current_val = config.get(key, 10 if type_func == float else "")
+                # Mask sensitive values when prompting
+                if key in SENSITIVE_KEYS and current_val:
+                    current_val = mask_sensitive_value(str(current_val))
                 new_val = input(f"Nhập giá trị mới cho '{label}' [hiện tại: {current_val}]: ").strip()
                 if new_val or type_func == str:
                     try:
@@ -1394,38 +1433,101 @@ def map_job_type(job_text):
     if "like" in job_text: return "like"
     return "unknown"
 
-def getidpost(lk: str):
-    # Thử dùng TraoDoiSub API trước vì nó quy đổi cực kỳ chuẩn cho mọi loại link post/profile/video...
-    headers = {
-        'accept': '*/*',
-        'content-type': 'application/x-www-form-urlencoded',
-        'origin': 'https://id.traodoisub.com',
-        'referer': 'https://id.traodoisub.com/',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    }
-    try:
-        response = cffi_requests.post('https://id.traodoisub.com/api.php', headers=headers, data={'link': lk}, timeout=10)
-        js = response.json()
-        if "success" in js:
-            uid = js.get('post_id', '') or js.get('id', '')
-            if uid: return str(uid)
-    except Exception:
-        pass
-        
-    # Dự phòng bằng Regex nếu API bên thứ 3 gặp sự cố
+
+def is_valid_facebook_url(url: str) -> bool:
+    """Validate Facebook URL format."""
+    if not url or not isinstance(url, str):
+        return False
+    url = url.strip()
+    # Basic Facebook URL patterns
+    valid_patterns = [
+        r'^https?://(www\.)?facebook\.com/',
+        r'^https?://(www\.)?fb\.com/',
+        r'^https?://m\.facebook\.com/',
+    ]
     import re
+    for pattern in valid_patterns:
+        if re.match(pattern, url, re.IGNORECASE):
+            return True
+    return False
+
+
+def getidpost(lk: str) -> str:
+    """
+    Extract Facebook post/user ID from URL.
+
+    Args:
+        lk: Facebook URL (must be validated)
+
+    Returns:
+        Extracted ID or "0" if not found
+    """
+    import re
+
+    # Input validation
+    if not lk or not isinstance(lk, str):
+        return "0"
+
+    lk = lk.strip()
+    if not is_valid_facebook_url(lk):
+        print(f"[WARNING] Invalid Facebook URL format: {lk[:50]}...")
+        return "0"
+
+    # Circuit breaker: skip external API if too many failures
+    global _external_api_circuit_open, _external_api_failures
+
+    if _external_api_circuit_open:
+        print("[Circuit Breaker] External API temporarily unavailable, using local parsing...")
+    else:
+        # Try dùng TraoDoiSub API trước
+        headers = {
+            'accept': '*/*',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://id.traodoisub.com',
+            'referer': 'https://id.traodoisub.com/',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        }
+        try:
+            response = cffi_requests.post('https://id.traodoisub.com/api.php', headers=headers, data={'link': lk}, timeout=10)
+            response.raise_for_status()
+            js = response.json()
+
+            # Validate response schema
+            if isinstance(js, dict) and "success" in js:
+                uid = js.get('post_id', '') or js.get('id', '')
+                if uid and isinstance(uid, (str, int)):
+                    # Reset failure count on success
+                    _external_api_failures = 0
+                    return str(uid)
+        except (requests.RequestException, ValueError, KeyError) as e:
+            # Increment failure count
+            _external_api_failures += 1
+            if _external_api_failures >= _MAX_FAILURES:
+                _external_api_circuit_open = True
+                print(f"[Circuit Breaker] External API failed {_MAX_FAILURES} times. Switching to fallback mode.")
+        except Exception:
+            pass
+
+    # Dự phòng bằng Regex nếu API bên thứ 3 gặp sự cố
     m = re.search(r'profile\.php\?id=(\d+)', lk)
     if m: return m.group(1)
-    
+
     m = re.search(r'fbid=(\d+)', lk)
     if m: return m.group(1)
-    
+
     # Chỉ lấy UID dạng facebook.com/123 khi không có posts/videos/photos để tránh nhận nhầm ID tác giả
     if "/posts/" not in lk and "/videos/" not in lk and "/photos/" not in lk:
         m = re.search(r'facebook\.com/(\d+)', lk)
         if m: return m.group(1)
-        
+
     return "0"
+
+
+def reset_external_api_circuit():
+    """Reset circuit breaker state (call periodically or after network recovery)."""
+    global _external_api_circuit_open, _external_api_failures
+    _external_api_circuit_open = False
+    _external_api_failures = 0
 
 def close_da_hieu_popup(driver):
     try:
@@ -1481,7 +1583,9 @@ def get_cookie_from_user():
                 encrypted = cred_manager._encrypt(cookie_input)
                 with open(cookie_file, 'w', encoding='utf-8') as f:
                     f.write(encrypted)
-                return cookie_input
+                print("ℹ️ Cookie được mã hóa và lưu an toàn.")
+                # Return encrypted value - will decrypt when needed
+                return encrypted
         except Exception as e:
             print(f"❌ Lỗi khi kiểm tra cookie: {e}")
 
@@ -1493,7 +1597,8 @@ def load_cookie():
             try:
                 with open(cookie_file, 'r', encoding='utf-8') as f:
                     encrypted = f.read().strip()
-                return cred_manager._decrypt(encrypted)
+                # Return encrypted value - will decrypt when needed
+                return encrypted
             except Exception:
                 return get_cookie_from_user()
         else:
@@ -1600,7 +1705,10 @@ def setup_multi_accounts():
         # Yêu cầu nhập tên profile
         pname = input(f"   Tên mô tả cho Acc {idx} (ví dụ: Acc chính): ").strip() or f"Acc {idx}"
 
-        accounts.append({"profile_name": pname, "cookie": c, "uid": u, "golike_uid": u})
+        # Encrypt cookie before storing
+        encrypted_cookie = cred_manager._encrypt(c) if hasattr(cred_manager, '_encrypt') else c
+
+        accounts.append({"profile_name": pname, "cookie": encrypted_cookie, "uid": u, "golike_uid": u, "is_encrypted": True})
         idx += 1
 
     if accounts:
@@ -1612,7 +1720,8 @@ def setup_multi_accounts():
                         "profile_name": a.get("profile_name", f"Acc {i}"),
                         "cookie": a.get("cookie"),
                         "golike_uid": a.get("golike_uid") or a.get("uid"),
-                        "facebook_uid": parse_facebook_uid_from_cookie(a.get("cookie", "")) or "N/A"
+                        "facebook_uid": parse_facebook_uid_from_cookie(a.get("cookie", "")) or "N/A",
+                        "is_encrypted": a.get("is_encrypted", False)
                     }
                     for i, a in enumerate(accounts, 1)
                 ]
@@ -1777,9 +1886,20 @@ def run_single_mode():
             current_cookie = acc_info.get("cookie")
             current_uid = acc_info.get("uid")  # Facebook UID (dùng cho API)
             current_golike_uid = acc_info.get("golike_uid") or current_uid  # GoLike UID (dùng để chọn nick trong dropdown)
-            
-            if current_cookie:
-                Fb = FB_API(current_cookie, proxies=fb_proxies)
+
+            # Decrypt cookie if it's encrypted
+            actual_cookie = current_cookie
+            if current_cookie and hasattr(cred_manager, '_decrypt'):
+                try:
+                    # Try to decrypt; if it fails, assume it's plaintext
+                    decrypted = cred_manager._decrypt(current_cookie)
+                    actual_cookie = decrypted
+                except Exception:
+                    # Cookie might be plaintext, use as-is
+                    actual_cookie = current_cookie
+
+            if actual_cookie:
+                Fb = FB_API(actual_cookie, proxies=fb_proxies)
                 Fb.login()
             else:
                 Fb = None
@@ -1857,16 +1977,16 @@ def run_single_mode():
 
                     # Thực hiện việc báo lỗi để chuyển tài khoản
                     try:
-                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')][1]")))
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
                         human_click(driver, bl)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
 
                         lydo = "Báo cáo hoàn thành thất bại"
-                        c_lydo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{lydo}')]/ancestor::div[contains(@class, 'row')][1]")
+                        c_lydo = driver.find_element(By.XPATH, f"//h6[contains(., '{lydo}')]")
                         human_click(driver, c_lydo)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
 
-                        gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
+                        gui = driver.find_element(By.XPATH, "//button[contains(., 'Gửi báo cáo')]")
                         human_click(driver, gui)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
 
@@ -2155,7 +2275,7 @@ def run_single_mode():
                         if need_skip:
                             print("🚨 Bắt đầu Báo lỗi...")
                             try:
-                                bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')][1]")))
+                                bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
                                 human_click(driver, bl)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
 
@@ -2163,11 +2283,11 @@ def run_single_mode():
                                 if not uid or uid == "0": lydo = "Không tìm thấy bài viết"
                                 else: lydo = "Báo cáo hoàn thành thất bại"
 
-                                c_lydo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{lydo}')]/ancestor::div[contains(@class, 'row')][1]")
+                                c_lydo = driver.find_element(By.XPATH, f"//h6[contains(., '{lydo}')]")
                                 human_click(driver, c_lydo)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
 
-                                gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
+                                gui = driver.find_element(By.XPATH, "//button[contains(., 'Gửi báo cáo')]")
                                 human_click(driver, gui)
                                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                                 try:
@@ -2599,6 +2719,10 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                     ch_b = find_browser_button(driver, timeout=8)
                     fb_url = ch_b.get_attribute("href")
                     human_click(driver, ch_b)
+                except StaleElementReferenceException:
+                    log_thread(p_name, "Element became stale while clicking browser button. Retrying...")
+                    sleep(2)
+                    continue
                 except TimeoutException:
                     log_thread(p_name, "Lỗi: Không tìm thấy lựa chọn trình duyệt. Bỏ qua.")
                     driver.refresh()
@@ -2661,39 +2785,50 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                                     break
 
                             if rate_limit_detected:
-                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                ok_c = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
                                 human_click(driver, ok_c)
                                 sleep(1)
                                 handle_rate_limit(driver, p_name)
                                 # After handling rate limit, continue to next job scan
                                 need_skip = True
                             else:
-                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                ok_c = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
                                 human_click(driver, ok_c)
                                 if "lỗi" in tp.lower() or "thất bại" in tp.lower() or "lỗi" in cp.lower() or "thất bại" in cp.lower():
                                     need_skip = True
                                 else: need_skip = False
-                        except: pass
+                        except StaleElementReferenceException:
+                            log_thread(p_name, "Popup element became stale during complete confirmation. Retrying...")
+                            need_skip = True
+                        except Exception:
+                            pass
+                    except StaleElementReferenceException:
+                        log_thread(p_name, "Complete button became stale. Marking as skip...")
+                        need_skip = True
                     except: need_skip = True
 
                 if need_skip:
                     try:
-                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Báo lỗi')]/ancestor::div[contains(@class, 'row')][1]")))
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
                         human_click(driver, bl)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                         ldo = "Báo cáo hoàn thành thất bại"
                         if not uid or uid == "0": ldo = "Không tìm thấy bài viết"
-                        c_ldo = driver.find_element(By.XPATH, f"//h6[contains(text(), '{ldo}')]/ancestor::div[contains(@class, 'row')][1]")
+                        c_ldo = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, f"//h6[contains(., '{ldo}')]")))
                         human_click(driver, c_ldo)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
-                        gui = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi báo cáo')]")
+                        gui = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Gửi báo cáo')]")))
                         human_click(driver, gui)
                         sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
                         try:
-                            o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                            o_b = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
                             human_click(driver, o_b)
+                        except StaleElementReferenceException:
+                            log_thread(p_name, "Report confirmation button became stale.")
                         except: pass
                         log_thread(p_name, "-> Đã báo lỗi job.")
+                    except StaleElementReferenceException:
+                        log_thread(p_name, "Element became stale during report process. Continuing...")
                     except: pass
                 
                 log_thread(p_name, "Nghỉ 10 giây...")
@@ -2766,15 +2901,16 @@ def run_parallel_mode():
         profiles = raw
     elif isinstance(raw, dict):
         profiles = raw.get("parallel_accounts", [])
-        # Nếu dict có delay config -> load vào CONFIG_DELAY
+        # Nếu dict có delay config -> load vào CONFIG_DELAY (thread-safe)
         delay_keys = ["delay_between_jobs", "delay_after_api_call", "delay_after_complete",
                       "delay_after_report_error", "delay_on_job_hunt_retry", "delay_between_accounts",
                       "timeout_driver_load", "timeout_wait_element", "sleep_on_reset",
                       "sleep_on_cool_down", "delay_after_reset_click", "sleep_on_hunt_retry",
                       "switch_server_minutes", "default_proxy"]
-        for k in delay_keys:
-            if k in raw:
-                CONFIG_DELAY[k] = raw[k]
+        with CONFIG_DELAY_LOCK:
+            for k in delay_keys:
+                if k in raw:
+                    CONFIG_DELAY[k] = raw[k]
         if any(k in raw for k in delay_keys):
             print(f"[✓] Đã load delay config từ config_parallel.json")
     else:
@@ -2801,7 +2937,8 @@ def run_parallel_mode():
             global_2captcha_api_key = input("Nhập 2Captcha API Key: ").strip()
             if global_2captcha_api_key:
                 print(f"[✓] đã cấu hình 2Captcha API")
-                CONFIG_DELAY["2captcha_api_key"] = global_2captcha_api_key
+                with CONFIG_DELAY_LOCK:
+                    CONFIG_DELAY["2captcha_api_key"] = global_2captcha_api_key
             else:
                 print("[!] Không có API key, sẽ chuyển manual nếu phát hiện captcha")
         else:
