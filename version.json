@@ -1,6 +1,6 @@
 {
-  "version": "1.11.3",
+  "version": "1.11.4",
   "release_date": "2026-05-27",
-  "changelog": "v1.11.3 - Thêm cấu hình tự chọn số job tối đa trước khi nghỉ giải lao và cấu hình khoảng thời gian nghỉ ngơi ngẫu nhiên (min-max giây) để chống quét.",
-  "previous_version": "1.11.2"
+  "changelog": "v1.11.4 - Tắt cơ chế vuốt xem video ngẫu nhiên khi thực hiện job Follow để tránh ấn nhầm/lệch trên trang cá nhân của user.",
+  "previous_version": "1.11.3"
 }

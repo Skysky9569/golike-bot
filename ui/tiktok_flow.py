@@ -168,15 +168,15 @@ def _process_single_job(
     # Doi theo delay
     actual_delay = random.randint(delay_min, delay_max)
     
-    # Random mot thoi diem trong luc cho de vuot xem video khac
+    # Random mot thoi diem trong luc cho de vuot xem video khac (chi ap dung cho job like)
     # Thuong la vao khoang 1/3 hoac 2/3 thoi gian cho
-    vuot_luc = random.choice([actual_delay // 3, actual_delay * 2 // 3])
+    vuot_luc = random.choice([actual_delay // 3, actual_delay * 2 // 3]) if job_type == "like" else -1
     
     for t in range(actual_delay, -1, -1):
         print(colored(f"⏰ Doi {t} giay ...       ", "cyan"), end="\r")
         time.sleep(1)
-        # Hanh vi nguoi dung: Trong luc doi thi luot sang xem video khac
-        if ui_automator and t == vuot_luc:
+        # Hanh vi nguoi dung: Trong luc doi thi luot sang xem video khac (chi ap dung cho job like)
+        if ui_automator and job_type == "like" and t == vuot_luc:
             print(colored(f"⏰ Doi {t} giay (Dang vuot luot xem video tiep theo...)    ", "cyan"), end="\r")
             ui_automator.scroll_down_only()
 

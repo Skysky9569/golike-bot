@@ -713,15 +713,48 @@ class FB_API:
                 print(f"[LIKE_PAGE] fan_status exception: {e1}")
 
             # ================================================
-            # APPROACH 2: GraphQL fallback (nếu fan_status thất bại)
+            # APPROACH 2: GraphQL — thử nhiều format variables
+            # cho doc_id 24681394398162286 (đã xác nhận tồn tại)
             # ================================================
-            print("[LIKE_PAGE] Thử GraphQL fallback...")
-            doc_ids_to_try = [d for d in FacebookSession._LIKE_PAGE_DOC_IDS if d not in ('null', '25463905889878308')]
+            print("[LIKE_PAGE] Thu GraphQL fallback...")
+
+            # Các format variables cần thử (noncoercible = sai kiểu dữ liệu)
+            CONFIRMED_DOC_ID = '24681394398162286'
+            uid = self.session.user_id
+            variable_formats = [
+                # Format 1: source=null, tracking=null (bỏ source)
+                f'{{"input":{{"is_tracking_encrypted":false,"page_id":"{PAGE_ID}","source":null,"tracking":null,"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
+                # Format 2: source=TIMELINE (enum uppercase), tracking=[]
+                f'{{"input":{{"is_tracking_encrypted":false,"page_id":"{PAGE_ID}","source":"TIMELINE","tracking":[],"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
+                # Format 3: không có source và tracking
+                f'{{"input":{{"page_id":"{PAGE_ID}","actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
+                # Format 4: source=PROFILE
+                f'{{"input":{{"is_tracking_encrypted":false,"page_id":"{PAGE_ID}","source":"PROFILE","tracking":[],"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
+                # Format 5: không có is_tracking_encrypted
+                f'{{"input":{{"page_id":"{PAGE_ID}","source":null,"tracking":null,"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
+            ]
+
+            base_payload = {
+                'av': uid,
+                '__user': uid,
+                '__req': NumberEncoder.to_base36(self.payload_builder.request_counter + 1),
+                '__rev': self.session.revision,
+                'fb_dtsg': self.session.token,
+                'jazoest': self.session.jazoest,
+                'lsd': self.session.lsd,
+                '__spin_r': self.session.revision,
+                'fb_api_caller_class': 'RelayModern',
+                'fb_api_req_friendly_name': 'CometPageLikeButtonMutation',
+                'server_timestamps': 'true',
+                'doc_id': CONFIRMED_DOC_ID,
+            }
+
             last_error = None
-            for try_doc_id in doc_ids_to_try:
-                payload = self.payload_builder.build_LikePage(PAGE_ID, try_doc_id)
-                if isinstance(payload, dict) and 'err' in payload:
-                    continue
+            for i, var_fmt in enumerate(variable_formats, 1):
+                self.payload_builder.request_counter += 1
+                payload = {**base_payload,
+                           '__req': NumberEncoder.to_base36(self.payload_builder.request_counter),
+                           'variables': var_fmt}
                 response = requests.post(
                     'https://www.facebook.com/api/graphql/',
                     headers=self.header,
@@ -740,15 +773,14 @@ class FB_API:
                 errors = resp_json.get("errors", [])
                 if errors:
                     err_msg = errors[0].get("message", str(errors[0]))
-                    last_error = f"FB GraphQL error (doc_id={try_doc_id}): {err_msg}"
-                    print(f"[LIKE_PAGE] doc_id={try_doc_id} → {err_msg[:100]}")
+                    last_error = f"format#{i}: {err_msg}"
+                    print(f"[LIKE_PAGE] GraphQL format#{i} -> {err_msg[:100]}")
                     continue
                 data = resp_json.get("data", {})
-                if data:
-                    FacebookSession._cached_like_page_doc_id = try_doc_id
-                    print(f"[LIKE_PAGE] ✓ GraphQL thành công (doc_id={try_doc_id})")
+                if data is not None:
+                    print(f"[LIKE_PAGE] GraphQL thanh cong (format#{i}, doc_id={CONFIRMED_DOC_ID})")
                     return {"success": True, "error": None, "id": PAGE_ID}
-                last_error = f"data rỗng (doc_id={try_doc_id})"
+                last_error = f"data rong (format#{i})"
 
             print(f"[LIKE_PAGE] ✗ Cả 2 phương pháp đều thất bại. Lỗi cuối: {last_error}")
             return {"success": False, "error": last_error or "All methods failed"}
