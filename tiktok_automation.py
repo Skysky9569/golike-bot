@@ -173,13 +173,14 @@ class TikTokUIAutomator:
 
         return False
 
-    def _find_element(self, selectors: List[dict], timeout: float = 2.0, exclude_follower: bool = False) -> Optional[ElementInfo]:
+    def _find_element(self, selectors: List[dict], timeout: float = 2.0, exclude_follower: bool = False, exclude_imageview: bool = False) -> Optional[ElementInfo]:
         """Tìm element theo danh sách selectors
 
         Args:
             selectors: Danh sách selectors để tìm
             timeout: Timeout tối đa (giây)
             exclude_follower: Loại trừ element Follower (cho nút Follow)
+            exclude_imageview: Loại trừ element ImageView (tránh nhầm với avatar)
 
         Returns:
             Optional[ElementInfo]: Thông tin element tìm thấy hoặc None
@@ -199,6 +200,11 @@ class TikTokUIAutomator:
                         # Loại trừ element Follower nếu cần
                         if exclude_follower and self._is_follower_element(info):
                             logger.debug(f"Bỏ qua element Follower: {info.get('text')}")
+                            continue
+
+                        # Loại trừ ImageView để tránh click nhầm vào avatar/profile picture
+                        if exclude_imageview and info.get("className") == "android.widget.ImageView":
+                            logger.debug(f"Bỏ qua ImageView (tránh click nhầm avatar): resourceId={info.get('resourceId')}, desc={info.get('contentDescription')}")
                             continue
 
                         bounds = info.get("bounds")
@@ -237,7 +243,7 @@ class TikTokUIAutomator:
         return None
 
     def find_follow_button(self, timeout: float = 2.0) -> Optional[ElementInfo]:
-        """Tìm nút Follow (loại trừ Follower)
+        """Tìm nút Follow (loại trừ Follower và ImageView/Avatar)
 
         Args:
             timeout: Timeout tối đa (giây)
@@ -246,7 +252,7 @@ class TikTokUIAutomator:
             Optional[ElementInfo]: Thông tin nút Follow hoặc None
         """
         logger.debug("Đang tìm nút Follow...")
-        return self._find_element(self.FOLLOW_SELECTORS, timeout, exclude_follower=True)
+        return self._find_element(self.FOLLOW_SELECTORS, timeout, exclude_follower=True, exclude_imageview=True)
 
     def debug_find_follow_elements(self) -> List[dict]:
         """Debug: Tìm tất cả element có chứa "Follow" để xem có bao nhiêu
