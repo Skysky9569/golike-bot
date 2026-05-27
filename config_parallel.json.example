@@ -1,0 +1,41 @@
+{
+  "_comment": "=== HƯỚNG DẪN CẤU HÌNH ===",
+  "_help": {
+    "profile_name": "Tên hiển thị trong log (đặt tuỳ ý)",
+    "golike_username": "Tên đăng nhập GoLike",
+    "golike_password": "Mật khẩu GoLike",
+    "facebook_cookie": "Cookie Facebook (lấy từ browser)",
+    "golike_uid": "GoLike UID = giá trị i_user trong cookie (dùng để chọn đúng acc trong dropdown)",
+    "target_fb_uid": "Facebook UID = giá trị c_user trong cookie (dùng để gọi API)",
+    "target_fb_name": "Tên Facebook hiển thị (dự phòng nếu không match được uid)",
+    "proxy": "Proxy riêng cho acc này, để trống nếu không dùng. VD: 127.0.0.1:8080 hoặc socks5://user:pass@ip:port"
+  },
+
+  "delay_between_jobs": 10.0,
+  "delay_after_api_call": 5.0,
+  "delay_after_complete": 3.0,
+  "delay_after_report_error": 3.0,
+  "delay_on_job_hunt_retry": 16.0,
+  "delay_between_accounts": 30.0,
+  "timeout_driver_load": 15.0,
+  "timeout_wait_element": 15.0,
+  "sleep_on_reset": 60.0,
+  "sleep_on_hunt_retry": 15.0,
+  "sleep_on_cool_down": 180.0,
+  "delay_after_reset_click": 15.0,
+  "switch_server_minutes": 0.0,
+  "default_proxy": "",
+
+  "parallel_accounts": [
+    {
+      "profile_name": "Acc 1",
+      "golike_username": "YOUR_GOLIKE_USERNAME",
+      "golike_password": "YOUR_GOLIKE_PASSWORD",
+      "golike_uid": "",
+      "target_fb_uid": "YOUR_FB_UID",
+      "target_fb_name": "YOUR_FB_NAME",
+      "proxy": "",
+      "facebook_cookie": "YOUR_FB_COOKIE_HERE"
+    }
+  ]
+}
