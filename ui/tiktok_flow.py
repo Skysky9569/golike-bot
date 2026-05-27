@@ -457,7 +457,23 @@ def tiktok_menu(auth_token: str) -> None:
     except Exception:
         delay_job_min, delay_job_max = 25, 45
 
-    logger.info(f"Cau hinh delay: Action ({delay_action_min}-{delay_action_max}s), Job ({delay_job_min}-{delay_job_max}s)")
+    # So job de nghi
+    try:
+        v = input(colored("📆 Sau bao nhieu job thi nghi (nhap '40' hoac Enter de dung mac dinh): ", "green")).strip()
+        if not v: v = "40"
+        break_jobs = int(v)
+    except Exception:
+        break_jobs = 40
+
+    # Thoi gian nghi tu min-max
+    try:
+        v = input(colored("⏱️  Thoi gian nghi (giay, nhap '300-600' hoac Enter de dung mac dinh): ", "green")).strip()
+        if not v: v = "300-600"
+        break_delay_min, break_delay_max = map(int, v.split("-"))
+    except Exception:
+        break_delay_min, break_delay_max = 300, 600
+
+    logger.info(f"Cau hinh delay: Action ({delay_action_min}-{delay_action_max}s), Job ({delay_job_min}-{delay_job_max}s), Break after {break_jobs} jobs ({break_delay_min}-{break_delay_max}s)")
     print(colored("════════════════════════════════════════════════", "white"))
 
     doiacc = input_int("📆 So job fail de doi acc TikTok (nhap 1 neu k muon dung) : ")
@@ -618,10 +634,11 @@ def tiktok_menu(auth_token: str) -> None:
             jobs_completed_for_break += 1
             
             # Kiem tra nghi giai lao
-            if jobs_completed_for_break >= 40:
-                print(colored("\n💤 Da lam 40 nhiem vu. Cho he thong nghi giai lao 5 phut de tranh bi quét...", "yellow", bold=True))
-                for t in range(300, -1, -1):
-                    print(colored(f"⏰ Nghỉ ngơi: Doi {t} giay ...    ", "cyan"), end="\r")
+            if break_jobs > 0 and jobs_completed_for_break >= break_jobs:
+                rest_time = random.randint(break_delay_min, break_delay_max)
+                print(colored(f"\n💤 Da lam {break_jobs} nhiem vu. Cho he thong nghi giai lao {rest_time} giay de tranh bi quet...", "yellow", bold=True))
+                for t in range(rest_time, -1, -1):
+                    print(colored(f"⏰ Nghi ngoi: Doi {t} giay ...    ", "cyan"), end="\r")
                     time.sleep(1)
                 print(" " * 50, end="\r")
                 jobs_completed_for_break = 0

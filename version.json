@@ -1,6 +1,6 @@
 {
-  "version": "1.11.2",
+  "version": "1.11.3",
   "release_date": "2026-05-27",
-  "changelog": "v1.11.2 - Sửa lỗi thiếu import input_int gây crash ở menu chọn token. Thêm chức năng xóa token trong phần Quản lý Authorization Tokens.",
-  "previous_version": "1.11.1"
+  "changelog": "v1.11.3 - Thêm cấu hình tự chọn số job tối đa trước khi nghỉ giải lao và cấu hình khoảng thời gian nghỉ ngơi ngẫu nhiên (min-max giây) để chống quét.",
+  "previous_version": "1.11.2"
 }
