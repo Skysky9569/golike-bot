@@ -1942,11 +1942,14 @@ def run_single_mode():
             actual_cookie = current_cookie
             if current_cookie and hasattr(cred_manager, '_decrypt'):
                 try:
-                    # Try to decrypt; if it fails, assume it's plaintext
                     decrypted = cred_manager._decrypt(current_cookie)
-                    actual_cookie = decrypted
+                    # Check if the decrypted cookie looks valid
+                    if decrypted and any(k in decrypted for k in ["c_user", "xs", "sb"]):
+                        actual_cookie = decrypted
+                    else:
+                        # Decryption returned empty/garbage, use as plaintext
+                        actual_cookie = current_cookie
                 except Exception:
-                    # Cookie might be plaintext, use as-is
                     actual_cookie = current_cookie
 
             if actual_cookie:
