@@ -1139,7 +1139,8 @@ def load_delay_config(filepath: str = "config_golike_sele.json"):
         "sleep_on_hunt_retry": 10,
         "switch_server_minutes": 0,
         "max_job_hunt_fail": 3,
-        "default_proxy": ""
+        "default_proxy": "",
+        "skipped_job_types": []
     }
 
     if os.path.exists(filepath):
@@ -1321,6 +1322,13 @@ def show_config_summary():
     proxy_val = CONFIG_DELAY.get("default_proxy", "")
     proxy_display = proxy_val if proxy_val else "(không đặt)"
     print(f"    {C_MAGENTA}{'Default proxy':.<40s}{C_RESET} {C_YELLOW}{proxy_display}{C_RESET}")
+
+    # ── Nhóm Phân loại Job ────────────────────────────────────────
+    print(f"\n  {C_BOLD}🚫 PHÂN LOẠI JOB BỎ QUA{C_RESET}")
+    skipped = CONFIG_DELAY.get("skipped_job_types", [])
+    skipped_display = ", ".join(skipped) if skipped else "(không bỏ qua loại nào)"
+    print(f"    {C_MAGENTA}{'Job bỏ qua (skip)':.<40s}{C_RESET} {C_YELLOW}{skipped_display}{C_RESET}")
+    print(f"    {C_CYAN}  Các loại: like, lik_page, follow, love, haha, wow, sad, angry, care{C_RESET}")
     
     # ── Nhóm Mở rộng ────────────────────────────────────────────────
     print(f"\n  {C_BOLD}🔌 MỞ RỘNG (API/TELEGRAM){C_RESET}")
@@ -1353,6 +1361,7 @@ def setup_delay_config():
         ("sleep_on_hunt_retry", "Sleep khi retry hunt job (giây)", float),
         ("switch_server_minutes", "Thời gian tự động đổi Server (phút, 0 để tắt)", float),
         ("max_job_hunt_fail", "Số lần hụt Job liên tiếp thì đổi Acc (lần, 0 để tắt)", float),
+        ("skipped_job_types", "🚫 Loại job BỎ QUA (VD: follow,haha,sad — để trống để làm tất cả)", "list"),
         ("telegram_bot_token", "Telegram Bot Token", str),
         ("telegram_chat_id", "Telegram Chat ID", str),
         ("2captcha_api_key", "2Captcha API Key (để trống nếu không dùng)", str),
@@ -1371,7 +1380,11 @@ def setup_delay_config():
         SENSITIVE_KEYS = {"telegram_bot_token", "telegram_chat_id", "2captcha_api_key"}
 
         for i, (key, label, type_func) in enumerate(key_names, 1):
-            val = config.get(key, 10 if type_func == float else "(trống)")
+            if type_func == "list":
+                raw_list = config.get(key, [])
+                val = ", ".join(raw_list) if raw_list else "(không bỏ qua)"
+            else:
+                val = config.get(key, 10 if type_func == float else "(trống)")
             # Mask sensitive values
             if key in SENSITIVE_KEYS and val and val != "(trống)":
                 val = mask_sensitive_value(str(val))
@@ -1388,20 +1401,39 @@ def setup_delay_config():
             idx = int(choice) - 1
             if 0 <= idx < len(key_names):
                 key, label, type_func = key_names[idx]
-                current_val = config.get(key, 10 if type_func == float else "")
-                # Mask sensitive values when prompting
-                if key in SENSITIVE_KEYS and current_val:
-                    current_val = mask_sensitive_value(str(current_val))
-                new_val = input(f"Nhập giá trị mới cho '{label}' [hiện tại: {current_val}]: ").strip()
-                if new_val or type_func == str:
-                    try:
-                        if type_func == float and not new_val:
-                            pass
+                if type_func == "list":
+                    raw_list = config.get(key, [])
+                    current_val = ", ".join(raw_list) if raw_list else "(không bỏ qua)"
+                    print(f"\n  📋 Các loại job hợp lệ: like, lik_page, follow, love, haha, wow, sad, angry, care")
+                    new_val = input(f"Nhập danh sách loại job BỎ QUA (cách nhau bằng dấu phẩy) [hiện tại: {current_val}]: ").strip()
+                    # Parse comma-separated list, strip whitespace
+                    if new_val == "" or new_val.lower() in ("none", "0", "không"):
+                        config[key] = []
+                        print(f"[✓] Đã xóa danh sách skip — sẽ làm TẤT CẢ các loại job")
+                    else:
+                        parsed = [t.strip().lower() for t in new_val.split(",") if t.strip()]
+                        valid_types = ["like", "lik_page", "follow", "love", "haha", "wow", "sad", "angry", "care", "unknown"]
+                        invalid = [t for t in parsed if t not in valid_types]
+                        if invalid:
+                            print(f"[!] Loại không hợp lệ: {invalid}. Chỉ chấp nhận: {valid_types}")
                         else:
-                            config[key] = type_func(new_val) if new_val else ""
-                            print(f"[✓] Đã cập nhật {key} = {config[key]}")
-                    except ValueError:
-                        print(f"[!] Giá trị không hợp lệ, giữ nguyên: {current_val}")
+                            config[key] = parsed
+                            print(f"[✓] Đã cập nhật {key} = {parsed}")
+                else:
+                    current_val = config.get(key, 10 if type_func == float else "")
+                    # Mask sensitive values when prompting
+                    if key in SENSITIVE_KEYS and current_val:
+                        current_val = mask_sensitive_value(str(current_val))
+                    new_val = input(f"Nhập giá trị mới cho '{label}' [hiện tại: {current_val}]: ").strip()
+                    if new_val or type_func == str:
+                        try:
+                            if type_func == float and not new_val:
+                                pass
+                            else:
+                                config[key] = type_func(new_val) if new_val else ""
+                                print(f"[✓] Đã cập nhật {key} = {config[key]}")
+                        except ValueError:
+                            print(f"[!] Giá trị không hợp lệ, giữ nguyên: {current_val}")
             else:
                 print("[!] Lựa chọn không hợp lệ!")
         except ValueError:
@@ -1419,6 +1451,9 @@ def setup_delay_config():
     load_delay_config(config_path)  # Reload config
 
 # ================= CHIA SẺ HÀM LOGIC CHUNG =================
+# Danh sách loại job hợp lệ để user tham khảo
+ALL_JOB_TYPES = ["like", "lik_page", "follow", "love", "haha", "wow", "sad", "angry", "care", "unknown"]
+
 def map_job_type(job_text):
     job_text = job_text.lower()
     if "like cho fanpage" in job_text: return "lik_page"
@@ -1432,6 +1467,22 @@ def map_job_type(job_text):
     if "care" in job_text or "thương thương" in job_text: return "care"
     if "like" in job_text: return "like"
     return "unknown"
+
+
+def is_job_skipped(job_type: str) -> bool:
+    """
+    Kiểm tra xem loại job có nằm trong danh sách cần bỏ qua không.
+
+    Args:
+        job_type: Loại job đã qua map_job_type() (ví dụ: 'like', 'follow', ...)
+
+    Returns:
+        True nếu nên bỏ qua job này, False nếu tiếp tục làm
+    """
+    skipped = CONFIG_DELAY.get("skipped_job_types", [])
+    if not isinstance(skipped, list):
+        return False
+    return job_type in [s.strip().lower() for s in skipped if s]
 
 
 def is_valid_facebook_url(url: str) -> bool:
@@ -2202,6 +2253,31 @@ def run_single_mode():
                     
                         # GỌI API
                         j_type = map_job_type(job_type_raw)
+
+                        # ---- Kiểm tra job bị skip ----
+                        if is_job_skipped(j_type):
+                            print(f"🚫 [SKIP] Loại job '{j_type}' ({job_type_raw}) nằm trong danh sách bỏ qua. Đang báo lỗi...")
+                            try:
+                                bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
+                                human_click(driver, bl)
+                                sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+                                c_lydo = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Tôi không muốn làm Job này')]")))
+                                human_click(driver, c_lydo)
+                                sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
+                                gui = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Gửi báo cáo')]")))
+                                human_click(driver, gui)
+                                sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+                                try:
+                                    o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                    human_click(driver, o_b)
+                                except: pass
+                                print(f"✅ [SKIP] Đã bỏ qua job loại '{j_type}'.")
+                            except Exception as skip_e:
+                                print(f"[!] Lỗi khi bỏ qua job: {skip_e}")
+                            smart_sleep(smart_random_delay(CONFIG_DELAY.get("delay_between_jobs", 10)))
+                            continue
+                        # ---- Kết thúc kiểm tra skip ----
+
                         uid = getidpost(fb_job_url)
                         success = False
                     
@@ -2740,6 +2816,31 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
                 
                 j_t = map_job_type(j_raw)
+
+                # ---- Kiểm tra job bị skip ----
+                if is_job_skipped(j_t):
+                    log_thread(p_name, f"🚫 [SKIP] Loại job '{j_t}' ({j_raw}) nằm trong danh sách bỏ qua. Đang báo lỗi...")
+                    try:
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
+                        human_click(driver, bl)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+                        c_lydo = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Tôi không muốn làm Job này')]")))
+                        human_click(driver, c_lydo)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
+                        gui = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Gửi báo cáo')]")))
+                        human_click(driver, gui)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+                        try:
+                            o_b = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
+                            human_click(driver, o_b)
+                        except: pass
+                        log_thread(p_name, f"✅ [SKIP] Đã bỏ qua job loại '{j_t}'.")
+                    except Exception as skip_e:
+                        log_thread(p_name, f"[!] Lỗi khi bỏ qua job: {skip_e}")
+                    smart_sleep(smart_random_delay(CONFIG_DELAY.get("delay_between_jobs", 10)))
+                    continue
+                # ---- Kết thúc kiểm tra skip ----
+
                 uid = getidpost(fb_url)
                 ok = False
                 if uid and uid != "0":

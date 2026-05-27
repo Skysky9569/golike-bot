@@ -84,7 +84,7 @@ from golike_core.logging import logger
 from golike_core.security import CredentialManager, InputValidator
 from golike_core.adb_manager import colored
 
-from ui.console import menu, banner, check_for_updates, CURRENT_VERSION
+from ui.console import menu, banner, check_for_updates, CURRENT_VERSION, input_int
 from ui.adb_menu import adb_menu
 from ui.system_panels import show_security_config, show_logs, run_tests, toggle_debug_mode
 from ui.tiktok_flow import tiktok_menu
@@ -138,6 +138,7 @@ def auth_manager_menu() -> None:
 
         print(colored("\nLựa chọn:", "white"))
         print(colored("   [1] ➕ Thêm token mới", "green"))
+        print(colored("   [2] ❌ Xóa token", "red"))
         print(colored("   [0] 🔙 Quay lại menu chính", "white"))
         print(colored("════════════════════════════════════════════════", "cyan"))
 
@@ -160,6 +161,37 @@ def auth_manager_menu() -> None:
                 print(colored(f"[✔] Da luu token voi nhan '{label}'!", "green"))
             else:
                 print(colored("[!] Luu token that bai!", "red"))
+        elif choice == "2":
+            # Xóa token
+            if not tokens:
+                print(colored("[!] Khong co token nao de xoa!", "yellow"))
+                continue
+
+            print(colored("\nChon token muon xoa:", "red"))
+            for i, label in enumerate(tokens, 1):
+                print(f"  [{i}] {label}")
+
+            try:
+                del_choice = input(colored("Nhap so thu tu token muon xoa (hoac Enter de huy): ", "white")).strip()
+                if not del_choice:
+                    print(colored("Da huy xoa token.", "yellow"))
+                    continue
+
+                del_idx = int(del_choice)
+                if 1 <= del_idx <= len(tokens):
+                    label_to_delete = tokens[del_idx - 1]
+                    confirm = input(colored(f"Ban co chac muon xoa token '{label_to_delete}'? (y/n): ", "yellow")).strip().lower()
+                    if confirm == 'y':
+                        if cred_manager.delete_auth(label_to_delete):
+                            print(colored(f"[✔] Da xoa token '{label_to_delete}'!", "green"))
+                        else:
+                            print(colored("[!] Xoa token that bai!", "red"))
+                    else:
+                        print(colored("Da huy.", "yellow"))
+                else:
+                    print(colored("Lua chon khong hop le!", "red"))
+            except ValueError:
+                print(colored("Lua chon khong hop le! Vui long nhap so.", "red"))
         else:
             print(colored("Lua chon khong hop le!", "yellow"))
 

@@ -89,13 +89,13 @@ def check_termux_requirements() -> dict:
         pass
 
     try:
-        import selenium
+        import selenium as _selenium  # noqa: F401
         result['has_selenium'] = True
     except ImportError:
         pass
 
     try:
-        import playwright
+        import playwright as _playwright  # noqa: F401
         result['has_playwright'] = True
     except ImportError:
         pass

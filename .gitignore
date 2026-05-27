@@ -63,3 +63,7 @@ golike_core/modules/main_system.py
 # === CODE ANALYSIS ===
 .codegraph/
 openai_search_results.png
+
+# === UI DUMP FILES (cho automation analysis) ===
+ui_dump.xml
+*_dump.xml

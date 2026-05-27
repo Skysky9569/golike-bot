@@ -24,13 +24,14 @@ def _load_version() -> str:
 CURRENT_VERSION = _load_version()
 
 
-def input_int(prompt: str, color: str = "green", minval: int = 1) -> int:
+def input_int(prompt: str, color: str = "green", minval: int = 1, maxval: Optional[int] = None) -> int:
     """Helper de input so nguyen
 
     Args:
         prompt: Noi dung prompt
         color: Mau cua text
         minval: Gia tri toi thieu
+        maxval: Gia tri toi da
 
     Returns:
         int: So nguyen nguoi dung nhap
@@ -38,9 +39,13 @@ def input_int(prompt: str, color: str = "green", minval: int = 1) -> int:
     while True:
         try:
             val = int(input(colored(prompt, color)).strip())
-            if val >= minval:
-                return val
-            logger.warning(f"Gia tri phai >= {minval}!")
+            if val < minval:
+                logger.warning(f"Gia tri phai >= {minval}!")
+                continue
+            if maxval is not None and val > maxval:
+                logger.warning(f"Gia tri phai <= {maxval}!")
+                continue
+            return val
         except ValueError:
             logger.warning("Vui long nhap so nguyen!")
 

@@ -1,6 +1,6 @@
 {
-  "version": "1.11.1",
-  "release_date": "2026-05-26",
-  "changelog": "v1.11.1 - Vá lỗi: Thêm is_parallel vào hàm handle_2captcha_captcha. Tối ưu hóa XPaths click lý do báo lỗi tránh click lệch vào menu điều hướng. Tự động cuộn phần tử click vào giữa màn hình để chống bị đè bởi fixed header/footer. Bỏ quét JS bundle tìm doc_id ở Facebook session để tăng tốc độ đăng nhập tài khoản và tiết kiệm proxy.",
-  "previous_version": "1.11.0"
+  "version": "1.11.2",
+  "release_date": "2026-05-27",
+  "changelog": "v1.11.2 - Sửa lỗi thiếu import input_int gây crash ở menu chọn token. Thêm chức năng xóa token trong phần Quản lý Authorization Tokens.",
+  "previous_version": "1.11.1"
 }

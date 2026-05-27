@@ -11,8 +11,8 @@ from typing import Optional, Dict, List
 # Cryptography support with fallback to XOR for Termux compatibility
 try:
     from cryptography.fernet import Fernet
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.primitives import hashes  # noqa: F401 - imported for type checking
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # noqa: F401 - imported for type checking
     HAS_CRYPTO = True
 except ImportError:
     HAS_CRYPTO = False

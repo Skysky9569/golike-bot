@@ -62,7 +62,7 @@ class GoLikeModule:
             print(f"Lỗi điều hướng đến Facebook jobs: {e}")
             return False
 
-    def select_facebook_account(self, account_name=None, account_id=None):
+    def select_facebook_account(self, _account_name=None, _account_id=None):
         """Chọn tài khoản Facebook để chạy"""
         try:
             # Click vào nút chọn tài khoản
