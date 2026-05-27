@@ -1,6 +1,6 @@
 {
-  "version": "1.11.5",
+  "version": "1.11.6",
   "release_date": "2026-05-27",
-  "changelog": "v1.11.5 - Sửa lỗi click nhầm vào avatar khi làm nhiệm vụ Follow (loại bỏ các UI element dạng ImageView khỏi selectors tìm nút Follow).",
-  "previous_version": "1.11.4"
+  "changelog": "v1.11.6 - Thêm debug thông tin chi tiết (type, attributes) khi không tìm thấy method REACTION trong FB_API.",
+  "previous_version": "1.11.5"
 }

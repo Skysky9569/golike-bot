@@ -548,7 +548,7 @@ def throttled_api_call(api_obj, method_name, *args, **kwargs):
         if method:
             return method(*args, **kwargs)
         else:
-            print(f"[!] Không tìm thấy method {method_name} trong FB_API")
+            print(f"[!] Không tìm thấy method {method_name} trong FB_API (Object type: {type(api_obj)}, attributes: {dir(api_obj) if api_obj is not None else 'None'})")
             return {"success": False}
 
 
