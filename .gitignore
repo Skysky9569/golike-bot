@@ -34,7 +34,6 @@ multi_accounts.json
 *.local.json
 config_parallel.json
 settings.local.json
-settings.local.json
 *_config.json
 !*_config.json.example
 # File config chứa credentials - untrack để tránh commit nhầm
@@ -63,6 +62,10 @@ golike_core/modules/main_system.py
 # === CODE ANALYSIS ===
 .codegraph/
 openai_search_results.png
+.coverage
+*.coverage
+scratch/
+test_golike_fb_requests.py
 
 # === UI DUMP FILES (cho automation analysis) ===
 ui_dump.xml

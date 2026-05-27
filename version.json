@@ -1,6 +1,6 @@
 {
-  "version": "1.11.7",
+  "version": "1.11.8",
   "release_date": "2026-05-27",
-  "changelog": "v1.11.7 - Sửa lỗi giải mã cookie thất bại/rác trả về chuỗi rỗng gây mất đối tượng Fb (gây ra lỗi Không tìm thấy method REACTION/FOLLOW trong FB_API).",
-  "previous_version": "1.11.6"
+  "changelog": "v1.11.8 - Cập nhật file .gitignore để chặn các file rác như .coverage, thư mục scratch/, file test tạm thời và dọn dẹp trùng lặp.",
+  "previous_version": "1.11.7"
 }
