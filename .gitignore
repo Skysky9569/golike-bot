@@ -46,6 +46,7 @@ Authorization.txt
 *.token
 auth_tokens.json
 single_mode_accounts.json
+golike_token.json
 
 # === CẦN UNTRACK (không xóa local, chỉ untrack) ===
 demo_config.json

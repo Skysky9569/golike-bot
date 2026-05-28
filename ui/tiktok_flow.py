@@ -115,15 +115,15 @@ def _process_single_job(
     if search_mode and job_type == "follow":
         username = extract_username_from_link(link)
         if not username:
-            logger.warning(f"Khong extract duoc username tu link: {link[:60]}")
+            logger.warning(f"Không lấy được username từ link: {link[:60]}")
             actual_delay = random.randint(delay_min, delay_max)
             for t in range(actual_delay, -1, -1):
-                print(colored(f"⏰ Doi {t} giay ...", "cyan"), end="\r")
+                print(colored(f"⏰ Đợi {t} giây ...", "cyan"), end="\r")
                 time.sleep(1)
             return False, 0, False
 
         if ui_automator:
-            print(colored(f"🔍 Dang tim kiem user '{username}' trong app TikTok...", "cyan"), end="\r")
+            print(colored(f"🔍 Đang tìm kiếm user '{username}' trong app TikTok...", "cyan"), end="\r")
             search_ok, search_msg = ui_automator.search_user(username, timeout=5, retry_count=3)
             if search_ok:
                 print(colored(f"✅ {search_msg}", "green"))
@@ -132,38 +132,38 @@ def _process_single_job(
                 ui_automator.clear_search_text()
                 actual_delay = random.randint(delay_min, delay_max)
                 for t in range(actual_delay, -1, -1):
-                    print(colored(f"⏰ Doi {t} giay ...", "cyan"), end="\r")
+                    print(colored(f"⏰ Đợi {t} giây ...", "cyan"), end="\r")
                     time.sleep(1)
                 return False, 0, False
         else:
-            logger.error("UI Automation khong kha dung, khong the search!")
+            logger.error("UI Automation không khả dụng, không thể tìm kiếm!")
             return False, 0, False
     elif search_mode and job_type == "like":
-        logger.info(f"Search mode - ADB mo link like: {link[:50]}...")
+        logger.info(f"Chế độ tìm kiếm - ADB mở link like: {link[:50]}...")
         job_processor.process(Job(ads_id, link, job_type, object_id))
     else:
-        logger.info(f"Mo link job {job_type}: {link[:50]}...")
+        logger.info(f"Mở link nhiệm vụ {job_type}: {link[:50]}...")
         opened = job_processor.process(Job(ads_id, link, job_type, object_id))
 
         if not opened and open_method == "adb":
-            print(colored(f"❌ Khong the mo bang ADB", "red"), end="\r")
+            print(colored(f"❌ Không thể mở bằng ADB", "red"), end="\r")
             print(colored(f"🔗 Link: {link}", "yellow"))
-            print(colored("   Vui long mo thu cong...", "cyan"))
+            print(colored("   Vui lòng mở thủ công...", "cyan"))
 
     # UI Automation
     if ui_automator and job_type in ["follow", "like"]:
-        print(colored(f"🤖 Dang thuc hien UI automation cho {job_type}...", "cyan"), end="\r")
+        print(colored(f"🤖 Đang thực hiện tự động click cho {job_type}...", "cyan"), end="\r")
         ui_success, ui_message, ui_not_found = _call_process_job(ui_automator, job_type)
-        logger.info(f"UI automation {job_type}: {ui_message}")
+        logger.info(f"Tự động click {job_type}: {ui_message}")
 
         if ui_not_found:
-            print(colored(f"🚫 Khong tim thay nut {job_type} sau 2 lan → Skip job!", "red", bold=True))
+            print(colored(f"🚫 Không tìm thấy nút {job_type} sau 2 lần → Bỏ qua nhiệm vụ!", "red", bold=True))
             _skip_job(api_client, ads_id, object_id, account_id, job_type)
             return False, 0, True  # not_found_skip = True
         elif ui_success:
-            print(colored(f"✅ UI automation thanh cong: {ui_message}", "green"))
+            print(colored(f"✅ Tự động click thành công: {ui_message}", "green"))
         else:
-            print(colored(f"⚠️ UI automation canh bao: {ui_message}", "yellow"))
+            print(colored(f"⚠️ Tự động click cảnh báo: {ui_message}", "yellow"))
 
     # Doi theo delay
     actual_delay = random.randint(delay_min, delay_max)
@@ -173,17 +173,17 @@ def _process_single_job(
     vuot_luc = random.choice([actual_delay // 3, actual_delay * 2 // 3]) if job_type == "like" else -1
     
     for t in range(actual_delay, -1, -1):
-        print(colored(f"⏰ Doi {t} giay ...       ", "cyan"), end="\r")
+        print(colored(f"⏰ Đợi {t} giây ...       ", "cyan"), end="\r")
         time.sleep(1)
         # Hanh vi nguoi dung: Trong luc doi thi luot sang xem video khac (chi ap dung cho job like)
         if ui_automator and job_type == "like" and t == vuot_luc:
-            print(colored(f"⏰ Doi {t} giay (Dang vuot luot xem video tiep theo...)    ", "cyan"), end="\r")
+            print(colored(f"⏰ Đợi {t} giây (Đang vuốt lướt xem video tiếp theo...)    ", "cyan"), end="\r")
             ui_automator.scroll_down_only()
 
     # Xoa text search neu search mode
     if search_mode and ui_automator:
         ui_automator.clear_search_text()
-        print(colored("🧹 Da xoa text search", "cyan"), end="\r")
+        print(colored("🧹 Đã xóa chữ tìm kiếm", "cyan"), end="\r")
 
     # Nhan tien
     return _claim_payment(api_client, ads_id, account_id, job_type, stt=stt, tong=tong)
@@ -193,7 +193,7 @@ def _skip_job(api_client: GolikeAPIClient, ads_id: str, object_id: str, account_
     """Bao cao va skip job that bai."""
     try:
         api_client.post('/api/report/send', {
-            "description": "Bao cao hoan thanh that bai",
+            "description": "Báo cáo hoàn thành thất bại",
             "users_advertising_id": ads_id,
             "type": "ads",
             "provider": "tiktok",
@@ -207,7 +207,7 @@ def _skip_job(api_client: GolikeAPIClient, ads_id: str, object_id: str, account_
             "type": job_type
         })
     except Exception as e:
-        logger.error(f"Loi skip job: {e}")
+        logger.error(f"Lỗi bỏ qua nhiệm vụ: {e}")
 
 
 def _claim_payment(
@@ -227,7 +227,7 @@ def _claim_payment(
     reward = 0
     for lan in range(1, 3):
         try:
-            logger.info(f"Dang nhan tien lan {lan} cho job {job_type} (ads_id: {ads_id})...")
+            logger.info(f"Đang nhận tiền lần {lan} cho nhiệm vụ {job_type} (ads_id: {ads_id})...")
             nhantien = api_client.post('/api/advertising/publishers/tiktok/complete-jobs', {
                 "ads_id": ads_id,
                 "account_id": account_id,
@@ -241,18 +241,18 @@ def _claim_payment(
                 message = nhantien['data'].get('message')
                 now = datetime.now(tz).strftime("%H:%M:%S") if tz else time.strftime("%H:%M:%S")
                 
-                print(colored(f"| {stt} | {now} | success | {job_type} | +{reward} | {tong + reward} |", "green", bold=True))
+                print(colored(f"| {stt} | {now} | thành công | {job_type} | +{reward} | {tong + reward} |", "green", bold=True))
                 if message:
-                    print(colored(f"   └── Thong bao tu he thong: {message}", "cyan"))
+                    print(colored(f"   └── Thông báo từ hệ thống: {message}", "cyan"))
                 
-                logger.info(f"Job hoan thanh: {job_type}, +{reward} xu" + (f" - {message}" if message else ""))
+                logger.info(f"Nhiệm vụ hoàn thành: {job_type}, +{reward} xu" + (f" - {message}" if message else ""))
                 break
             elif lan == 1:
-                print(colored("⚠️ Lan 1 that bai - Dang thu lan 2...", "yellow"), end="\r")
+                print(colored("⚠️ Lần 1 thất bại - Đang thử lần 2...", "yellow"), end="\r")
         except Exception as e:
-            logger.error(f"Loi nhan tien lan {lan}: {e}")
+            logger.error(f"Lỗi nhận tiền lần {lan}: {e}")
             if lan == 1:
-                print(colored("⚠️ Lan 1 that bai - Dang thu lan 2...", "yellow"), end="\r")
+                print(colored("⚠️ Lần 1 thất bại - Đang thử lần 2...", "yellow"), end="\r")
 
     return ok, reward, False
 
@@ -274,42 +274,42 @@ def tiktok_menu(auth_token: str) -> None:
     current_device = None
     adb_manager = None
 
-    # 1. Thu tai su dung cau hinh cu
+    # 1. Thử tải sử dụng cấu hình cũ
     use_saved = False
     if saved_open_method == "adb" and saved_device:
-        logger.info(f"Phat hien thiet bi ADB da chon truoc do: {saved_device}")
-        chon_saved = input(colored("👉 Ban muon tiep tuc chay va Auto Click tren thiet bi nay? (y/n, Enter la Co): ", "green")).strip().lower()
+        logger.info(f"Phát hiện thiết bị ADB đã chọn trước đó: {saved_device}")
+        chon_saved = input(colored("👉 Bạn muốn tiếp tục chạy và Auto Click trên thiết bị này? (y/n, Enter là Có): ", "green")).strip().lower()
         if chon_saved in ["y", "yes", ""]:
             use_saved = True
             open_method = "adb"
             current_device = saved_device
             adb_manager = ADBManager()
             adb_manager.selected_device = current_device
-            logger.info(f"Tai su dung thiet bi ADB da luu: {current_device}")
+            logger.info(f"Tái sử dụng thiết bị ADB đã lưu: {current_device}")
     elif saved_open_method == "u2":
         saved_ip_port = adb_config.get("current_device", "")
         if saved_ip_port:
-            logger.info(f"Thiet bi uiautomator2 da luu: {saved_ip_port}")
-            chon_saved = input(colored("👉 Ban muon tiep tuc dung thiet bi nay? (y/n, Enter la Co): ", "green")).strip().lower()
+            logger.info(f"Thiết bị uiautomator2 đã lưu: {saved_ip_port}")
+            chon_saved = input(colored("👉 Bạn muốn tiếp tục dùng thiết bị này? (y/n, Enter là Có): ", "green")).strip().lower()
             if chon_saved in ["y", "yes", ""]:
                 use_saved = True
                 open_method = "u2"
                 current_device = saved_ip_port
                 adb_manager = ADBManager()
-                logger.info(f"Tai su dung thiet bi u2: {current_device}")
+                logger.info(f"Tái sử dụng thiết bị u2: {current_device}")
     elif saved_open_method in ["termux", "manual"]:
-        method_desc = "Termux" if saved_open_method == "termux" else "Che do Thu cong (Ban tu Click bang tay)"
-        logger.info(f"Phuong thuc mo link truoc do: {method_desc}")
-        chon_saved = input(colored("👉 Ban muon tiep tuc giu nguyen phuong thuc nay? (y/n, Enter la Co): ", "green")).strip().lower()
+        method_desc = "Termux" if saved_open_method == "termux" else "Chế độ Thủ công (Bạn tự Click bằng tay)"
+        logger.info(f"Phương thức mở link trước đó: {method_desc}")
+        chon_saved = input(colored("👉 Bạn muốn tiếp tục giữ nguyên phương thức này? (y/n, Enter là Có): ", "green")).strip().lower()
         if chon_saved in ["y", "yes", ""]:
             use_saved = True
             open_method = saved_open_method
-            logger.info(f"Tai su dung phuong thuc: {open_method}")
+            logger.info(f"Tái sử dụng phương thức: {open_method}")
     elif saved_open_method == "search":
-        logger.info("Phuong thuc truoc do: Tim kiem user TikTok de Follow")
+        logger.info("Phương thức trước đó: Tìm kiếm user TikTok để Follow")
         if saved_device:
-            logger.info(f"Thiet bi da chon: {saved_device}")
-        chon_saved = input(colored("👉 Ban muon tiep tuc dung che do tim kiem? (y/n, Enter la Co): ", "green")).strip().lower()
+            logger.info(f"Thiết bị đã chọn: {saved_device}")
+        chon_saved = input(colored("👉 Bạn muốn tiếp tục dùng chế độ tìm kiếm? (y/n, Enter là Có): ", "green")).strip().lower()
         if chon_saved in ["y", "yes", ""]:
             use_saved = True
             open_method = "search"
@@ -317,20 +317,20 @@ def tiktok_menu(auth_token: str) -> None:
             adb_manager = ADBManager()
             if saved_device:
                 adb_manager.selected_device = saved_device
-            logger.info("Tai su dung phuong thuc: search")
+            logger.info("Tái sử dụng phương thức: search")
 
-    # 2. Neu khong dung lai cau hinh cu, thiet lap moi
+    # 2. Nếu không dùng lại cấu hình cũ, thiết lập mới
     if not use_saved:
         print(colored("════════════════════════════════════════════════", "white"))
-        print(colored("📱 Cau hinh Ket noi & Auto Click:", "cyan", bold=True))
-        print(colored("   [1] ⭐ Chay TU DONG: Mo Link & Tu Auto Click (Dung ADB cho PC/Gia lap)", "white"))
-        print(colored("   [2] 📱 Chay qua WiFi (uiautomator2): Nhap IP:Port dien thoai de ket noi", "cyan"))
-        print(colored("   [3] ✍️  Chay Thu Cong: Chi hien Link, ban TU CLICK BANG TAY tren dien thoai", "white"))
-        print(colored("   [4] 🔍 Tim kiem user TikTok de Follow (dung thanh search trong app)", "yellow"))
+        print(colored("📱 Cấu hình Kết nối & Auto Click:", "cyan", bold=True))
+        print(colored("   [1] ⭐ Chạy TỰ ĐỘNG: Mở Link & Tự Auto Click (Dùng ADB cho PC/Giả lập)", "white"))
+        print(colored("   [2] 📱 Chạy qua WiFi (uiautomator2): Nhập IP:Port điện thoại để kết nối", "cyan"))
+        print(colored("   [3] ✍️  Chạy Thủ Công: Chỉ hiện Link, bạn TỰ CLICK BẰNG TAY trên điện thoại", "white"))
+        print(colored("   [4] 🔍 Tìm kiếm user TikTok để Follow (dùng thanh search trong app)", "yellow"))
         print(colored("════════════════════════════════════════════════", "white"))
 
         while True:
-            conn_choice = input(colored("👉 Chon phuong thuc ket noi (1-4, Mac dinh 1): ", "green")).strip()
+            conn_choice = input(colored("👉 Chọn phương thức kết nối (1-4, Mặc định 1): ", "green")).strip()
             if conn_choice in ["1", ""]:
                 open_method = "adb"
                 break
@@ -344,33 +344,33 @@ def tiktok_menu(auth_token: str) -> None:
                 open_method = "search"
                 break
             else:
-                logger.warning("Lua chon khong hop le, hay thu lai!")
+                logger.warning("Lựa chọn không hợp lệ, hãy thử lại!")
 
         if open_method == "adb":
             adb_manager = ADBManager()
             current_device = adb_manager.select_device()
             if not current_device:
-                logger.warning("Chua chon duoc thiet bi cu the! He thong se co ket noi den ADB mac dinh...")
+                logger.warning("Chưa chọn được thiết bị cụ thể! Hệ thống sẽ cố kết nối đến ADB mặc định...")
             adb_config["open_method"] = "adb"
             adb_config["current_device"] = current_device
             save_adb_config(adb_config)
         elif open_method == "u2":
-            print(colored("\n📡 KET NOI UIAUTOMATOR2 QUA WIFI:", "cyan"))
+            print(colored("\n📡 KẾT NỐI UIAUTOMATOR2 QUA WIFI:", "cyan"))
             while True:
-                ip_port = input(colored("👉 Nhap IP:Port dien thoai (vi du: 192.168.1.10:5555): ", "green")).strip()
+                ip_port = input(colored("👉 Nhập IP:Port điện thoại (ví dụ: 192.168.1.10:5555): ", "green")).strip()
                 parts = ip_port.split(":")
                 if len(parts) == 2 and parts[1].isdigit() and parts[0]:
                     break
-                logger.warning("Dinh dang khong hop le! Nhap dang IP:Port (vd: 192.168.1.10:5555)")
+                logger.warning("Định dạng không hợp lệ! Nhập dạng IP:Port (vd: 192.168.1.10:5555)")
             current_device = ip_port
             adb_manager = ADBManager()
-            logger.info(f"Se ket noi uiautomator2 den: {current_device}")
-            save_choice = input(colored("💾 Luu thiet bi nay lai de dung nhanh lan sau? (y/n, Enter la Co): ", "green")).strip().lower()
+            logger.info(f"Sẽ kết nối uiautomator2 đến: {current_device}")
+            save_choice = input(colored("💾 Lưu thiết bị này lại để dùng nhanh lần sau? (y/n, Enter là Có): ", "green")).strip().lower()
             if save_choice in ["y", "yes", ""]:
                 adb_config["open_method"] = "u2"
                 adb_config["current_device"] = current_device
                 save_adb_config(adb_config)
-                logger.info(f"Da luu thiet bi: {current_device}")
+                logger.info(f"Đã lưu thiết bị: {current_device}")
             else:
                 adb_config["open_method"] = "u2"
                 adb_config["current_device"] = None
@@ -379,7 +379,7 @@ def tiktok_menu(auth_token: str) -> None:
             adb_manager = ADBManager()
             current_device = adb_manager.select_device()
             if not current_device:
-                logger.warning("Chua chon duoc thiet bi cu the!")
+                logger.warning("Chưa chọn được thiết bị cụ thể!")
             adb_config["open_method"] = "search"
             adb_config["current_device"] = current_device
             save_adb_config(adb_config)
@@ -388,45 +388,45 @@ def tiktok_menu(auth_token: str) -> None:
             adb_config["current_device"] = None
             save_adb_config(adb_config)
 
-    # Lay danh sach acc
+    # Lấy danh sách acc
     api_client = GolikeAPIClient()
     api_client.set_auth(auth_token)
 
     try:
         accounts = api_client.get('/api/tiktok-account')
     except Exception as e:
-        logger.error(f"Loi lay danh sach tai khoan: {e}")
-        print(colored("🚨 Loi ket noi API! Hay kiem tra lai.", "red"))
-        input(colored("Nhan Enter de quay lai...", "white"))
+        logger.error(f"Lỗi lấy danh sách tài khoản: {e}")
+        print(colored("🚨 Lỗi kết nối API! Hãy kiểm tra lại.", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
         return
 
     if not accounts or accounts.get("status") != 200 or not accounts.get("data"):
-        print(colored("🚨 Authorization hoac T sai hoac khong co tai khoan. Hay nhap lai!", "red"))
-        logger.error("Authorization khong hop le hoac khong co tai khoan")
-        input(colored("Nhan Enter de quay lai...", "white"))
+        print(colored("🚨 Token Authorization sai hoặc không có tài khoản. Hãy nhập lại!", "red"))
+        logger.error("Authorization không hợp lệ hoặc không có tài khoản")
+        input(colored("Nhấn Enter để quay lại...", "white"))
         return
 
-    print(colored(f"🚨 Dia chi Ip  : 👀{get_public_ip()}👀", "white"))
+    print(colored(f"🚨 Địa chỉ IP  : 👀{get_public_ip()}👀", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
-    print(colored("🆔 Danh sach acc Tik Tok :", "yellow"))
+    print(colored("🆔 Danh sách acc TikTok :", "yellow"))
     print(colored("════════════════════════════════════════════════", "white"))
     data = accounts.get("data", [])
     if not isinstance(data, list) or not data:
-        print(colored("Khong co tai khoan TikTok nao!", "red"))
-        input(colored("Nhan Enter de quay lai...", "white"))
+        print(colored("Không có tài khoản TikTok nào!", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
         return
     for idx, acc in enumerate(data, 1):
         print(colored(f"[{idx}] 🆔 : {acc.get('unique_username', 'N/A')} ♦️ : ✅", "cyan"))
     print(colored("════════════════════════════════════════════════", "white"))
 
-    print(colored("Huong dan: Ban co the nhap so thu tu hoac ID tai khoan.", "cyan"))
+    print(colored("Hướng dẫn: Bạn có thể nhập số thứ tự hoặc ID tài khoản.", "cyan"))
     while True:
-        acc_input = input(colored("☀️ Nhap so thu tu hoac ID Acc Tiktok: ", "green")).strip()
+        acc_input = input(colored("☀️ Nhập số thứ tự hoặc ID Acc Tiktok: ", "green")).strip()
         if acc_input.isdigit() and 1 <= int(acc_input) <= len(data):
             acc_index = int(acc_input) - 1
             acc_obj = data[acc_index]
             account_id = acc_obj.get("id")
-            logger.info(f"Da chon tai khoan [{acc_input}]: {acc_obj.get('unique_username', 'N/A')}")
+            logger.info(f"Đã chọn tài khoản [{acc_input}]: {acc_obj.get('unique_username', 'N/A')}")
             break
         elif acc_input:
             acc_obj = next((a for a in data if a.get("unique_username") == acc_input), None)
@@ -434,16 +434,16 @@ def tiktok_menu(auth_token: str) -> None:
                 account_id = acc_obj.get("id")
                 break
             else:
-                logger.warning("Acc nay chua duoc them vao golike or id sai")
+                logger.warning("Acc này chưa được thêm vào GoLike hoặc ID sai")
         else:
-            logger.warning("Vui long nhap so thu tu hoac ID hop le!")
+            logger.warning("Vui lòng nhập số thứ tự hoặc ID hợp lệ!")
 
     print(colored("════════════════════════════════════════════════", "white"))
-    print(colored("⏳ CAU HINH GIA LAP HANH VI (CHONG BAN):", "cyan", bold=True))
+    print(colored("⏳ CẤU HÌNH GIẢ LẬP HÀNH VI (CHỐNG BAN):", "cyan", bold=True))
     
-    # Delay giua cac thao tac
+    # Delay giữa các thao tác
     try:
-        v = input(colored("⏱️  Delay giua cac thao tac (giay, nhap '18-28' hoac Enter de dung mac dinh): ", "green")).strip()
+        v = input(colored("⏱️  Delay giữa các thao tác (giây, nhập '18-28' hoặc Enter để dùng mặc định): ", "green")).strip()
         if not v: v = "18-28"
         delay_action_min, delay_action_max = map(int, v.split("-"))
     except Exception:
@@ -451,7 +451,7 @@ def tiktok_menu(auth_token: str) -> None:
         
     # Delay giua 2 nhiem vu
     try:
-        v = input(colored("⏱️  Delay giua 2 nhiem vu (giay, nhap '25-45' hoac Enter de dung mac dinh): ", "green")).strip()
+        v = input(colored("⏱️  Delay giữa 2 nhiệm vụ (giây, nhập '25-45' hoặc Enter để dùng mặc định): ", "green")).strip()
         if not v: v = "25-45"
         delay_job_min, delay_job_max = map(int, v.split("-"))
     except Exception:
@@ -459,7 +459,7 @@ def tiktok_menu(auth_token: str) -> None:
 
     # So job de nghi
     try:
-        v = input(colored("📆 Sau bao nhieu job thi nghi (nhap '40' hoac Enter de dung mac dinh): ", "green")).strip()
+        v = input(colored("📆 Sau bao nhiêu nhiệm vụ thì nghỉ (nhập '40' hoặc Enter để dùng mặc định): ", "green")).strip()
         if not v: v = "40"
         break_jobs = int(v)
     except Exception:
@@ -467,24 +467,24 @@ def tiktok_menu(auth_token: str) -> None:
 
     # Thoi gian nghi tu min-max
     try:
-        v = input(colored("⏱️  Thoi gian nghi (giay, nhap '300-600' hoac Enter de dung mac dinh): ", "green")).strip()
+        v = input(colored("⏱️  Thời gian nghỉ (giây, nhập '300-600' hoặc Enter để dùng mặc định): ", "green")).strip()
         if not v: v = "300-600"
         break_delay_min, break_delay_max = map(int, v.split("-"))
     except Exception:
         break_delay_min, break_delay_max = 300, 600
 
-    logger.info(f"Cau hinh delay: Action ({delay_action_min}-{delay_action_max}s), Job ({delay_job_min}-{delay_job_max}s), Break after {break_jobs} jobs ({break_delay_min}-{break_delay_max}s)")
+    logger.info(f"Cấu hình delay: Action ({delay_action_min}-{delay_action_max}s), Job ({delay_job_min}-{delay_job_max}s), Break after {break_jobs} jobs ({break_delay_min}-{break_delay_max}s)")
     print(colored("════════════════════════════════════════════════", "white"))
 
-    doiacc = input_int("📆 So job fail de doi acc TikTok (nhap 1 neu k muon dung) : ")
+    doiacc = input_int("📆 Số nhiệm vụ thất bại để đổi acc TikTok (nhập 1 nếu không muốn đổi): ")
     while True:
         print(colored("════════════════════════════════════════════════", "white"))
-        print(colored("♦️ ✈ Nhap 1 : Chi nhan nhiem vu Follow", "yellow"))
-        print(colored("🔥 ✈ Nhap 2 : Chi nhan nhiem vu like", "yellow"))
-        print(colored("💥 ✈ Nhap 12 : Ket hop ca Like va Follow", "yellow"))
-        print(colored("🔍 Nhap 3 : Search Follow (thanh search) + ADB Like (mo link)", "yellow"))
+        print(colored("♦️ ✈ Nhập 1 : Chỉ nhận nhiệm vụ Follow", "yellow"))
+        print(colored("🔥 ✈ Nhập 2 : Chỉ nhận nhiệm vụ Like", "yellow"))
+        print(colored("💥 ✈ Nhập 12 : Kết hợp cả Like và Follow", "yellow"))
+        print(colored("🔍 Nhập 3 : Search Follow (thanh tìm kiếm) + ADB Like (mở link)", "yellow"))
         print(colored("════════════════════════════════════════════════", "white"))
-        chedo = input(colored("✅ Chon lua chon: ", "cyan")).strip()
+        chedo = input(colored("✅ Chọn lựa chọn: ", "cyan")).strip()
         if chedo in {"1", "2", "12", "3"}:
             break
 
@@ -505,24 +505,24 @@ def tiktok_menu(auth_token: str) -> None:
     search_retry = 3
     if search_mode:
         print(colored("════════════════════════════════════════════════", "white"))
-        print(colored("🔍 Cau hinh Tim kiem:", "cyan", bold=True))
+        print(colored("🔍 Cấu hình tìm kiếm:", "cyan", bold=True))
         try:
-            v = input(colored("⏱️  Thoi gian cho toi da khi search (giay, mac dinh 5): ", "green")).strip()
+            v = input(colored("⏱️  Thời gian chờ tối đa khi tìm kiếm (giây, mặc định 5): ", "green")).strip()
             search_timeout = int(v) if v else 5
         except ValueError:
             search_timeout = 5
         try:
-            v = input(colored("🔄 So lan thu lai neu khong tim thay ket qua (mac dinh 3): ", "green")).strip()
+            v = input(colored("🔄 Số lần thử lại nếu không tìm thấy kết quả (mặc định 3): ", "green")).strip()
             search_retry = int(v) if v else 3
         except ValueError:
             search_retry = 3
-        logger.info(f"Search timeout: {search_timeout}s | Retry: {search_retry} lan")
+        logger.info(f"Search timeout: {search_timeout}s | Retry: {search_retry} lần")
 
     # Bat dau vong lap lam job
     dem = tong = checkdoiacc = 0
     jobs_completed_for_break = 0
     print(colored("════════════════════════════════════════════════", "white"))
-    print(colored("|🆔| ⏱️ ┊ Status | So Jos | ID Acc | Xu | Tong", "cyan"))
+    print(colored("|🆔| ⏱️ ┊ Trạng thái | Số Job | ID Acc | Xu | Tổng", "cyan"))
     print(colored("════════════════════════════════════════════════", "white"))
     prev_job = None
 
@@ -535,9 +535,9 @@ def tiktok_menu(auth_token: str) -> None:
             device_id=current_device
         )
     except ValueError as e:
-        logger.error(f"Loi tao job processor: {e}")
-        print(colored(f"❌ Loi tao job processor: {e}", "red"))
-        input(colored("Nhan Enter de quay lai...", "white"))
+        logger.error(f"Lỗi tạo job processor: {e}")
+        print(colored(f"❌ Lỗi tạo job processor: {e}", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
         return
 
     ui_automator = None
@@ -546,45 +546,46 @@ def tiktok_menu(auth_token: str) -> None:
             ui_automator = TikTokUIAutomator(device_id=current_device)
             if open_method == "u2":
                 ui_automator.connect()
-            logger.info("UI Automation da san sang")
-            print(colored("🤖 [He Thong] Da kich hoat thanh cong Module Auto Click!", "green", bold=True))
+            logger.info("UI Automation đã sẵn sàng")
+            print(colored("🤖 [Hệ thống] Đã kích hoạt thành công Module Auto Click!", "green", bold=True))
         except Exception as e:
-            logger.warning(f"Khong the tao UI automator: {e}")
-            print(colored(f"⚠️ Khong the khoi dong UI automator: {e}", "yellow"))
+            logger.warning(f"Không thể tạo UI automator: {e}")
+            print(colored(f"⚠️ Không thể khởi động UI automator: {e}", "yellow"))
             ui_automator = None
 
     if open_method == "u2" and isinstance(job_processor, U2JobProcessor) and ui_automator and ui_automator._u2:
         job_processor._u2_device = ui_automator._u2
-        logger.info("Da inject u2 device chung vao U2JobProcessor")
+        logger.info("Đã inject u2 device chung vào U2JobProcessor")
 
     while True:
         # Doi acc neu vuot gioi han fail
         if checkdoiacc >= doiacc:
+            _send_telegram_limit_notify(data, account_id)
             account_id = _select_new_account(data, account_id, checkdoiacc)
             checkdoiacc = 0
 
         # Nhan job
-        print(colored("🔎 Dang Tim Nhiem vu:>        ", "pink"), end="\r")
+        print(colored("🔎 Đang tìm nhiệm vụ:>        ", "magenta"), end="\r")
         try:
             nhanjob = api_client.get(f'/api/advertising/publishers/tiktok/jobs?account_id={account_id}&data=null')
         except Exception as e:
-            logger.error(f"Loi lay job: {e}")
+            logger.error(f"Lỗi lấy job: {e}")
             no_job_wait = random.randint(22, 30)
             for t in range(no_job_wait, -1, -1):
-                print(colored(f"⏳ Khong co job. Doi {t}s de thu lai...    ", "yellow"), end="\r")
+                print(colored(f"⏳ Không có nhiệm vụ. Đợi {t}s để thử lại...    ", "yellow"), end="\r")
                 time.sleep(1)
             continue
 
         if not nhanjob or not nhanjob.get("data"):
             no_job_wait = random.randint(22, 30)
             for t in range(no_job_wait, -1, -1):
-                print(colored(f"⏳ Khong co job. Doi {t}s de thu lai...    ", "yellow"), end="\r")
+                print(colored(f"⏳ Không có nhiệm vụ. Đợi {t}s để thử lại...    ", "yellow"), end="\r")
                 time.sleep(1)
             continue
 
         # Check job trung
         if prev_job and prev_job.get("data", {}).get("link") == nhanjob.get("data", {}).get("link") and prev_job.get("data", {}).get("type") == nhanjob.get("data", {}).get("type"):
-            logger.warning("Job trung lap, bo qua")
+            logger.warning("Nhiệm vụ trùng lặp, bỏ qua")
             _duplicate_job_skip(api_client, nhanjob, account_id)
             time.sleep(2)
             continue
@@ -599,19 +600,19 @@ def tiktok_menu(auth_token: str) -> None:
         else:
             no_job_wait = random.randint(22, 30)
             for t in range(no_job_wait, -1, -1):
-                print(colored(f"⏳ Khong co job. Doi {t}s de thu lai...    ", "yellow"), end="\r")
+                print(colored(f"⏳ Không có nhiệm vụ. Đợi {t}s để thử lại...    ", "yellow"), end="\r")
                 time.sleep(1)
             continue
 
         if not link:
-            logger.warning("Job khong co link, bo qua")
+            logger.warning("Nhiệm vụ không có link, bỏ qua")
             _skip_job(api_client, ads_id, object_id, account_id, job_type)
             time.sleep(2)
             continue
 
         if job_type not in lam:
             _skip_job(api_client, ads_id, object_id, account_id, job_type)
-            print(colored(f"❌ Da bo qua job {job_type}!", "yellow"), end="\r")
+            print(colored(f"❌ Đã bỏ qua nhiệm vụ {job_type}!", "yellow"), end="\r")
             time.sleep(1)
             continue
 
@@ -636,57 +637,103 @@ def tiktok_menu(auth_token: str) -> None:
             # Kiem tra nghi giai lao
             if break_jobs > 0 and jobs_completed_for_break >= break_jobs:
                 rest_time = random.randint(break_delay_min, break_delay_max)
-                print(colored(f"\n💤 Da lam {break_jobs} nhiem vu. Cho he thong nghi giai lao {rest_time} giay de tranh bi quet...", "yellow", bold=True))
+                print(colored(f"\n💤 Đã làm {break_jobs} nhiệm vụ. Chờ hệ thống nghỉ giải lao {rest_time} giây để tránh bị quét...", "yellow", bold=True))
                 for t in range(rest_time, -1, -1):
-                    print(colored(f"⏰ Nghi ngoi: Doi {t} giay ...    ", "cyan"), end="\r")
+                    print(colored(f"⏰ Nghỉ ngơi: Đợi {t} giây ...    ", "cyan"), end="\r")
                     time.sleep(1)
                 print(" " * 50, end="\r")
                 jobs_completed_for_break = 0
             else:
                 job_wait = random.randint(delay_job_min, delay_job_max)
                 for t in range(job_wait, -1, -1):
-                    print(colored(f"⏰ Chuan bi nhan job tiep theo: Doi {t} giay ...    ", "cyan"), end="\r")
+                    print(colored(f"⏰ Chuẩn bị nhận nhiệm vụ tiếp theo: Đợi {t} giây ...    ", "cyan"), end="\r")
                     time.sleep(1)
                 print(" " * 50, end="\r")
         else:
-            logger.warning("Nhan tien that bai sau 2 lan retry → Skip job")
+            logger.warning("Nhận tiền thất bại sau 2 lần retry → Bỏ qua nhiệm vụ")
             _skip_job(api_client, ads_id, object_id, account_id, job_type)
             time.sleep(1)
             checkdoiacc += 1
 
 
+def _send_telegram_limit_notify(data: List[Dict], account_id: str) -> None:
+    """Gui thong bao Telegram khi acc dat gioi han (fail limit / max job)"""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        telegram_enabled = os.getenv('TELEGRAM_ENABLED', '').lower() in ('true', '1', 'yes')
+        if not telegram_enabled:
+            if os.path.exists("config_golike_sele.json"):
+                with open("config_golike_sele.json", "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    telegram_enabled = cfg.get("telegram_enabled", False)
+                    
+        if not telegram_enabled:
+            return
+            
+        bot_token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
+        chat_id = os.getenv('TELEGRAM_CHAT_ID', '').strip()
+        
+        if not bot_token or not chat_id:
+            return
+            
+        acc_obj = next((a for a in data if a.get("id") == account_id), None)
+        username = acc_obj.get("unique_username", "N/A") if acc_obj else "N/A"
+        
+        now = datetime.now(tz).strftime("%H:%M:%S") if tz else time.strftime("%H:%M:%S")
+        ip = get_public_ip()
+        
+        # Format message: acc: [tên_acc] đạt max job
+        message = f"🚨 <b>GoLike TikTok Alert</b>\n" \
+                  f"acc: {username} đạt max job\n" \
+                  f"IP: {ip}\n" \
+                  f"Thời gian: {now}"
+                  
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        params = {
+            'chat_id': chat_id,
+            'text': message,
+            'parse_mode': 'HTML'
+        }
+        requests.post(url, json=params, timeout=10)
+        logger.info(f"Đã gửi thông báo Telegram cho acc {username} đạt max job")
+    except Exception as e:
+        logger.error(f"Lỗi gửi thông báo Telegram: {e}")
+
+
 def _select_new_account(data: List[Dict], account_id: str, checkdoiacc: int) -> str:
     """Hien thi lai danh sach va chon acc moi."""
-    print(colored(f"🚨 Dia chi Ip  : 👀{get_public_ip()}👀", "white"))
+    print(colored(f"🚨 Địa chỉ IP  : 👀{get_public_ip()}👀", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
-    print(colored("🆔 Danh sach acc Tik Tok :", "yellow"))
+    print(colored("🆔 Danh sách acc TikTok :", "yellow"))
     print(colored("════════════════════════════════════════════════", "white"))
     for idx, acc in enumerate(data, 1):
         print(colored(f"[{idx}] 🆔 : {acc.get('unique_username', 'N/A')} ♦️ : ✅", "cyan"))
     print(colored("════════════════════════════════════════════════", "white"))
     while True:
-        acc_input = input(colored("⚡ Job fail dat gioi han, nhap so thu tu hoac ID acc moi: ", "red")).strip()
+        acc_input = input(colored("⚡ Nhiệm vụ thất bại đạt giới hạn, nhập số thứ tự hoặc ID acc mới: ", "red")).strip()
         if acc_input.isdigit() and 1 <= int(acc_input) <= len(data):
             acc_index = int(acc_input) - 1
             acc_obj = data[acc_index]
             new_id = acc_obj.get("id")
-            logger.info(f"Da chon tai khoan [{acc_input}]: {acc_obj.get('unique_username', 'N/A')}")
+            logger.info(f"Đã chọn tài khoản [{acc_input}]: {acc_obj.get('unique_username', 'N/A')}")
             return new_id
         elif acc_input:
             acc_obj = next((a for a in data if a.get("unique_username") == acc_input), None)
             if acc_obj:
                 return acc_obj.get("id")
             else:
-                logger.warning("Acc nay chua duoc them vao golike or id sai")
+                logger.warning("Acc này chưa được thêm vào GoLike hoặc ID sai")
         else:
-            logger.warning("Vui long nhap so thu tu hoac ID hop le!")
+            logger.warning("Vui lòng nhập số thứ tự hoặc ID hợp lệ!")
 
 
 def _duplicate_job_skip(api_client: GolikeAPIClient, nhanjob: Dict, account_id: str) -> None:
     """Skip job trung lap."""
     try:
         api_client.post('/api/report/send', {
-            "description": "Bao cao hoan thanh that bai",
+            "description": "Báo cáo hoàn thành thất bại",
             "users_advertising_id": nhanjob["data"].get("id"),
             "type": "ads",
             "provider": "tiktok",
@@ -700,4 +747,4 @@ def _duplicate_job_skip(api_client: GolikeAPIClient, nhanjob: Dict, account_id: 
             "type": nhanjob["data"].get("type")
         })
     except Exception as e:
-        logger.error(f"Loi bao cao job trung: {e}")
+        logger.error(f"Lỗi báo cáo nhiệm vụ trùng: {e}")

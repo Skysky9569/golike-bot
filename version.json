@@ -1,6 +1,6 @@
 {
-  "version": "1.11.8",
-  "release_date": "2026-05-27",
-  "changelog": "v1.11.8 - Cập nhật file .gitignore để chặn các file rác như .coverage, thư mục scratch/, file test tạm thời và dọn dẹp trùng lặp.",
-  "previous_version": "1.11.7"
+  "version": "1.11.9",
+  "release_date": "2026-05-28",
+  "changelog": "v1.11.9 - Tích hợp GoLike Facebook Web API mới (không cần ADB), tự động nhận diện tài khoản Facebook từ cookie, hỗ trợ gửi thông báo Telegram cho TikTok ADB và tối giản menu chính.",
+  "previous_version": "1.11.8"
 }

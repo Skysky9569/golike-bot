@@ -1,4 +1,3 @@
-import requests
 import json
 import time
 import random
@@ -6,6 +5,37 @@ import mimetypes
 import re,base64
 from typing import Dict, Any, Optional
 import uuid
+import urllib3
+
+# Tắt cảnh báo SSL Insecure
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+try:
+    from curl_cffi import requests as requests_lib
+    HAS_CURL_CFFI = True
+except ImportError:
+    import requests as requests_lib
+    HAS_CURL_CFFI = False
+
+class RequestsWrapper:
+    @staticmethod
+    def get(url, **kwargs):
+        if not HAS_CURL_CFFI:
+            kwargs['verify'] = False
+        else:
+            kwargs.setdefault('impersonate', 'chrome110')
+        return requests_lib.get(url, **kwargs)
+
+    @staticmethod
+    def post(url, **kwargs):
+        if not HAS_CURL_CFFI:
+            kwargs['verify'] = False
+        else:
+            kwargs.setdefault('impersonate', 'chrome110')
+        return requests_lib.post(url, **kwargs)
+
+requests = RequestsWrapper()
+
 class CookieHandler:
     @staticmethod
     def to_dict(cookie_str: str) -> Dict[str, str]:
@@ -155,6 +185,10 @@ class FacebookSession:
             except Exception:
                 continue
         return None
+
+    def set_actor_id(self, uid: str):
+        """Override user_id/actor_id để thao tác bằng đúng profile (i_user) thay vì c_user."""
+        self.user_id = uid
 
     def authenticate(self) -> dict:
         headers = {
@@ -483,6 +517,11 @@ class FB_API:
             "x-fb-friendly-name": "CometUFIFeedbackReactMutation",
         }
         return True
+
+    def set_actor_id(self, uid: str):
+        """Override actor_id để thao tác bằng đúng profile (i_user) thay vì c_user."""
+        if self.session:
+            self.session.set_actor_id(uid)
 
     @staticmethod
     def _format_error(response):

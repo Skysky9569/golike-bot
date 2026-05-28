@@ -39,21 +39,21 @@ try:
         import updater
         if not updater.ensure_system_complete():
             print("\033[1;31m" + "=" * 60 + "\033[0m")
-            print("\033[1;31m[!] THIEU FILE HE THONG QUAN TRONG!\033[0m")
-            print("\033[1;31m[!] Khong the tu dong tai ve. Vui long kiem tra lai.\033[0m")
-            print("\033[1;33m[!] Thu chay: python main.py --skip-bootstrap\033[0m")
-            print("\033[1;33m[!] Hoac clone lai tu GitHub:\033[0m")
+            print("\033[1;31m[!] THIẾU FILE HỆ THỐNG QUAN TRỌNG!\033[0m")
+            print("\033[1;31m[!] Không thể tự động tải về. Vui lòng kiểm tra lại.\033[0m")
+            print("\033[1;33m[!] Thử chạy: python main.py --skip-bootstrap\033[0m")
+            print("\033[1;33m[!] Hoặc clone lại từ GitHub:\033[0m")
             print("\033[1;33m    git clone https://github.com/skysky9569/golike-bot.git\033[0m")
             print("\033[1;31m" + "=" * 60 + "\033[0m")
             sys.exit(1)
 except KeyboardInterrupt:
-    print("\n\033[1;33m[!] Da huy qua trinh khoi tao.\033[0m")
+    print("\n\033[1;33m[!] Đã hủy quá trình khởi tạo.\033[0m")
     sys.exit(0)
 except Exception as e:
     print(f"\033[1;31m" + "=" * 60 + "\033[0m")
-    print(f"\033[1;31m[!] LOI KHOI TAO HE THONG: {e}\033[0m")
+    print(f"\033[1;31m[!] LỖI KHỞI TẠO HỆ THỐNG: {e}\033[0m")
     print(f"\033[1;31m" + "=" * 60 + "\033[0m")
-    print(f"\033[1;33m[!] Thu chay: python main.py --skip-bootstrap\033[0m")
+    print(f"\033[1;33m[!] Thử chạy: python main.py --skip-bootstrap\033[0m")
     sys.exit(1)
 
 # ============================================================================
@@ -86,15 +86,14 @@ from golike_core.adb_manager import colored
 
 from ui.console import menu, banner, check_for_updates, CURRENT_VERSION, input_int
 from ui.adb_menu import adb_menu
-from ui.system_panels import show_security_config, show_logs, run_tests, toggle_debug_mode
 from ui.tiktok_flow import tiktok_menu
-from ui.facebook_flow import facebook_menu
+import test_golike_fb_web
 
 
 def run_facebook_selenium_bot() -> None:
-    """Chay tool GoLike Facebook Selenium (ho tro API + DOM Click mode) - Import directly instead of subprocess."""
+    """Chạy tool GoLike Facebook Selenium (hỗ trợ API + DOM Click mode) - Import trực tiếp thay vì subprocess."""
     print(colored("\n════════════════════════════════════════════════", "cyan"))
-    print(colored("🚀 KHOI DONG TOOL GOLIKE FACEBOOK SELENIUM", "yellow"))
+    print(colored("🚀 KHỞI ĐỘNG TOOL GOLIKE FACEBOOK SELENIUM", "yellow"))
     print(colored("════════════════════════════════════════════════", "cyan"))
 
     try:
@@ -106,15 +105,15 @@ def run_facebook_selenium_bot() -> None:
         # User chose 'exit' - propagate to exit main program
         raise
     except KeyboardInterrupt:
-        print(colored("\n👋 Da dong Tool Facebook Selenium.", "yellow"))
+        print(colored("\n👋 Đã đóng Tool Facebook Selenium.", "yellow"))
     except Exception as e:
-        logger.error(f"Loi khi chay golikefb_sele.py: {e}")
-        print(colored(f"❌ Da xay ra loi: {e}", "red"))
-        input(colored("Nhan Enter de quay lai...", "white"))
+        logger.error(f"Lỗi khi chạy golikefb_sele.py: {e}")
+        print(colored(f"❌ Đã xảy ra lỗi: {e}", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
 
 
 def auth_manager_menu() -> None:
-    """Menu untuk quản lý các authorization token"""
+    """Menu quản lý các authorization token"""
     cred_manager = CredentialManager()
     validator = InputValidator()
 
@@ -142,58 +141,58 @@ def auth_manager_menu() -> None:
         print(colored("   [0] 🔙 Quay lại menu chính", "white"))
         print(colored("════════════════════════════════════════════════", "cyan"))
 
-        choice = input(colored("Nhap lua chon: ", "white")).strip()
+        choice = input(colored("Nhập lựa chọn: ", "white")).strip()
 
         if choice == "0":
             break
         elif choice == "1":
             # Thêm token mới
-            label = input(colored("Nhap nhan cho token moi: ", "green")).strip()
+            label = input(colored("Nhập nhãn cho token mới: ", "green")).strip()
             while not label:
-                label = input(colored("Nhan khong duoc de trong. Nhap lai: ", "green")).strip()
+                label = input(colored("Nhãn không được để trống. Nhập lại: ", "green")).strip()
 
-            token = input(colored("Nhap authorization token: ", "green")).strip()
+            token = input(colored("Nhập authorization token: ", "green")).strip()
             while not validator.validate_auth_token(token):
-                print(colored("Token khong hop le! Phai tu 10-500 ky tu", "red"))
-                token = input(colored("Nhap lai authorization token: ", "green")).strip()
+                print(colored("Token không hợp lệ! Phải từ 10-500 ký tự", "red"))
+                token = input(colored("Nhập lại authorization token: ", "green")).strip()
 
             if cred_manager.save_auth(label, token):
-                print(colored(f"[✔] Da luu token voi nhan '{label}'!", "green"))
+                print(colored(f"[✔] Đã lưu token với nhãn '{label}'!", "green"))
             else:
-                print(colored("[!] Luu token that bai!", "red"))
+                print(colored("[!] Lưu token thất bại!", "red"))
         elif choice == "2":
             # Xóa token
             if not tokens:
-                print(colored("[!] Khong co token nao de xoa!", "yellow"))
+                print(colored("[!] Không có token nào để xóa!", "yellow"))
                 continue
 
-            print(colored("\nChon token muon xoa:", "red"))
+            print(colored("\nChọn token muốn xóa:", "red"))
             for i, label in enumerate(tokens, 1):
                 print(f"  [{i}] {label}")
 
             try:
-                del_choice = input(colored("Nhap so thu tu token muon xoa (hoac Enter de huy): ", "white")).strip()
+                del_choice = input(colored("Nhập số thứ tự token muốn xóa (hoặc Enter để hủy): ", "white")).strip()
                 if not del_choice:
-                    print(colored("Da huy xoa token.", "yellow"))
+                    print(colored("Đã hủy xóa token.", "yellow"))
                     continue
 
                 del_idx = int(del_choice)
                 if 1 <= del_idx <= len(tokens):
                     label_to_delete = tokens[del_idx - 1]
-                    confirm = input(colored(f"Ban co chac muon xoa token '{label_to_delete}'? (y/n): ", "yellow")).strip().lower()
+                    confirm = input(colored(f"Bạn có chắc muốn xóa token '{label_to_delete}'? (y/n): ", "yellow")).strip().lower()
                     if confirm == 'y':
                         if cred_manager.delete_auth(label_to_delete):
-                            print(colored(f"[✔] Da xoa token '{label_to_delete}'!", "green"))
+                            print(colored(f"[✔] Đã xóa token '{label_to_delete}'!", "green"))
                         else:
-                            print(colored("[!] Xoa token that bai!", "red"))
+                            print(colored("[!] Xóa token thất bại!", "red"))
                     else:
-                        print(colored("Da huy.", "yellow"))
+                        print(colored("Đã hủy.", "yellow"))
                 else:
-                    print(colored("Lua chon khong hop le!", "red"))
+                    print(colored("Lựa chọn không hợp lệ!", "red"))
             except ValueError:
-                print(colored("Lua chon khong hop le! Vui long nhap so.", "red"))
+                print(colored("Lựa chọn không hợp lệ! Vui lòng nhập số.", "red"))
         else:
-            print(colored("Lua chon khong hop le!", "yellow"))
+            print(colored("Lựa chọn không hợp lệ!", "yellow"))
 
 
 def main() -> None:
@@ -202,14 +201,14 @@ def main() -> None:
     cred_manager = CredentialManager()
 
     check_for_updates()
-    logger.info("Khoi dong ung dung...")
+    logger.info("Khởi động ứng dụng...")
 
     while True:
         menu()
-        choose = input(colored("🥇 Nhap Lua Chon (0-9): ", "white")).strip()
+        choose = input(colored("🥇 Nhập Lựa Chọn (0-5): ", "white")).strip()
 
         if choose == "0":
-            print(colored("👋 Tam biet!", "green"))
+            print(colored("👋 Tạm biệt!", "green"))
             break
         elif choose == "3":
             run_facebook_selenium_bot()
@@ -220,39 +219,27 @@ def main() -> None:
             # Thay đổi tùy chọn 5 thành Quản lý authorization tokens
             auth_manager_menu()
             continue
-        elif choose == "6":
-            show_security_config()
-            continue
-        elif choose == "7":
-            show_logs()
-            continue
-        elif choose == "8":
-            run_tests()
-            continue
-        elif choose == "9":
-            toggle_debug_mode()
-            continue
         elif choose == "1":
             # TikTok menu
             if not cred_manager.has_any_token():
                 # Chưa có token nào, yêu cầu nhập ngay tại chỗ
-                label = input(colored("Nhap nhan cho token moi: ", "green")).strip()
+                label = input(colored("Nhập nhãn cho token mới: ", "green")).strip()
                 while not label:
-                    label = input(colored("Nhan khong duoc de trong. Nhap lai: ", "green")).strip()
-                token = input(colored("Nhap authorization token: ", "green")).strip()
+                    label = input(colored("Nhãn không được để trống. Nhập lại: ", "green")).strip()
+                token = input(colored("Nhập authorization token: ", "green")).strip()
                 while not validator.validate_auth_token(token):
-                    print(colored("Token khong hop le! Phai tu 10-500 ky tu", "red"))
-                    token = input(colored("Nhap lai authorization token: ", "green")).strip()
+                    print(colored("Token không hợp lệ! Phải từ 10-500 ký tự", "red"))
+                    token = input(colored("Nhập lại authorization token: ", "green")).strip()
                 cred_manager.save_auth(label, token)
                 auth_token = token
-                print(colored(f"[✔] Da luu token voi nhan '{label}' va dang su dung!", "green"))
+                print(colored(f"[✔] Đã lưu token với nhãn '{label}' và đang sử dụng!", "green"))
             else:
                 labels = cred_manager.get_auth_labels()
                 if len(labels) == 1:
                     auth_token = cred_manager.get_auth_by_label(labels[0])
                 else:
                     # Nhiều token, yêu cầu chọn
-                    print(colored("\nChon token de su dung cho TikTok:", "cyan"))
+                    print(colored("\nChọn token để sử dụng cho TikTok:", "cyan"))
                     for i, label in enumerate(labels, 1):
                         token = cred_manager.get_auth_by_label(label)
                         if token and len(token) > 14:
@@ -260,30 +247,30 @@ def main() -> None:
                         else:
                             masked = token
                         print(f"  [{i}] {label} ({masked})")
-                    choice_idx = input_int("Nhap lua chon: ", minval=1, maxval=len(labels))
+                    choice_idx = input_int("Nhập lựa chọn: ", minval=1, maxval=len(labels))
                     auth_token = cred_manager.get_auth_by_label(labels[choice_idx-1])
             tiktok_menu(auth_token)
         elif choose == "2":
             # Facebook menu
             if not cred_manager.has_any_token():
                 # Chưa có token nào, yêu cầu nhập ngay tại chỗ
-                label = input(colored("Nhap nhan cho token moi: ", "green")).strip()
+                label = input(colored("Nhập nhãn cho token mới: ", "green")).strip()
                 while not label:
-                    label = input(colored("Nhan khong duoc de trong. Nhap lai: ", "green")).strip()
-                token = input(colored("Nhap authorization token: ", "green")).strip()
+                    label = input(colored("Nhãn không được để trống. Nhập lại: ", "green")).strip()
+                token = input(colored("Nhập authorization token: ", "green")).strip()
                 while not validator.validate_auth_token(token):
-                    print(colored("Token khong hop le! Phai tu 10-500 ky tu", "red"))
-                    token = input(colored("Nhap lai authorization token: ", "green")).strip()
+                    print(colored("Token không hợp lệ! Phải từ 10-500 ký tự", "red"))
+                    token = input(colored("Nhập lại authorization token: ", "green")).strip()
                 cred_manager.save_auth(label, token)
                 auth_token = token
-                print(colored(f"[✔] Da luu token voi nhan '{label}' va dang su dung!", "green"))
+                print(colored(f"[✔] Đã lưu token với nhãn '{label}' và đang sử dụng!", "green"))
             else:
                 labels = cred_manager.get_auth_labels()
                 if len(labels) == 1:
                     auth_token = cred_manager.get_auth_by_label(labels[0])
                 else:
                     # Nhiều token, yêu cầu chọn
-                    print(colored("\nChon token de su dung cho Facebook:", "cyan"))
+                    print(colored("\nChọn token để sử dụng cho Facebook:", "cyan"))
                     for i, label in enumerate(labels, 1):
                         token = cred_manager.get_auth_by_label(label)
                         if token and len(token) > 14:
@@ -291,11 +278,11 @@ def main() -> None:
                         else:
                             masked = token
                         print(f"  [{i}] {label} ({masked})")
-                    choice_idx = input_int("Nhap lua chon: ", minval=1, maxval=len(labels))
+                    choice_idx = input_int("Nhập lựa chọn: ", minval=1, maxval=len(labels))
                     auth_token = cred_manager.get_auth_by_label(labels[choice_idx-1])
-            facebook_menu(auth_token)
+            test_golike_fb_web.main(auth_token)
         else:
-            logger.warning("Lua chon khong hop le!")
+            logger.warning("Lựa chọn không hợp lệ!")
 
 
 if __name__ == "__main__":

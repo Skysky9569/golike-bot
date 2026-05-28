@@ -1678,6 +1678,17 @@ def get_golike_credentials():
 def parse_golike_uid_from_cookie(cookie_str: str) -> Optional[str]:
     """Extract GoLike UID (i_user) from cookie string."""
     import re
+    if not cookie_str:
+        return None
+    # Giải mã nếu cookie đang ở dạng mã hóa
+    if "c_user=" not in cookie_str and "xs=" not in cookie_str:
+        if hasattr(cred_manager, '_decrypt'):
+            try:
+                decrypted = cred_manager._decrypt(cookie_str)
+                if decrypted and "c_user=" in decrypted:
+                    cookie_str = decrypted
+            except Exception:
+                pass
     match = re.search(r'i_user=(\d+)', cookie_str)
     if match:
         return match.group(1)
@@ -1687,6 +1698,17 @@ def parse_golike_uid_from_cookie(cookie_str: str) -> Optional[str]:
 def parse_facebook_uid_from_cookie(cookie_str: str) -> Optional[str]:
     """Extract Facebook UID (c_user) from cookie string."""
     import re
+    if not cookie_str:
+        return None
+    # Giải mã nếu cookie đang ở dạng mã hóa
+    if "c_user=" not in cookie_str and "xs=" not in cookie_str:
+        if hasattr(cred_manager, '_decrypt'):
+            try:
+                decrypted = cred_manager._decrypt(cookie_str)
+                if decrypted and "c_user=" in decrypted:
+                    cookie_str = decrypted
+            except Exception:
+                pass
     match = re.search(r'c_user=(\d+)', cookie_str)
     return match.group(1) if match else None
 

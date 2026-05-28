@@ -42,33 +42,33 @@ def facebook_menu(auth_token: str) -> None:
                 f.write(encrypted)
             return True
         except (IOError, ValueError) as e:
-            logger.error(f"Loi luu cookie: {e}")
+            logger.error(f"Lỗi lưu cookie: {e}")
             return False
 
     cookie = get_fb_cookie()
     if cookie:
-        logger.info("Da tim thay Facebook Cookie luu san trong he thong.")
-        change = input(colored("🔄 Ban co muon xoa va nhap Cookie FB moi khong? (y/N): ", "yellow")).strip().lower()
+        logger.info("Đã tìm thấy Facebook Cookie lưu sẵn trong hệ thống.")
+        change = input(colored("🔄 Bạn có muốn xóa và nhập Cookie FB mới không? (y/N): ", "yellow")).strip().lower()
         if change == 'y':
             cookie = None
             if os.path.exists(cookie_file):
                 os.remove(cookie_file)
-                logger.info("Da xoa Cookie FB cu!")
+                logger.info("Đã xóa Cookie FB cũ!")
 
     while not cookie:
-        cookie = input(colored("📢 Nhap Facebook Cookie: ", "green")).strip()
+        cookie = input(colored("📢 Nhập Facebook Cookie: ", "green")).strip()
         # Validate TRƯỚC sanitize để không làm mất dữ liệu hợp lệ
         if not validator.validate_cookie(cookie):
-            logger.warning("Cookie khong hop le!")
+            logger.warning("Cookie không hợp lệ!")
             cookie = ""
             continue
         # Sanitize sau khi validate thành công
         cookie = validator.sanitize_string(cookie, 1000)
         if cookie:
             if save_fb_cookie(cookie):
-                logger.info("Da luu Facebook cookie")
+                logger.info("Đã lưu Facebook cookie")
             else:
-                logger.error("Loi luu cookie!")
+                logger.error("Lỗi lưu cookie!")
                 cookie = ""
 
     api_client = GolikeAPIClient()
@@ -78,14 +78,14 @@ def facebook_menu(auth_token: str) -> None:
         accounts = api_client.get_accounts(provider='facebook')
         logger.debug(f"API Response: {safe_log(accounts)}")
     except Exception as e:
-        logger.error(f"Loi lay danh sach account Facebook: {e}")
-        print(colored("🚨 Loi ket noi API!", "red"))
-        input(colored("Nhan Enter de quay lai...", "white"))
+        logger.error(f"Lỗi lấy danh sách account Facebook: {e}")
+        print(colored("🚨 Lỗi kết nối API!", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
         return
 
     if not accounts or accounts.get("status") != 200 or not accounts.get("data"):
-        print(colored("🚨 Khong co tai khoan Facebook nao!", "red"))
-        input(colored("Nhan Enter de quay lai...", "white"))
+        print(colored("🚨 Không có tài khoản Facebook nào!", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
         return
 
     raw_data = accounts.get("data", {})
@@ -96,11 +96,11 @@ def facebook_menu(auth_token: str) -> None:
     else:
         data = []
 
-    print(colored("\n🆔 Danh sach account Facebook:", "yellow"))
+    print(colored("\n🆔 Danh sách account Facebook:", "yellow"))
     print(colored("════════════════════════════════════════════════", "cyan"))
     if not isinstance(data, list) or not data:
-        print(colored("Khong co tai khoan Facebook nao!", "red"))
-        input(colored("Nhan Enter de quay lai...", "white"))
+        print(colored("Không có tài khoản Facebook nào!", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
         return
 
     for idx, acc in enumerate(data, 1):
@@ -108,32 +108,32 @@ def facebook_menu(auth_token: str) -> None:
     print(colored("════════════════════════════════════════════════", "cyan"))
 
     while True:
-        acc_choice = input(colored("☀️ Nhap so thu tu account: ", "green")).strip()
+        acc_choice = input(colored("☀️ Nhập số thứ tự account: ", "green")).strip()
         if acc_choice.isdigit() and 1 <= int(acc_choice) <= len(data):
             selected = data[int(acc_choice) - 1]
             fb_id = selected.get('fb_id')
             account_db_id = selected.get('id')
             break
-        print(colored("❌ Lua chon khong hop le!", "red"))
+        print(colored("❌ Lựa chọn không hợp lệ!", "red"))
 
-    delay = input_int("👀 Nhap thoi gian lam job: ")
+    delay = input_int("👀 Nhập thời gian làm job: ")
     while True:
-        lannhan = input(colored("🛑 Nhan tien lan 2 neu lan 1 fail? (y/n): ", "green")).strip().lower()
+        lannhan = input(colored("🛑 Nhận tiền lần 2 nếu lần 1 fail? (y/n): ", "green")).strip().lower()
         if lannhan in {"y", "n"}:
             break
-        logger.warning("Nhap sai hay nhap lai!!!")
+        logger.warning("Nhập sai hãy nhập lại!!!")
 
-    doiacc = input_int("📆 So job fail de doi acc (nhap 1 neu k muon dung): ")
+    doiacc = input_int("♻️ Số job fail để đổi acc (nhập 1 nếu không muốn dùng): ")
     while True:
         print(colored("════════════════════════════════════════════════", "white"))
-        print(colored("♦️ ✈ Nhap 1 : Chi nhan nhiem vu Like", "yellow"))
-        print(colored("🔥 ✈ Nhap 2 : Chi nhan nhiem vu Like Page", "yellow"))
-        print(colored("💥 ✈ Nhap 3 : Chi nhan nhiem vu Comment", "yellow"))
-        print(colored("👍 ✈ Nhap 4 : Chi nhan nhiem vu Follow", "yellow"))
-        print(colored("😊 ✈ Nhap 5 : Chi nhan nhiem vu Reaction", "yellow"))
-        print(colored("🌟 ✈ Nhap 12345 : Ket hop tat ca", "yellow"))
+        print(colored("♦️ ✈ Nhập 1 : Chỉ nhận nhiệm vụ Like", "yellow"))
+        print(colored("🔥 ✈ Nhập 2 : Chỉ nhận nhiệm vụ Like Page", "yellow"))
+        print(colored("💥 ✈ Nhập 3 : Chỉ nhận nhiệm vụ Comment", "yellow"))
+        print(colored("👍 ✈ Nhập 4 : Chỉ nhận nhiệm vụ Follow", "yellow"))
+        print(colored("😊 ✈ Nhập 5 : Chỉ nhận nhiệm vụ Reaction", "yellow"))
+        print(colored("🌟 ✈ Nhập 12345 : Kết hợp tất cả", "yellow"))
         print(colored("════════════════════════════════════════════════", "white"))
-        chedo = input(colored("✅ Chon lua chon: ", "cyan")).strip()
+        chedo = input(colored("✅ Chọn lựa chọn: ", "cyan")).strip()
         if chedo in {"1", "2", "3", "4", "5", "12345"}:
             break
 
@@ -152,20 +152,20 @@ def facebook_menu(auth_token: str) -> None:
     processor = FacebookJobProcessor(api_client, fb_id, cookie, internal_id=account_db_id)
     dem = tong = checkdoiacc = 0
     print(colored("════════════════════════════════════════════════", "white"))
-    print(colored("|🆔| ⏱️ ┊ Status | So Jos | Type | Xu | Tong", "cyan"))
+    print(colored("|🆔| ⏱️ ┊ Trạng thái | Số Job | Loại | Xu | Tổng", "cyan"))
     print(colored("════════════════════════════════════════════════", "white"))
 
     while True:
         if checkdoiacc >= doiacc:
-            logger.warning("Job fail dat gioi han, chon acc moi!")
-            input(colored("Nhan Enter de tiep...", "white"))
-            print(colored("\n🆔 Danh sach account Facebook:", "yellow"))
+            logger.warning("Job fail đạt giới hạn, chọn acc mới!")
+            input(colored("Nhấn Enter để tiếp...", "white"))
+            print(colored("\n🆔 Danh sách account Facebook:", "yellow"))
             print(colored("════════════════════════════════════════════════", "cyan"))
             for idx, acc in enumerate(data, 1):
                 print(colored(f"[{idx}] 🆔: {acc.get('fb_name', 'N/A')} | ID: {acc.get('fb_id', 'N/A')}", "cyan"))
             print(colored("════════════════════════════════════════════════", "cyan"))
 
-            acc_choice = input(colored("☀️ Nhap so thu tu account moi: ", "green")).strip()
+            acc_choice = input(colored("☀️ Nhập số thứ tự account mới: ", "green")).strip()
             if acc_choice.isdigit() and 1 <= int(acc_choice) <= len(data):
                 selected = data[int(acc_choice) - 1]
                 fb_id = selected.get('fb_id')
@@ -187,18 +187,18 @@ def facebook_menu(auth_token: str) -> None:
                 tien = result.get("reward", 0)
                 tong += tien
                 now = time.strftime("%H:%M:%S")
-                print(colored(f"| {dem} | {now} | success | {result.get('type', job_type)} | +{tien} | {tong}", "green"))
+                print(colored(f"| {dem} | {now} | thành công | {result.get('type', job_type)} | +{tien} | {tong}", "green"))
                 checkdoiacc = 0
             else:
                 reason = result.get("reason", "unknown")
                 if reason == "no_jobs":
                     for i in range(5, 0, -1):
-                        print(colored(f"⏳ Het job tam thoi, tu dong tim lai sau {i} giay...", "yellow"), end="\r")
+                        print(colored(f"⏳ Hết nhiệm vụ tạm thời, tự động tìm lại sau {i} giây...", "yellow"), end="\r")
                         time.sleep(1)
                     print(" " * 60, end="\r")
                     break
 
-                print(colored(f"| - | - | fail | {job_type} | 0 | {tong}  🚨 Ly do: {reason}", "red"))
+                print(colored(f"| - | - | thất bại | {job_type} | 0 | {tong}  🚨 Lý do: {reason}", "red"))
                 checkdoiacc += 1
 
         time.sleep(delay)
