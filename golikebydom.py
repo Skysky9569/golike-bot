@@ -653,6 +653,9 @@ def main():
                     tong += tien
                     now = datetime.now(tz).strftime("%H:%M:%S")
                     print(colored(f"| {dem} | {now} | success | {nhantien['data'].get('type', '')} | Ẩn ID | +{tien} | {tong}", "green"))
+                    msg = nhantien.get("message")
+                    if msg:
+                        print(colored(f"   └── Thông báo từ hệ thống: {msg}", "cyan"))
                     checkdoiacc = 0
                     break
                 elif lan == 2:

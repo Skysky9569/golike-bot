@@ -238,7 +238,7 @@ def _claim_payment(
                 ok = True
                 reward = nhantien["data"].get("prices", 0)
                 job_type = nhantien['data'].get('type', '')
-                message = nhantien['data'].get('message')
+                message = nhantien.get('message')
                 now = datetime.now(tz).strftime("%H:%M:%S") if tz else time.strftime("%H:%M:%S")
                 
                 print(colored(f"| {stt} | {now} | thành công | {job_type} | +{reward} | {tong + reward} |", "green", bold=True))

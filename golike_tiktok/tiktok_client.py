@@ -181,10 +181,13 @@ class TikTokJobProcessor:
                 })
 
                 if response and response.get("status") == 200:
+                    msg = response.get("message", "Báo cáo thành công!")
+                    logger.info(f"Golike báo: {msg}")
                     return {
                         "success": True,
                         "reward": response.get("data", {}).get("prices", 0),
                         "type": response.get("data", {}).get("type", ""),
+                        "message": msg,
                         "data": response.get("data", {})
                     }
                 elif attempt < max_retries:
