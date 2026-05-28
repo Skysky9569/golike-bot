@@ -1,6 +1,6 @@
 {
-  "version": "1.12.0",
+  "version": "1.12.1",
   "release_date": "2026-05-28",
-  "changelog": "v1.12.0 - Tự động nhận diện định dạng IP:Port hoặc chỉ IP khi kết nối thiết bị ADB WiFi, sửa lỗi kết nối uiautomator2 WiFi.",
-  "previous_version": "1.11.9"
+  "changelog": "v1.12.1 - Tự động quét và xử lý yêu cầu thả cảm xúc đặc biệt (ví dụ: thả tim/Love) trên Golike.",
+  "previous_version": "1.12.0"
 }

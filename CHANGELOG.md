@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.12.1] - 2026-05-28
+
+### Thêm Mới & Sửa Lỗi (Added & Fixed)
+- **Tự động quét và xử lý yêu cầu thả cảm xúc đặc biệt (ví dụ: thả tim/Love) trên Golike**:
+  - Tự động nhận diện block `.reaction-required` / `.reaction-text` trên trang chi tiết công việc.
+  - Tự động ghi đè loại reaction gốc (như Like) bằng loại cảm xúc được yêu cầu (Love, Haha, Wow, Sad, Angry, Care) để gửi reaction chính xác qua API.
+  - Bổ sung thông tin log chi tiết khi phát hiện và xử lý cảm xúc đặc biệt.
+
 ## [v1.12.0] - 2026-05-28
 
 ### Cải Tiến & Sửa Lỗi (Improved & Fixed)

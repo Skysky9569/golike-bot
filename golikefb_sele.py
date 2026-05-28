@@ -1469,6 +1469,40 @@ def map_job_type(job_text):
     return "unknown"
 
 
+def detect_reaction_required(driver) -> Optional[str]:
+    """
+    Quét thông tin yêu cầu thả cảm xúc (nếu có) trên trang chi tiết công việc.
+    """
+    try:
+        elements = driver.find_elements(By.CSS_SELECTOR, ".reaction-required, .reaction-text")
+        for elem in elements:
+            text = elem.text.strip()
+            text_lower = text.lower()
+            if "yêu cầu thả cảm xúc" in text_lower or "thả đúng cảm xúc" in text_lower:
+                reaction = None
+                if "love" in text_lower or "yêu thích" in text_lower or "tim" in text_lower:
+                    reaction = "love"
+                elif "haha" in text_lower:
+                    reaction = "haha"
+                elif "wow" in text_lower:
+                    reaction = "wow"
+                elif "sad" in text_lower or "buồn" in text_lower:
+                    reaction = "sad"
+                elif "angry" in text_lower or "phẫn nộ" in text_lower:
+                    reaction = "angry"
+                elif "care" in text_lower or "thương thương" in text_lower:
+                    reaction = "care"
+                elif "like" in text_lower or "thích" in text_lower:
+                    reaction = "like"
+                
+                if reaction:
+                    print(f"[⚙️] Phát hiện yêu cầu cảm xúc đặc biệt: '{text}' -> Sẽ thả: {reaction.upper()}")
+                    return reaction
+    except Exception as e:
+        print(f"Lỗi quét yêu cầu thả cảm xúc: {e}")
+    return None
+
+
 def is_job_skipped(job_type: str) -> bool:
     """
     Kiểm tra xem loại job có nằm trong danh sách cần bỏ qua không.
@@ -2278,6 +2312,10 @@ def run_single_mode():
                     
                         # GỌI API
                         j_type = map_job_type(job_type_raw)
+                        req_reaction = detect_reaction_required(driver)
+                        if req_reaction:
+                            print(f"[⚙️] Phát hiện yêu cầu thả cảm xúc đặc biệt: {req_reaction.upper()} (thay thế cho {j_type})")
+                            j_type = req_reaction
 
                         # ---- Kiểm tra job bị skip ----
                         if is_job_skipped(j_type):
@@ -2841,6 +2879,10 @@ def run_bot_loop(driver, Fb, profile_data, idx):
                 sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
                 
                 j_t = map_job_type(j_raw)
+                req_reaction = detect_reaction_required(driver)
+                if req_reaction:
+                    log_thread(p_name, f"[⚙️] Phát hiện yêu cầu thả cảm xúc đặc biệt: {req_reaction.upper()} (thay thế cho {j_t})")
+                    j_t = req_reaction
 
                 # ---- Kiểm tra job bị skip ----
                 if is_job_skipped(j_t):
