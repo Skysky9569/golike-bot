@@ -1,6 +1,6 @@
 {
-  "version": "1.12.1",
+  "version": "1.12.2",
   "release_date": "2026-05-28",
-  "changelog": "v1.12.1 - Tự động quét và xử lý yêu cầu thả cảm xúc đặc biệt (ví dụ: thả tim/Love) trên Golike.",
-  "previous_version": "1.12.0"
+  "changelog": "v1.12.2 - Hiển thị chính xác thông báo kết quả từ API hoàn thành job TikTok (complete-jobs).",
+  "previous_version": "1.12.1"
 }

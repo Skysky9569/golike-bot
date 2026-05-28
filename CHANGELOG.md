@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [v1.12.2] - 2026-05-28
+
+### Sửa Lỗi (Fixed)
+- **Hiển thị thông báo kết quả từ API hoàn thành job TikTok (`complete-jobs`)**:
+  - Sửa lỗi đọc trường `message` từ cấp root của JSON response thay vì nhánh `data` bị lỗi `None`.
+  - Hiển thị đầy đủ thông điệp từ hệ thống (VD: "Báo cáo thành công, số TIỀN làm được sẽ được cộng sau ÍT PHÚT ! Số jobs đã làm trong ngày...") trên cả bản `tiktok_flow.py`, `golikebydom.py` và `tiktok_client.py`.
+
 ## [v1.12.1] - 2026-05-28
 
 ### Thêm Mới & Sửa Lỗi (Added & Fixed)
