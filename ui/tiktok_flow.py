@@ -5,6 +5,43 @@ import os
 import re
 import sys
 import time
+
+def check_keyboard_pause():
+    try:
+        import msvcrt
+        if msvcrt.kbhit():
+            ch = msvcrt.getch()
+            if ch in (b'\r', b'\n'):
+                while msvcrt.kbhit():
+                    msvcrt.getch()
+                print("\n⏸️ [TẠM DỪNG] Đã tạm dừng tool. Nhấn 'r' để tiếp tục...")
+                while True:
+                    original_time_sleep(0.1)
+                    if msvcrt.kbhit():
+                        resume_ch = msvcrt.getch().lower()
+                        if resume_ch == b'r':
+                            while msvcrt.kbhit():
+                                msvcrt.getch()
+                            print("▶️ [TIẾP TỤC] Đang chạy tiếp...")
+                            break
+    except Exception:
+        pass
+
+original_time_sleep = time.sleep
+def paused_sleep(seconds):
+    check_keyboard_pause()
+    secs = int(seconds)
+    if secs > 1:
+        for _ in range(secs):
+            check_keyboard_pause()
+            original_time_sleep(1)
+        fraction = seconds - secs
+        if fraction > 0:
+            original_time_sleep(fraction)
+    else:
+        original_time_sleep(seconds)
+
+time.sleep = paused_sleep
 import json
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple

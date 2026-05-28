@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.12.3] - 2026-05-28
+
+### Thêm Mới & Sửa Lỗi (Added & Fixed)
+- **Tính năng tạm dừng bằng phím Enter và tiếp tục bằng phím 'r'**:
+  - Tự động nhận diện sự kiện gõ phím non-blocking trên hệ điều hành Windows qua thư viện `msvcrt`.
+  - Hỗ trợ phản hồi nhanh: Tạm dừng lập tức khi ấn `Enter` và tiếp tục chạy tiếp bình thường khi ấn `r`.
+  - Tích hợp đồng bộ trên cả tool Facebook (`golikefb_sele.py`) và TikTok (`tiktok_flow.py`, `golikebydom.py`).
+
 ## [v1.12.2] - 2026-05-28
 
 ### Sửa Lỗi (Fixed)

@@ -148,6 +148,27 @@ def wait_for_memory(frequency: float = 5.0):
         time.sleep(frequency)
 
 
+def check_keyboard_pause():
+    try:
+        import msvcrt
+        if msvcrt.kbhit():
+            ch = msvcrt.getch()
+            if ch in (b'\r', b'\n'):
+                while msvcrt.kbhit():
+                    msvcrt.getch()
+                print("\n⏸️ [TẠM DỪNG] Đã tạm dừng tool. Nhấn 'r' để tiếp tục...")
+                while True:
+                    original_sleep_time(0.1)
+                    if msvcrt.kbhit():
+                        resume_ch = msvcrt.getch().lower()
+                        if resume_ch == b'r':
+                            while msvcrt.kbhit():
+                                msvcrt.getch()
+                            print("▶️ [TIẾP TỤC] Đang chạy tiếp...")
+                            break
+    except Exception:
+        pass
+
 def smart_sleep(seconds: int):
     """Sleep for *seconds* seconds.
     If the duration is longer than 20 seconds, prints a countdown to the console.
@@ -156,20 +177,39 @@ def smart_sleep(seconds: int):
         secs = int(seconds)
     except Exception:
         secs = int(seconds)
+    
+    check_keyboard_pause()
     if secs > 20:
         for remaining in range(secs, 0, -1):
             print(f"⏳ Waiting {remaining}s...", end="\r", flush=True)
-            time.sleep(1)
+            check_keyboard_pause()
+            original_sleep_time(1)
         print(" " * 30, end="\r")  # clear line
     else:
-        time.sleep(secs)
+        for _ in range(secs):
+            check_keyboard_pause()
+            original_sleep_time(1)
+
 import sys
 import os
 import re
 import requests
 import json
 from datetime import datetime
-from time import sleep
+import time
+original_sleep_time = time.sleep
+def sleep(seconds):
+    check_keyboard_pause()
+    secs = int(seconds)
+    if secs > 1:
+        for _ in range(secs):
+            check_keyboard_pause()
+            original_sleep_time(1)
+        fraction = seconds - secs
+        if fraction > 0:
+            original_sleep_time(fraction)
+    else:
+        original_sleep_time(seconds)
 import threading
 
 # ================= 2CAPTCHA CAPTCHA SOLVER =================

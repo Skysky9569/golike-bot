@@ -1,6 +1,6 @@
 {
-  "version": "1.12.2",
+  "version": "1.12.3",
   "release_date": "2026-05-28",
-  "changelog": "v1.12.2 - Hiển thị chính xác thông báo kết quả từ API hoàn thành job TikTok (complete-jobs).",
-  "previous_version": "1.12.1"
+  "changelog": "v1.12.3 - Thêm tính năng ấn Enter để tạm dừng và ấn 'r' để tiếp tục chạy tool.",
+  "previous_version": "1.12.2"
 }
