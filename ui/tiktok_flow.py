@@ -357,11 +357,15 @@ def tiktok_menu(auth_token: str) -> None:
         elif open_method == "u2":
             print(colored("\n📡 KẾT NỐI UIAUTOMATOR2 QUA WIFI:", "cyan"))
             while True:
-                ip_port = input(colored("👉 Nhập IP:Port điện thoại (ví dụ: 192.168.1.10:5555): ", "green")).strip()
-                parts = ip_port.split(":")
-                if len(parts) == 2 and parts[1].isdigit() and parts[0]:
+                ip_port = input(colored("👉 Nhập IP:Port điện thoại (ví dụ: 192.168.1.10:5555 hoặc 192.168.1.10): ", "green")).strip()
+                if ":" in ip_port:
+                    parts = ip_port.split(":")
+                    if len(parts) == 2 and parts[1].isdigit() and parts[0]:
+                        break
+                elif ip_port:
+                    ip_port = f"{ip_port}:5555"
                     break
-                logger.warning("Định dạng không hợp lệ! Nhập dạng IP:Port (vd: 192.168.1.10:5555)")
+                logger.warning("Định dạng không hợp lệ! Nhập dạng IP:Port hoặc chỉ IP (vd: 192.168.1.10:5555)")
             current_device = ip_port
             adb_manager = ADBManager()
             logger.info(f"Sẽ kết nối uiautomator2 đến: {current_device}")

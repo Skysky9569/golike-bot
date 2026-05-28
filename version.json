@@ -1,6 +1,6 @@
 {
-  "version": "1.11.9",
+  "version": "1.12.0",
   "release_date": "2026-05-28",
-  "changelog": "v1.11.9 - Tích hợp GoLike Facebook Web API mới (không cần ADB), tự động nhận diện tài khoản Facebook từ cookie, hỗ trợ gửi thông báo Telegram cho TikTok ADB và tối giản menu chính.",
-  "previous_version": "1.11.8"
+  "changelog": "v1.12.0 - Tự động nhận diện định dạng IP:Port hoặc chỉ IP khi kết nối thiết bị ADB WiFi, sửa lỗi kết nối uiautomator2 WiFi.",
+  "previous_version": "1.11.9"
 }

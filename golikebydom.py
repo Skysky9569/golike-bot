@@ -288,9 +288,20 @@ def adb_menu():
         elif choice == "2":
             # Kết nối WiFi
             print(colored("════════════════════════════════════════════════", "white"))
-            ip = input(colored("📡 Nhập IP thiết bị (ví dụ: 192.168.1.100): ", "green")).strip()
-            port = input(colored("🔌 Nhập port (mặc định 5555): ", "green")).strip()
-            port = int(port) if port.isdigit() else 5555
+            ip_input = input(colored("📡 Nhập IP thiết bị (ví dụ: 192.168.1.100 hoặc 192.168.1.100:5555): ", "green")).strip()
+            
+            ip = ip_input
+            port = 5555
+            if ":" in ip_input:
+                parts = ip_input.split(":")
+                if len(parts) == 2:
+                    ip = parts[0]
+                    if parts[1].isdigit():
+                        port = int(parts[1])
+            
+            if ":" not in ip_input:
+                port_input = input(colored("🔌 Nhập port (mặc định 5555): ", "green")).strip()
+                port = int(port_input) if port_input.isdigit() else 5555
 
             print(colored(f"🔄 Đang kết nối đến {ip}:{port}...", "cyan"))
             if connect_adb_wifi(ip, port):

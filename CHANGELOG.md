@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.12.0] - 2026-05-28
+
+### Cải Tiến & Sửa Lỗi (Improved & Fixed)
+- **Tự động nhận diện định dạng IP:Port hoặc chỉ IP khi kết nối ADB WiFi**:
+  - Hỗ trợ người dùng nhập trực tiếp định dạng `IP:Port` (ví dụ `192.168.1.10:5555`) ở ô nhập địa chỉ IP mà không bị lỗi xác thực/cắt chuỗi.
+  - Tự động gán cổng mặc định `:5555` nếu người dùng chỉ nhập IP khi kết nối qua Uiautomator2 WiFi.
+  - Cập nhật đồng bộ trên cả Menu ADB, TikTok Flow và phiên bản đơn giản `golikebydom.py`.
+
 ## [v1.11.1] - 2026-05-26
 
 ### Sửa Lỗi (Fixed)

@@ -61,7 +61,17 @@ def adb_menu() -> None:
 
         elif choice == "2":
             print(colored("\n📡 KẾT NỐI QUA WIFI:", "cyan"))
-            ip = input(colored("👉 Nhập địa chỉ IP Điện thoại (ví dụ: 192.168.1.10): ", "green")).strip()
+            ip_input = input(colored("👉 Nhập địa chỉ IP Điện thoại (ví dụ: 192.168.1.10 hoặc 192.168.1.10:5555): ", "green")).strip()
+            
+            ip = ip_input
+            port = 5555
+            if ":" in ip_input:
+                parts = ip_input.split(":")
+                if len(parts) == 2:
+                    ip = parts[0]
+                    if parts[1].isdigit():
+                        port = int(parts[1])
+            
             ip = validator.sanitize_string(ip, 15)
 
             if not validator.validate_ip(ip):
@@ -69,15 +79,16 @@ def adb_menu() -> None:
                 input(colored("Nhấn Enter để quay lại...", "white"))
                 continue
 
-            port_input = input(colored("👉 Nhập Cổng (Port) kết nối (Mặc định 5555): ", "green")).strip()
-            if port_input and port_input.isdigit():
-                port = int(port_input)
-                if not validator.validate_port(port):
-                    print(colored("❌ Cổng không hợp lệ (phải từ 1-65535)!", "red"))
-                    input(colored("Nhấn Enter để tiếp tục...", "white"))
-                    continue
-            else:
-                port = 5555
+            if ":" not in ip_input:
+                port_input = input(colored("👉 Nhập Cổng (Port) kết nối (Mặc định 5555): ", "green")).strip()
+                if port_input and port_input.isdigit():
+                    port = int(port_input)
+                    if not validator.validate_port(port):
+                        print(colored("❌ Cổng không hợp lệ (phải từ 1-65535)!", "red"))
+                        input(colored("Nhấn Enter để tiếp tục...", "white"))
+                        continue
+                else:
+                    port = 5555
 
             print(colored(f"🔄 Đang tiến hành kết nối đến {ip}:{port}...", "cyan"))
             if adb_manager.connect_wifi(ip, port):
