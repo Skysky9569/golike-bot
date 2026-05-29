@@ -2080,7 +2080,10 @@ def run_single_mode():
                     chon_acc = int(input("👉 Nhập số để chọn nick chạy: "))
             
                 selected_node, name_run, uid_run = valid_accounts[chon_acc-1]
-                human_click(driver, selected_node)
+                try:
+                    driver.execute_script("arguments[0].click();", selected_node)
+                except Exception:
+                    human_click(driver, selected_node)
                 print(f"🚀 ✅ ĐANG CHẠY ACC: {name_run} | UID: {uid_run}")
                 sleep(3)
                 if prev_max_job:
@@ -3228,7 +3231,10 @@ def _select_golike_account(driver):
 
         chon_acc = int(input("👉 Nhap so de chon nick chay: "))
         selected_node, name_run, uid_run = valid_accounts[chon_acc - 1]
-        human_click(driver, selected_node)
+        try:
+            driver.execute_script("arguments[0].click();", selected_node)
+        except Exception:
+            human_click(driver, selected_node)
         print(f"🚀 ✅ DANG CHAY ACC: {name_run} | UID: {uid_run}")
         sleep(3)
         return name_run, uid_run
