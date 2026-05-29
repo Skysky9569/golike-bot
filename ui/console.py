@@ -77,6 +77,19 @@ def check_for_updates():
         logger.warning("Hệ thống Updater gặp lỗi kỹ thuật, bỏ qua bước kiểm tra phiên bản.")
 
 
+# Stats registry
+active_acc = "Chưa có"
+active_uid = "N/A"
+completed_jobs = 0
+total_coins = 0
+
+def update_stats(acc: str, uid: str, jobs: int, coins: int):
+    global active_acc, active_uid, completed_jobs, total_coins
+    active_acc = acc
+    active_uid = uid
+    completed_jobs = jobs
+    total_coins = coins
+
 def banner():
     """Hien thi banner"""
     os.system("clear" if os.name == "posix" else "cls")
@@ -93,8 +106,8 @@ def banner():
 {colored('========================================', 'white')}
 {colored('Tool By Dome: Golike v' + CURRENT_VERSION, 'cyan', bold=True)}
 {colored('========================================', 'white')}
-{colored('⚠️  Lưu ý    : Tool Sử Dụng Cho Android/PC', 'white')}
-{colored('🔐 Bảo mật  : Credential đã mã hóa, Input validated', 'green')}
+{colored(f'👤 Tên acc: {active_acc} ({active_uid})', 'white')}
+{colored(f'📊 Số job: {completed_jobs} | Tổng tiền: {total_coins} xu', 'green')}
 {colored('🔄 Cập nhật : ' + _changelog, 'green')}
 {colored('🏗️  Cấu trúc : Thiết kế dạng Module chuyên nghiệp', 'green')}
 {colored('========================================', 'white')}

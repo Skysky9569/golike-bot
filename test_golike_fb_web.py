@@ -668,6 +668,12 @@ def main(auth_token=None):
     # Cấu hình delay trước khi chạy
     configure_delays()
 
+    try:
+        from ui.console import update_stats
+        update_stats(selected_acc.get('fb_name', 'N/A'), FB_ID, 0, 0)
+    except Exception:
+        pass
+
     print("\nBat dau chay bot tu dong lam nhiem vu...")
     print(f"Delay Config: Action={DELAY_CONFIG['action_min']}-{DELAY_CONFIG['action_max']}s | "
           f"Report={DELAY_CONFIG['report_min']}-{DELAY_CONFIG['report_max']}s | "
@@ -699,6 +705,12 @@ def main(auth_token=None):
                     random_delay('report_min', 'report_max', '⏱️ Delay truoc bao cao:')
                     if report_job(job):
                         success_count += 1
+                        try:
+                            import ui.console
+                            reward = job.get('fix_coin_job') or 35
+                            ui.console.update_stats(selected_acc.get('fb_name', 'N/A'), FB_ID, success_count, ui.console.total_coins + reward)
+                        except Exception:
+                            pass
                     else:
                         fail_count += 1
                 else:

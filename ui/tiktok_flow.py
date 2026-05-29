@@ -57,7 +57,7 @@ from golike_core.security import CredentialManager, InputValidator
 from golike_core.job_processors import (
     Job, JobProcessorFactory, U2JobProcessor, _call_process_job
 )
-from ui.console import input_int, get_public_ip
+from ui.console import input_int, get_public_ip, update_stats
 
 # Import UI automation module
 try:
@@ -468,11 +468,13 @@ def tiktok_menu(auth_token: str) -> None:
             acc_obj = data[acc_index]
             account_id = acc_obj.get("id")
             logger.info(f"Đã chọn tài khoản [{acc_input}]: {acc_obj.get('unique_username', 'N/A')}")
+            update_stats(acc_obj.get('unique_username', 'N/A'), account_id, 0, 0)
             break
         elif acc_input:
             acc_obj = next((a for a in data if a.get("unique_username") == acc_input), None)
             if acc_obj:
                 account_id = acc_obj.get("id")
+                update_stats(acc_obj.get('unique_username', 'N/A'), account_id, 0, 0)
                 break
             else:
                 logger.warning("Acc này chưa được thêm vào GoLike hoặc ID sai")
@@ -674,6 +676,10 @@ def tiktok_menu(auth_token: str) -> None:
             tong += reward
             checkdoiacc = 0
             jobs_completed_for_break += 1
+            try:
+                update_stats(acc_obj.get('unique_username', 'N/A'), account_id, dem, tong)
+            except Exception:
+                pass
             
             # Kiem tra nghi giai lao
             if break_jobs > 0 and jobs_completed_for_break >= break_jobs:
