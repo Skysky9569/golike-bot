@@ -17,18 +17,24 @@ import base64
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 
-from selenium import webdriver as selenium_driver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import (
-    TimeoutException, StaleElementReferenceException,
-    NoSuchElementException, ElementClickInterceptedException
-)
-from webdriver_manager.chrome import ChromeDriverManager
+# Selenium imports - optional (not available on Termux/Android)
+HAS_SELENIUM = False
+try:
+    from selenium import webdriver as selenium_driver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.common.exceptions import (
+        TimeoutException, StaleElementReferenceException,
+        NoSuchElementException, ElementClickInterceptedException
+    )
+    from webdriver_manager.chrome import ChromeDriverManager
+    HAS_SELENIUM = True
+except ImportError:
+    pass
 
 from golike_core.security import CredentialManager
 from golike_core.api_client import GolikeAPIClient
@@ -769,6 +775,13 @@ class FacebookDesktopBot:
 
 def sele_desktop_menu() -> None:
     """Main menu for Facebook Desktop Selenium Bot"""
+    if not HAS_SELENIUM:
+        print(colored("\n❌ Facebook Desktop Selenium không khả dụng!", "red"))
+        print(colored("💡 Tính năng này yêu cầu: pip install selenium webdriver-manager", "yellow"))
+        print(colored("💡 Chỉ hỗ trợ trên Windows/Linux có Chrome Desktop.", "yellow"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
+        return
+
     cred_manager = CredentialManager()
     cookie = load_facebook_cookie()
 
