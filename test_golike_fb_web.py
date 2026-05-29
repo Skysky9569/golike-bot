@@ -496,14 +496,24 @@ def main(auth_token=None):
     # Nhập / tải token Golike
     if auth_token:
         user_token = auth_token
-        # Chuẩn hóa token
-        if not user_token.startswith("Bearer "):
-            user_token = f"Bearer {user_token}"
     else:
         user_token = configure_token()
         if not user_token:
             return
-    HEADERS['authorization'] = user_token
+
+    # Thử parse JSON cho các header g-auth và g-device-id
+    try:
+        data = json.loads(user_token)
+        if isinstance(data, dict):
+            HEADERS['authorization'] = data.get("authorization")
+            if data.get("g-auth"):
+                HEADERS['g-auth'] = data.get("g-auth")
+            if data.get("g-device-id"):
+                HEADERS['g-device-id'] = data.get("g-device-id")
+    except Exception:
+        if not user_token.startswith("Bearer "):
+            user_token = f"Bearer {user_token}"
+        HEADERS['authorization'] = user_token
 
     # Lấy tài khoản trên Golike
     print("\nDang lay danh sach tai khoan Facebook tu Golike...")

@@ -1139,6 +1139,7 @@ def load_delay_config(filepath: str = "config_golike_sele.json"):
         "sleep_on_hunt_retry": 10,
         "switch_server_minutes": 0,
         "max_job_hunt_fail": 3,
+        "max_jobs_before_switch": 20,
         "default_proxy": "",
         "skipped_job_types": []
     }
@@ -1298,6 +1299,7 @@ def show_config_summary():
         ("sleep_on_hunt_retry",      "Sleep khi retry hunt job"),
         ("switch_server_minutes",    "Tự động đổi server"),
         ("max_job_hunt_fail",        "Số lần hụt Job thì đổi Acc"),
+        ("max_jobs_before_switch",   "Số job tối đa trước khi đổi acc"),
     ]
 
     for i, (key, label) in enumerate(delay_keys):
@@ -1306,13 +1308,14 @@ def show_config_summary():
 
         if key == "sleep_on_cool_down" and val:
             suffix = f"  ({round(val / 60, 1)} phút)"
-        elif key in ["switch_server_minutes", "max_job_hunt_fail"]:
+        elif key in ["switch_server_minutes", "max_job_hunt_fail", "max_jobs_before_switch"]:
             suffix = "  (tắt)" if val == 0 else ""
         else:
             suffix = ""
 
         if key == "switch_server_minutes": unit = " phút"
         elif key == "max_job_hunt_fail": unit = " lần"
+        elif key == "max_jobs_before_switch": unit = " job"
         else: unit = "s"
         
         print(f"    {color}{label + ' ':.<40s}{C_RESET} {C_YELLOW}{val}{unit}{suffix}{C_RESET}")
@@ -1361,6 +1364,7 @@ def setup_delay_config():
         ("sleep_on_hunt_retry", "Sleep khi retry hunt job (giây)", float),
         ("switch_server_minutes", "Thời gian tự động đổi Server (phút, 0 để tắt)", float),
         ("max_job_hunt_fail", "Số lần hụt Job liên tiếp thì đổi Acc (lần, 0 để tắt)", float),
+        ("max_jobs_before_switch", "Số job tối đa làm được trước khi đổi Acc (job, 0 để tắt)", int),
         ("skipped_job_types", "🚫 Loại job BỎ QUA (VD: follow,haha,sad — để trống để làm tất cả)", "list"),
         ("telegram_bot_token", "Telegram Bot Token", str),
         ("telegram_chat_id", "Telegram Chat ID", str),
@@ -1420,14 +1424,14 @@ def setup_delay_config():
                             config[key] = parsed
                             print(f"[✓] Đã cập nhật {key} = {parsed}")
                 else:
-                    current_val = config.get(key, 10 if type_func == float else "")
+                    current_val = config.get(key, 10 if type_func in (float, int) else "")
                     # Mask sensitive values when prompting
                     if key in SENSITIVE_KEYS and current_val:
                         current_val = mask_sensitive_value(str(current_val))
                     new_val = input(f"Nhập giá trị mới cho '{label}' [hiện tại: {current_val}]: ").strip()
                     if new_val or type_func == str:
                         try:
-                            if type_func == float and not new_val:
+                            if type_func in (float, int) and not new_val:
                                 pass
                             else:
                                 config[key] = type_func(new_val) if new_val else ""
@@ -1456,7 +1460,7 @@ ALL_JOB_TYPES = ["like", "lik_page", "follow", "love", "haha", "wow", "sad", "an
 
 def map_job_type(job_text):
     job_text = job_text.lower()
-    if "like cho fanpage" in job_text: return "lik_page"
+    if "like cho fanpage" in job_text or "like_page" in job_text or "lik_page" in job_text: return "lik_page"
     if "like cho bài viết" in job_text or "like cho bài" in job_text: return "like"
     if "theo dõi" in job_text: return "follow"
     if "love" in job_text or "tim" in job_text: return "love"
@@ -1516,7 +1520,10 @@ def is_job_skipped(job_type: str) -> bool:
     skipped = CONFIG_DELAY.get("skipped_job_types", [])
     if not isinstance(skipped, list):
         return False
-    return job_type in [s.strip().lower() for s in skipped if s]
+    skipped_normalized = [s.strip().lower() for s in skipped if s]
+    if job_type == "lik_page" and ("like_page" in skipped_normalized or "lik_page" in skipped_normalized):
+        return True
+    return job_type in skipped_normalized
 
 
 def is_valid_facebook_url(url: str) -> bool:
@@ -1993,6 +2000,7 @@ def run_single_mode():
             current_cookie = acc_info.get("cookie")
             current_uid = acc_info.get("uid")  # Facebook UID (dùng cho API)
             current_golike_uid = acc_info.get("golike_uid") or current_uid  # GoLike UID (dùng để chọn nick trong dropdown)
+            jobs_done_for_acc = 0
 
             # Decrypt cookie if it's encrypted
             actual_cookie = current_cookie
@@ -2438,6 +2446,16 @@ def run_single_mode():
                                 print(f"Lỗi khi Báo lỗi: {e}")
                                 consecutive_failures += 1  # Lỗi khi báo lỗi, tăng bộ đếm failure
                     
+                        if not need_skip:
+                            jobs_done_for_acc += 1
+                            consecutive_failures = 0
+                            print(f"[📈] Đã làm thành công {jobs_done_for_acc} jobs cho tài khoản này.")
+                            max_jobs = int(CONFIG_DELAY.get("max_jobs_before_switch", 20))
+                            if max_jobs > 0 and jobs_done_for_acc >= max_jobs:
+                                print(f"[🔄] Đã làm đủ {max_jobs} jobs. Đang chuyển sang tài khoản tiếp theo...")
+                                current_account_index += 1
+                                break
+
                         print(f"Đợi {CONFIG_DELAY.get('delay_between_jobs', 10)}s trước khi tìm job tiếp theo...")
                         if job_limit_reached(driver):
                             acc_name = locals().get('name_run') or str(current_uid)
@@ -3074,7 +3092,7 @@ def run_parallel_mode():
                       "delay_after_report_error", "delay_on_job_hunt_retry", "delay_between_accounts",
                       "timeout_driver_load", "timeout_wait_element", "sleep_on_reset",
                       "sleep_on_cool_down", "delay_after_reset_click", "sleep_on_hunt_retry",
-                      "switch_server_minutes", "default_proxy"]
+                      "switch_server_minutes", "max_jobs_before_switch", "default_proxy"]
         with CONFIG_DELAY_LOCK:
             for k in delay_keys:
                 if k in raw:

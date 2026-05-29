@@ -1,6 +1,6 @@
 {
-  "version": "1.12.3",
-  "release_date": "2026-05-28",
-  "changelog": "v1.12.3 - Thêm tính năng ấn Enter để tạm dừng và ấn 'r' để tiếp tục chạy tool.",
-  "previous_version": "1.12.2"
+  "version": "1.12.4",
+  "release_date": "2026-05-29",
+  "changelog": "v1.12.4 - Khắc phục lỗi đăng nhập API GoLike (403/422) do thiếu các header bảo mật mới.",
+  "previous_version": "1.12.3"
 }

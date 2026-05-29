@@ -114,5 +114,6 @@ def menu() -> None:
     print(colored("\n🛠️  HỆ THỐNG & CẤU HÌNH:", "cyan", bold=True))
     print(colored("   [4] 📶 Cài Đặt Kết Nối ADB WiFi/USB", "cyan"))
     print(colored("   [5] 🥈 Quản Lý Authorization Tokens", "green"))
+    print(colored("   [6] 🖥️ Tool Facebook Desktop (Cookie + facebook.com)", "magenta"))
     print(colored("   [0] 🔙 Thoát Chương Trình", "white"))
     print(colored("════════════════════════════════════════════════", "white"))

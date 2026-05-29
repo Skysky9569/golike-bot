@@ -167,12 +167,15 @@ class CredentialManager:
                 except:
                     pass
 
-    def save_auth(self, label: str, auth_token: str) -> bool:
+    def save_auth(self, label: str, auth_token: str, g_auth: Optional[str] = None, g_device_id: Optional[str] = None, t_token: Optional[str] = None) -> bool:
         """Lưu authorization token đã mã hóa với nhãn cụ thể
 
         Args:
             label: Nhãn để xác định token
             auth_token: Authorization token cần lưu
+            g_auth: GoLike g-auth header
+            g_device_id: GoLike g-device-id header
+            t_token: GoLike t header (version token)
 
         Returns:
             bool: True nếu thành công, False nếu thất bại
@@ -181,7 +184,19 @@ class CredentialManager:
             return False
         try:
             tokens = self._load_tokens()
-            tokens[label] = self._encrypt(auth_token)
+            if g_auth:
+                import json
+                save_data = {
+                    "authorization": auth_token,
+                    "g-auth": g_auth,
+                    "g-device-id": g_device_id,
+                    "t": t_token
+                }
+                save_val = json.dumps(save_data)
+            else:
+                save_val = auth_token
+
+            tokens[label] = self._encrypt(save_val)
             self._save_tokens(tokens)
             return True
         except Exception as e:

@@ -88,6 +88,7 @@ from ui.console import menu, banner, check_for_updates, CURRENT_VERSION, input_i
 from ui.adb_menu import adb_menu
 from ui.tiktok_flow import tiktok_menu
 import test_golike_fb_web
+from golikefb_sele_desktop import sele_desktop_menu as fb_desktop_menu
 
 
 def run_facebook_selenium_bot() -> None:
@@ -112,6 +113,48 @@ def run_facebook_selenium_bot() -> None:
         input(colored("Nhấn Enter để quay lại...", "white"))
 
 
+def prompt_and_save_token(cred_manager: CredentialManager, validator: InputValidator, label: Optional[str] = None) -> Optional[str]:
+    """Hỏi thông tin token, g-auth, g-device-id và lưu lại. Trả về giá trị đã lưu dưới dạng JSON (nếu có g-auth) hoặc raw string."""
+    from typing import Optional
+    import uuid
+    import json
+
+    if not label:
+        label = input(colored("Nhập nhãn cho token mới: ", "green")).strip()
+        while not label:
+            label = input(colored("Nhãn không được để trống. Nhập lại: ", "green")).strip()
+
+    token = input(colored("Nhập authorization token: ", "green")).strip()
+    while not validator.validate_auth_token(token):
+        print(colored("Token không hợp lệ! Phải từ 10-500 ký tự", "red"))
+        token = input(colored("Nhập lại authorization token: ", "green")).strip()
+
+    g_auth = input(colored("Nhập g-auth token (Bắt buộc cho TikTok mới, hoặc ấn Enter để bỏ qua): ", "green")).strip() or None
+    g_device_id = input(colored("Nhập g-device-id (Ấn Enter để tự động sinh UUID): ", "green")).strip() or None
+
+    if g_auth and not g_device_id:
+        g_device_id = str(uuid.uuid4())
+        print(colored(f"💡 Tự động tạo g-device-id: {g_device_id}", "cyan"))
+
+    # Hỏi t token (version token từ browser DevTools)
+    print(colored("💡 Hướng dẫn lấy 't' token: Mở app.golike.net → F12 → Network → bắt request đến gateway.golike.net → copy giá trị header 't'", "cyan"))
+    t_token = input(colored("Nhập 't' header token (bắt buộc để tránh lỗi 403 version, Enter để bỏ qua): ", "green")).strip() or None
+
+    if cred_manager.save_auth(label, token, g_auth, g_device_id, t_token):
+        print(colored(f"[✔] Đã lưu token với nhãn '{label}'!", "green"))
+        if g_auth:
+            return json.dumps({
+                "authorization": token,
+                "g-auth": g_auth,
+                "g-device-id": g_device_id,
+                "t": t_token
+            })
+        return token
+    else:
+        print(colored("[!] Lưu token thất bại!", "red"))
+        return None
+
+
 def auth_manager_menu() -> None:
     """Menu quản lý các authorization token"""
     cred_manager = CredentialManager()
@@ -127,6 +170,15 @@ def auth_manager_menu() -> None:
             print(colored("Danh sách token hiện có:", "white"))
             for i, label in enumerate(tokens, 1):
                 token = cred_manager.get_auth_by_label(label)
+                # Check if it is a JSON with headers
+                try:
+                    import json
+                    token_data = json.loads(token)
+                    if isinstance(token_data, dict):
+                        token = token_data.get("authorization", "")
+                except Exception:
+                    pass
+
                 if token and len(token) > 14:
                     masked = token[:10] + "..." + token[-4:]
                 else:
@@ -146,20 +198,7 @@ def auth_manager_menu() -> None:
         if choice == "0":
             break
         elif choice == "1":
-            # Thêm token mới
-            label = input(colored("Nhập nhãn cho token mới: ", "green")).strip()
-            while not label:
-                label = input(colored("Nhãn không được để trống. Nhập lại: ", "green")).strip()
-
-            token = input(colored("Nhập authorization token: ", "green")).strip()
-            while not validator.validate_auth_token(token):
-                print(colored("Token không hợp lệ! Phải từ 10-500 ký tự", "red"))
-                token = input(colored("Nhập lại authorization token: ", "green")).strip()
-
-            if cred_manager.save_auth(label, token):
-                print(colored(f"[✔] Đã lưu token với nhãn '{label}'!", "green"))
-            else:
-                print(colored("[!] Lưu token thất bại!", "red"))
+            prompt_and_save_token(cred_manager, validator)
         elif choice == "2":
             # Xóa token
             if not tokens:
@@ -205,7 +244,7 @@ def main() -> None:
 
     while True:
         menu()
-        choose = input(colored("🥇 Nhập Lựa Chọn (0-5): ", "white")).strip()
+        choose = input(colored("🥇 Nhập Lựa Chọn (0-6): ", "white")).strip()
 
         if choose == "0":
             print(colored("👋 Tạm biệt!", "green"))
@@ -219,20 +258,17 @@ def main() -> None:
             # Thay đổi tùy chọn 5 thành Quản lý authorization tokens
             auth_manager_menu()
             continue
+        elif choose == "6":
+            # Facebook Desktop Selenium (cookie, facebook.com, F12)
+            fb_desktop_menu()
+            continue
         elif choose == "1":
             # TikTok menu
             if not cred_manager.has_any_token():
                 # Chưa có token nào, yêu cầu nhập ngay tại chỗ
-                label = input(colored("Nhập nhãn cho token mới: ", "green")).strip()
-                while not label:
-                    label = input(colored("Nhãn không được để trống. Nhập lại: ", "green")).strip()
-                token = input(colored("Nhập authorization token: ", "green")).strip()
-                while not validator.validate_auth_token(token):
-                    print(colored("Token không hợp lệ! Phải từ 10-500 ký tự", "red"))
-                    token = input(colored("Nhập lại authorization token: ", "green")).strip()
-                cred_manager.save_auth(label, token)
-                auth_token = token
-                print(colored(f"[✔] Đã lưu token với nhãn '{label}' và đang sử dụng!", "green"))
+                auth_token = prompt_and_save_token(cred_manager, validator)
+                if not auth_token:
+                    continue
             else:
                 labels = cred_manager.get_auth_labels()
                 if len(labels) == 1:
@@ -242,6 +278,15 @@ def main() -> None:
                     print(colored("\nChọn token để sử dụng cho TikTok:", "cyan"))
                     for i, label in enumerate(labels, 1):
                         token = cred_manager.get_auth_by_label(label)
+                        # Check if it is a JSON with headers
+                        try:
+                            import json
+                            token_data = json.loads(token)
+                            if isinstance(token_data, dict):
+                                token = token_data.get("authorization", "")
+                        except Exception:
+                            pass
+
                         if token and len(token) > 14:
                             masked = token[:10] + "..." + token[-4:]
                         else:
@@ -254,16 +299,9 @@ def main() -> None:
             # Facebook menu
             if not cred_manager.has_any_token():
                 # Chưa có token nào, yêu cầu nhập ngay tại chỗ
-                label = input(colored("Nhập nhãn cho token mới: ", "green")).strip()
-                while not label:
-                    label = input(colored("Nhãn không được để trống. Nhập lại: ", "green")).strip()
-                token = input(colored("Nhập authorization token: ", "green")).strip()
-                while not validator.validate_auth_token(token):
-                    print(colored("Token không hợp lệ! Phải từ 10-500 ký tự", "red"))
-                    token = input(colored("Nhập lại authorization token: ", "green")).strip()
-                cred_manager.save_auth(label, token)
-                auth_token = token
-                print(colored(f"[✔] Đã lưu token với nhãn '{label}' và đang sử dụng!", "green"))
+                auth_token = prompt_and_save_token(cred_manager, validator)
+                if not auth_token:
+                    continue
             else:
                 labels = cred_manager.get_auth_labels()
                 if len(labels) == 1:
@@ -273,6 +311,15 @@ def main() -> None:
                     print(colored("\nChọn token để sử dụng cho Facebook:", "cyan"))
                     for i, label in enumerate(labels, 1):
                         token = cred_manager.get_auth_by_label(label)
+                        # Check if it is a JSON with headers
+                        try:
+                            import json
+                            token_data = json.loads(token)
+                            if isinstance(token_data, dict):
+                                token = token_data.get("authorization", "")
+                        except Exception:
+                            pass
+
                         if token and len(token) > 14:
                             masked = token[:10] + "..." + token[-4:]
                         else:

@@ -49,19 +49,53 @@ class GolikeAPIClient:
         self.base_url = base_url or CONFIG.api_base_url
         self.timeout = timeout
         self.connect_timeout = connect_timeout
-        self._auth_token: Optional[str] = None
-        self._t_token = 'VFZSak0wOUVWWGRQUkZrd1QxRTlQUT09'
+        self._auth_token = None
+        self._g_auth = None
+        self._g_device_id = None
+        self._t_token = None
         # Session với timeout cấu hình
         self.session = requests.Session()
         self.session.timeout = (connect_timeout, timeout)
 
-    def set_auth(self, auth_token: str) -> None:
-        """Set authorization token
+    def set_auth(self, auth_token: str, g_auth: Optional[str] = None, g_device_id: Optional[str] = None) -> None:
+        """Set authorization token and g-auth info
 
         Args:
-            auth_token: Authorization token
+            auth_token: Authorization token or JSON string with headers
+            g_auth: GoLike g-auth header
+            g_device_id: GoLike g-device-id header
         """
+        if not auth_token:
+            return
+
+        try:
+            import json
+            data = json.loads(auth_token)
+            if isinstance(data, dict):
+                self._auth_token = data.get("authorization")
+                self._g_auth = data.get("g-auth") or data.get("g_auth")
+                self._g_device_id = data.get("g-device-id") or data.get("g_device_id")
+                # Load t token from stored credentials if available
+                t_from_cred = data.get("t")
+                if t_from_cred:
+                    self._t_token = t_from_cred
+                return
+        except Exception:
+            pass
+
         self._auth_token = auth_token
+        self._g_auth = g_auth
+        self._g_device_id = g_device_id
+        # Extract t token if passed in JSON data (already handled above)
+
+    def set_t_token(self, t_token: str) -> None:
+        """Set t header token (version token from browser)
+
+        Args:
+            t_token: The t header value captured from browser DevTools
+        """
+        if t_token:
+            self._t_token = t_token
 
     def _build_headers(self) -> Dict[str, str]:
         """Build headers cho request
@@ -69,6 +103,9 @@ class GolikeAPIClient:
         Returns:
             Dict[str, str]: Headers dictionary
         """
+        import time
+        import base64
+
         headers = {
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8,fr-FR;q=0.7,fr;q=0.6',
@@ -76,15 +113,29 @@ class GolikeAPIClient:
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-site',
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+            'Sec-Ch-Ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
             'Content-Type': 'application/json;charset=utf-8'
         }
         if self._auth_token:
-            # Truyền thẳng token, không thêm 'Bearer ' prefix
-            # vì user có thể đã nhập sẵn format đầy đủ
             headers['Authorization'] = self._auth_token
+        if self._g_auth:
+            headers['g-auth'] = self._g_auth
+        if self._g_device_id:
+            headers['g-device-id'] = self._g_device_id
+
+        # Use stored t token from credentials (version token) if available
+        # Otherwise fallback to triple-base64 encoded timestamp
         if self._t_token:
-            headers['T'] = self._t_token
+            headers['t'] = self._t_token
+        else:
+            t_val = str(int(time.time()))
+            for _ in range(3):
+                t_val = base64.b64encode(t_val.encode('utf-8')).decode('utf-8')
+            headers['t'] = t_val
+
         return headers
 
     @retry_on_error(max_retries=3, exceptions=(requests.RequestException,), logger_instance=logger)
@@ -103,17 +154,26 @@ class GolikeAPIClient:
         """
         try:
             url = f"{self.base_url}{endpoint}"
+            headers = self._build_headers()
             response = requests.get(
                 url,
                 params=params,
-                headers=self._build_headers(),
+                headers=headers,
                 timeout=(self.connect_timeout, self.timeout)
             )
+            # Log full API details on error
+            if response.status_code != 200:
+                headers_to_log = {k: (v[:15] + "..." if len(v) > 20 else v) for k, v in headers.items()}
+                logger.error(f"\n[API GET ERROR] URL: {response.url}\n"
+                             f"Headers: {headers_to_log}\n"
+                             f"Status Code: {response.status_code}\n"
+                             f"Response: {response.text}\n")
+            
             # Check for rate limit and session expired
             if response.status_code == 429:
                 raise RateLimitError("Rate limit exceeded", status_code=429)
             if response.status_code in (401, 403):
-                raise SessionExpiredError("Session expired or forbidden", status_code=response.status_code)
+                raise SessionExpiredError(f"Session expired or forbidden (HTTP {response.status_code}) - Response: {response.text}", status_code=response.status_code)
             return response.json()
         except (RateLimitError, SessionExpiredError):
             raise  # Không retry các lỗi này
@@ -136,17 +196,26 @@ class GolikeAPIClient:
         """
         try:
             url = f"{self.base_url}{endpoint}"
+            headers = self._build_headers()
             response = requests.post(
                 url,
                 json=data,
-                headers=self._build_headers(),
+                headers=headers,
                 timeout=(self.connect_timeout, self.timeout)
             )
+            # Log full API details on error
+            if response.status_code != 200:
+                headers_to_log = {k: (v[:15] + "..." if len(v) > 20 else v) for k, v in headers.items()}
+                logger.error(f"\n[API POST ERROR] URL: {response.url}\n"
+                             f"Headers: {headers_to_log}\n"
+                             f"Status Code: {response.status_code}\n"
+                             f"Response: {response.text}\n")
+
             # Check for rate limit and session expired
             if response.status_code == 429:
                 raise RateLimitError("Rate limit exceeded", status_code=429)
             if response.status_code in (401, 403):
-                raise SessionExpiredError("Session expired or forbidden", status_code=response.status_code)
+                raise SessionExpiredError(f"Session expired or forbidden (HTTP {response.status_code}) - Response: {response.text}", status_code=response.status_code)
             return response.json()
         except (RateLimitError, SessionExpiredError):
             raise  # Không retry các lỗi này
