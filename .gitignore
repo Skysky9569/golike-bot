@@ -71,3 +71,12 @@ test_golike_fb_requests.py
 # === UI DUMP FILES (cho automation analysis) ===
 ui_dump.xml
 *_dump.xml
+
+# === LOCAL DECOMPILATION & ANALYZER FILES ===
+.golike_device_id
+analyze_js*.py
+find_t_token.py
+av_function.js
+*.js
+!package.json
+!package-lock.json
