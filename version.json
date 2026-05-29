@@ -1,6 +1,6 @@
 {
-  "version": "1.12.4",
-  "release_date": "2026-05-29",
-  "changelog": "v1.12.4 - Khắc phục lỗi đăng nhập API GoLike (403/422) do thiếu các header bảo mật mới.",
-  "previous_version": "1.12.3"
+  "version": "1.12.5",
+  "release_date": "2026-05-30",
+  "changelog": "v1.12.5 - Fix lỗi Termux: thêm golikefb_sele_desktop.py, xử lý graceful khi thiếu Selenium trên Android/Termux.",
+  "previous_version": "1.12.4"
 }
