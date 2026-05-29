@@ -310,7 +310,8 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
 # Fallback essential files (dung khi GitHub API khong kha dung)
 ESSENTIAL_FILES = [
     'main.py', 'updater.py', 'requirements.txt', 'version.json',
-    'golikefb_sele.py', 'tiktok_automation.py', 'FB_WEB_API_FIXED.py',
+    'golikefb_sele.py', 'golikefb_sele_desktop.py',
+    'tiktok_automation.py', 'FB_WEB_API_FIXED.py',
     'tiktok_follow_bot.py', 'tiktok_follow_bot_v2.py', 'tt_like_page.py',
     'app_config.json', 'adb_config.json', 'config_parallel.json',
     'golike_core/__init__.py', 'golike_core/adb_manager.py',

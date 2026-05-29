@@ -5,6 +5,7 @@ Termux/Android compatible
 """
 import os
 import sys
+from typing import Optional
 
 # ============================================================================
 # TERMUX/ANDROID COMPATIBILITY
@@ -88,7 +89,13 @@ from ui.console import menu, banner, check_for_updates, CURRENT_VERSION, input_i
 from ui.adb_menu import adb_menu
 from ui.tiktok_flow import tiktok_menu
 import test_golike_fb_web
-from golikefb_sele_desktop import sele_desktop_menu as fb_desktop_menu
+
+try:
+    from golikefb_sele_desktop import sele_desktop_menu as fb_desktop_menu
+    HAS_DESKTOP_SELE = True
+except ImportError:
+    HAS_DESKTOP_SELE = False
+    fb_desktop_menu = None
 
 
 def run_facebook_selenium_bot() -> None:
@@ -260,7 +267,12 @@ def main() -> None:
             continue
         elif choose == "6":
             # Facebook Desktop Selenium (cookie, facebook.com, F12)
-            fb_desktop_menu()
+            if HAS_DESKTOP_SELE and fb_desktop_menu:
+                fb_desktop_menu()
+            else:
+                print(colored("❌ Facebook Desktop Selenium không khả dụng trên thiết bị này.", "red"))
+                print(colored("💡 Tính năng này yêu cầu Chrome Desktop + Selenium (chỉ hỗ trợ Windows/Linux).", "yellow"))
+                input(colored("Nhấn Enter để quay lại...", "white"))
             continue
         elif choose == "1":
             # TikTok menu
