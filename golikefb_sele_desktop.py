@@ -34,7 +34,10 @@ try:
     from webdriver_manager.chrome import ChromeDriverManager
     HAS_SELENIUM = True
 except ImportError:
-    pass
+    class DummySeleniumDriver:
+        class Chrome:
+            pass
+    selenium_driver = DummySeleniumDriver
 
 from golike_core.security import CredentialManager
 from golike_core.api_client import GolikeAPIClient
