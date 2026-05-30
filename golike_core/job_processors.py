@@ -125,6 +125,15 @@ class U2JobProcessor(JobProcessor):
         if self._u2_device is None:
             try:
                 import uiautomator2 as u2
+                if self.device_id and ("." in self.device_id or ":" in self.device_id):
+                    try:
+                        import subprocess
+                        from golike_core.adb_manager import ADBManager
+                        adb_mgr = ADBManager()
+                        adb_path = adb_mgr.adb_path
+                        subprocess.run([adb_path, "connect", self.device_id], capture_output=True, timeout=5)
+                    except Exception:
+                        pass
                 self._u2_device = u2.connect(self.device_id)
             except Exception as e:
                 logger.error(f"Loi ket noi u2 de mo link: {e}")

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.12.10] - 2026-05-30
+
+### Sửa lỗi kết nối WiFi (WiFi Connection Fixed)
+- **Tự động kích hoạt adb connect cho uiautomator2 WiFi**:
+  - Tự động kiểm tra và thực thi lệnh `adb connect <IP:Port>` ngầm trước khi khởi tạo kết nối `uiautomator2`.
+  - Giúp giải quyết triệt để lỗi thiết bị báo ngoại tuyến (offline) hoặc không tìm thấy serial khi uiautomator2 cố gắng liên lạc với thiết bị chưa được đăng ký trong daemon ADB.
+  - Áp dụng đồng bộ trong cả module chính `TikTokUIAutomator` và `U2JobProcessor` (trình xử lý mở link).
+
 ## [v1.12.9] - 2026-05-30
 
 ### Cải Tiến & Tối Ưu (Improved & Optimized)

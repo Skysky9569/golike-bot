@@ -133,11 +133,23 @@ class TikTokUIAutomator:
 
         try:
             if self.device_id:
+                # Nếu device_id có dạng IP/WiFi (chứa '.' hoặc ':'), tự động chạy adb connect trước
+                if "." in self.device_id or ":" in self.device_id:
+                    try:
+                        import subprocess
+                        from golike_core.adb_manager import ADBManager
+                        adb_mgr = ADBManager()
+                        adb_path = adb_mgr.adb_path
+                        logger.info(f"Đang tự động kết nối ADB qua Wifi đến {self.device_id}...")
+                        subprocess.run([adb_path, "connect", self.device_id], capture_output=True, timeout=5)
+                    except Exception as e:
+                        logger.debug(f"Không thể chạy adb connect tự động: {e}")
+
                 self._u2 = u2.connect(self.device_id)
             else:
                 self._u2 = u2.connect()
 
-            # Test kết nối
+            # Test kết nối bằng cách lấy thông tin thiết bị (info)
             self._u2.info
             self._connected = True
             logger.info(f"Đã kết nối đến thiết bị: {self.device_id or 'mặc định'}")

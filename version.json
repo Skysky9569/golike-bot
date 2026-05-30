@@ -1,6 +1,6 @@
 {
-  "version": "1.12.9",
+  "version": "1.12.10",
   "release_date": "2026-05-30",
-  "changelog": "v1.12.9 - Tối ưu hóa tốc độ cập nhật/tải file bằng cách tải song song nhiều file (ThreadPoolExecutor) giúp tốc độ nhanh hơn gấp 5-10 lần.",
-  "previous_version": "1.12.8"
+  "changelog": "v1.12.10 - Tự động chạy lệnh 'adb connect' khi kết nối uiautomator2 qua WiFi để tránh lỗi thiết bị ngoại tuyến (offline) trên ADB server.",
+  "previous_version": "1.12.9"
 }
