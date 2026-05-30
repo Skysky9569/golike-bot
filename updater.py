@@ -8,7 +8,9 @@ import sys
 import re
 import json
 import shutil
+import threading
 from typing import Optional, List, Tuple
+from concurrent.futures import ThreadPoolExecutor
 
 # Auto-detect internet module (preferred requests, fallback native urllib)
 try:
@@ -258,6 +260,10 @@ TEXT_EXTENSIONS = {'.py', '.json', '.md', '.txt', '.yml', '.yaml', '.cfg', '.con
                    '.gitignore', '.dockerignore', '.env.example', '.enc', '.toml'}
 
 
+# Lock for synchronized console prints
+print_lock = threading.Lock()
+
+
 def download_repo_files(base_dir: str) -> Tuple[int, int]:
     """
     Download all text files from GitHub repository.
@@ -272,17 +278,20 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
 
     ok_count = 0
     fail_count = 0
+    count_lock = threading.Lock()
 
+    # Filter files first
+    files_to_download = []
     for rel_path in repo_files:
-        # Bo qua file nhi phan
         _, ext = os.path.splitext(rel_path)
         if ext.lower() not in TEXT_EXTENSIONS and ext != '':
             continue
+        files_to_download.append(rel_path)
 
+    def download_worker(rel_path: str):
+        nonlocal ok_count, fail_count
         full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
         url = f"{GITHUB_RAW_BASE}{rel_path}"
-
-        print(f"  📥 {rel_path} ... ", end="", flush=True)
 
         try:
             content = _download_text(url, timeout=25)
@@ -295,14 +304,25 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
                 # Write file
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                print("\033[1;32m[OK]\033[0m")
-                ok_count += 1
+                
+                with count_lock:
+                    ok_count += 1
+                with print_lock:
+                    print(f"  📥 {rel_path} ... \033[1;32m[OK]\033[0m")
             else:
-                print("\033[1;33m[BỎ QUA]\033[0m")
-                fail_count += 1
+                with count_lock:
+                    fail_count += 1
+                with print_lock:
+                    print(f"  📥 {rel_path} ... \033[1;33m[BỎ QUA]\033[0m")
         except Exception as e:
-            print(f"\033[1;31m[ERROR: {e}]\033[0m")
-            fail_count += 1
+            with count_lock:
+                fail_count += 1
+            with print_lock:
+                print(f"  📥 {rel_path} ... \033[1;31m[ERROR: {e}]\033[0m")
+
+    # Use ThreadPoolExecutor to download in parallel
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(download_worker, files_to_download)
 
     return ok_count, fail_count
 
@@ -350,13 +370,18 @@ def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, i
     """
     restored = 0
     failed = 0
+    count_lock = threading.Lock()
 
+    # Filter files first
+    files_to_download = []
     for rel_path in file_list:
-        # Bo qua file nhi phan (khong download duoc dang text)
         _, ext = os.path.splitext(rel_path)
         if ext.lower() not in TEXT_EXTENSIONS and ext != '':
             continue
+        files_to_download.append(rel_path)
 
+    def download_worker(rel_path: str):
+        nonlocal restored, failed
         full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
         url = f"{GITHUB_RAW_BASE}{rel_path}"
 
@@ -369,14 +394,24 @@ def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, i
             try:
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                print(f"  ✅ {rel_path}")
-                restored += 1
+                with count_lock:
+                    restored += 1
+                with print_lock:
+                    print(f"  ✅ {rel_path}")
             except Exception as e:
-                print(f"  ❌ {rel_path}: {e}")
-                failed += 1
+                with count_lock:
+                    failed += 1
+                with print_lock:
+                    print(f"  ❌ {rel_path}: {e}")
         else:
-            print(f"  ❌ {rel_path}: download failed")
-            failed += 1
+            with count_lock:
+                failed += 1
+            with print_lock:
+                print(f"  ❌ {rel_path}: download failed")
+
+    # Use ThreadPoolExecutor to download in parallel
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(download_worker, files_to_download)
 
     return restored, failed
 

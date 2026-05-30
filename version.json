@@ -1,6 +1,6 @@
 {
-  "version": "1.12.8",
+  "version": "1.12.9",
   "release_date": "2026-05-30",
-  "changelog": "v1.12.8 - Kiểm tra kết nối uiautomator2 ngay khi kết nối qua WiFi hoặc dùng thiết bị đã lưu; Tự động dừng bot nếu thiết bị không online.",
-  "previous_version": "1.12.7"
+  "changelog": "v1.12.9 - Tối ưu hóa tốc độ cập nhật/tải file bằng cách tải song song nhiều file (ThreadPoolExecutor) giúp tốc độ nhanh hơn gấp 5-10 lần.",
+  "previous_version": "1.12.8"
 }

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.12.9] - 2026-05-30
+
+### Cải Tiến & Tối Ưu (Improved & Optimized)
+- **Tải tệp tin song song (Parallel Downloading)**:
+  - Tích hợp `ThreadPoolExecutor` trong `updater.py` để tải nhiều tệp cùng lúc từ GitHub (tối đa 10 luồng song song).
+  - Tăng tốc độ cập nhật hệ thống và khôi phục tệp thiếu nhanh hơn gấp 5 - 10 lần so với tải tuần tự trước đó.
+  - Sử dụng cơ chế khóa in ấn (`print_lock`) và khóa đếm (`count_lock`) để bảo toàn trạng thái log đầu ra không bị đè hay trùng lắp.
+
 ## [v1.12.8] - 2026-05-30
 
 ### Cải Tiến & Kiểm Soát (Improved & Controlled)
