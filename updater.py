@@ -312,7 +312,6 @@ ESSENTIAL_FILES = [
     'main.py', 'updater.py', 'requirements.txt', 'version.json',
     'golikefb_sele.py', 'golikefb_sele_desktop.py',
     'tiktok_automation.py', 'FB_WEB_API_FIXED.py',
-    'tiktok_follow_bot.py', 'tiktok_follow_bot_v2.py', 'tt_like_page.py',
     'app_config.json', 'adb_config.json', 'config_parallel.json',
     'golike_core/__init__.py', 'golike_core/adb_manager.py',
     'golike_core/api_client.py', 'golike_core/config.py',
