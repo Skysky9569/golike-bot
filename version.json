@@ -1,6 +1,6 @@
 {
-  "version": "1.12.5",
+  "version": "1.12.6",
   "release_date": "2026-05-30",
-  "changelog": "v1.12.5 - Fix lỗi Termux: thêm golikefb_sele_desktop.py, xử lý graceful khi thiếu Selenium trên Android/Termux.",
-  "previous_version": "1.12.4"
+  "changelog": "v1.12.6 - Fix LIKE_PAGE: thêm CometProfilePlusLikeMutation, auto-scan doc_id từ JS bundle, thử nhiều mutation name + format. Fix Termux compatibility.",
+  "previous_version": "1.12.5"
 }

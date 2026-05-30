@@ -168,6 +168,7 @@ class FacebookSession:
 
         # Tên mutation cần tìm doc_id
         MUTATION_NAMES = [
+            'CometProfilePlusLikeMutation',
             'CometPageLikeButtonMutation',
             'CometPageLikeMutation',
             'PageLikeMutation',
@@ -681,11 +682,12 @@ class FB_API:
         Like (Thích) một Facebook Fanpage.
 
         Chiến lược:
-        1. PRIMARY: POST /ajax/pages/fan_status.php (không cần doc_id, ổn định)
-        2. FALLBACK: GraphQL CometPageLikeButtonMutation (cần doc_id hợp lệ)
+        1. Thử auto-scan doc_id từ JS bundle nếu chưa có
+        2. Thử nhiều mutation name + doc_id + variable format
+        3. Fallback: fan_status.php (legacy)
 
         :param PAGE_ID: ID của Facebook Page cần like
-        :param doc_id: GraphQL doc_id (chỉ dùng cho fallback)
+        :param doc_id: GraphQL doc_id (nếu đã biết trước)
         """
         if not isinstance(PAGE_ID, str):
             return {"success": False, "error": "Value error"}
@@ -694,9 +696,151 @@ class FB_API:
             if not self.ready:
                 return {"success": False, "error": "Not logged in"}
 
+            uid = self.session.user_id
+
             # ================================================
-            # APPROACH 1: fan_status.php (legacy, không cần doc_id)
+            # STEP 1: Thu thập doc_ids để thử
             # ================================================
+            doc_ids_to_try = []
+
+            # Nếu user cung cấp doc_id cụ thể, ưu tiên
+            if doc_id != 'null':
+                doc_ids_to_try.append(('user_provided', doc_id))
+
+            # Auto-scan doc_id từ JS bundle (nếu chưa cache)
+            if not FacebookSession._cached_like_page_doc_id:
+                print("[LIKE_PAGE] Quét doc_id từ JS bundle Facebook...")
+                try:
+                    html_resp = requests.get(
+                        "https://www.facebook.com/",
+                        headers={
+                            "user-agent": self.ua,
+                            "cookie": self.cookie,
+                        },
+                        cookies=CookieHandler.to_dict(self.cookie),
+                        timeout=15,
+                        proxies=self.proxies,
+                    )
+                    scanned_id = FacebookSession._find_like_page_doc_id(html_resp.text, self.proxies)
+                    if scanned_id:
+                        FacebookSession._cached_like_page_doc_id = scanned_id
+                        print(f"[LIKE_PAGE] ✓ Tìm thấy doc_id từ JS: {scanned_id}")
+                except Exception as e:
+                    print(f"[LIKE_PAGE] Không quét được doc_id: {e}")
+
+            if FacebookSession._cached_like_page_doc_id:
+                doc_ids_to_try.append(('js_scanned', FacebookSession._cached_like_page_doc_id))
+
+            # Thêm các fallback doc_ids đã biết (mới → cũ)
+            KNOWN_DOC_IDS = [
+                ('CometProfilePlusLikeMutation', '25463905889878308'),
+                ('CometPageLikeButtonMutation', '24681394398162286'),
+                ('CometPageLikeButtonMutation', '6390606484378696'),
+                ('CometPageLikeButtonMutation', '7024407287661374'),
+            ]
+            for mutation_name, did in KNOWN_DOC_IDS:
+                if not any(d[1] == did for d in doc_ids_to_try):
+                    doc_ids_to_try.append((mutation_name, did))
+
+            # ================================================
+            # STEP 2: Thử từng doc_id với nhiều format variables
+            # ================================================
+            last_error = None
+            attempt = 0
+
+            for mutation_label, try_doc_id in doc_ids_to_try:
+                # Xác định mutation name dựa trên label
+                if 'ProfilePlus' in mutation_label:
+                    friendly_name = 'CometProfilePlusLikeMutation'
+                elif mutation_label in ('js_scanned', 'user_provided'):
+                    friendly_name = 'CometPageLikeButtonMutation'
+                else:
+                    friendly_name = mutation_label
+
+                # Các format variables cần thử
+                variable_formats = [
+                    # Format A: source=null, tracking=null (đơn giản nhất)
+                    json.dumps({"input": {"is_tracking_encrypted": False, "page_id": PAGE_ID, "source": None, "tracking": None, "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                    # Format B: không có source, tracking, is_tracking_encrypted (tối giản)
+                    json.dumps({"input": {"page_id": PAGE_ID, "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                    # Format C: source="PROFILE", tracking=[]
+                    json.dumps({"input": {"is_tracking_encrypted": False, "page_id": PAGE_ID, "source": "PROFILE", "tracking": [], "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                ]
+
+                for var_idx, var_fmt in enumerate(variable_formats, 1):
+                    attempt += 1
+                    self.payload_builder.request_counter += 1
+
+                    payload = {
+                        'av': uid,
+                        '__user': uid,
+                        '__req': NumberEncoder.to_base36(self.payload_builder.request_counter),
+                        '__rev': self.session.revision,
+                        'fb_dtsg': self.session.token,
+                        'jazoest': self.session.jazoest,
+                        'lsd': self.session.lsd,
+                        '__spin_r': self.session.revision,
+                        'fb_api_caller_class': 'RelayModern',
+                        'fb_api_req_friendly_name': friendly_name,
+                        'server_timestamps': 'true',
+                        'variables': var_fmt,
+                        'doc_id': try_doc_id,
+                    }
+
+                    # Cập nhật header friendly name
+                    header = self.header.copy()
+                    header['x-fb-friendly-name'] = friendly_name
+
+                    try:
+                        response = requests.post(
+                            'https://www.facebook.com/api/graphql/',
+                            headers=header,
+                            data=payload,
+                            proxies=self.proxies,
+                            timeout=15
+                        )
+                    except Exception as req_err:
+                        last_error = f"Request error: {req_err}"
+                        continue
+
+                    if response.status_code != 200:
+                        last_error = f"HTTP {response.status_code}"
+                        print(f"[LIKE_PAGE] #{attempt} {friendly_name} doc={try_doc_id[:8]}... fmt#{var_idx} -> HTTP {response.status_code}")
+                        continue
+
+                    try:
+                        resp_json = response.json()
+                    except Exception:
+                        last_error = f"Non-JSON: {response.text[:200]}"
+                        continue
+
+                    # Kiểm tra lỗi
+                    errors = resp_json.get("errors", [])
+                    if errors:
+                        err_msg = errors[0].get("message", str(errors[0]))
+                        last_error = f"{friendly_name} fmt#{var_idx}: {err_msg}"
+                        # Nếu noncoercible → thử format khác
+                        if "noncoercible" in err_msg.lower():
+                            print(f"[LIKE_PAGE] #{attempt} {friendly_name} fmt#{var_idx} -> noncoercible (thử tiếp)")
+                            continue
+                        # Lỗi khác → in ra nhưng vẫn thử tiếp
+                        print(f"[LIKE_PAGE] #{attempt} {friendly_name} fmt#{var_idx} -> {err_msg[:80]}")
+                        continue
+
+                    # Thành công!
+                    data = resp_json.get("data", {})
+                    if data is not None:
+                        print(f"[LIKE_PAGE] ✓ Thành công! ({friendly_name}, doc_id={try_doc_id}, fmt#{var_idx})")
+                        # Cache doc_id thành công
+                        FacebookSession._cached_like_page_doc_id = try_doc_id
+                        return {"success": True, "error": None, "id": PAGE_ID}
+
+                    last_error = f"data rỗng ({friendly_name} fmt#{var_idx})"
+
+            # ================================================
+            # STEP 3: FALLBACK — fan_status.php (legacy)
+            # ================================================
+            print("[LIKE_PAGE] Thử fan_status.php (legacy)...")
             try:
                 fan_payload = self.payload_builder.build_LikePage_legacy(PAGE_ID)
                 fan_header = {
@@ -722,106 +866,24 @@ class FB_API:
                 )
                 if fan_resp.status_code == 200:
                     resp_text = fan_resp.text.strip()
-                    # Response format: for (;;);{"payload":{...}}
                     clean = resp_text.replace('for (;;);', '').strip()
                     try:
                         rj = json.loads(clean)
-                        # Kiểm tra lỗi
                         errors = rj.get('errors', []) or rj.get('error', [])
-                        if errors:
-                            err_str = str(errors)
-                            print(f"[LIKE_PAGE] fan_status lỗi: {err_str[:120]}")
-                        else:
-                            # Thành công nếu không có error và có payload
-                            payload_data = rj.get('payload', {})
-                            if payload_data is not None:
-                                print(f"[LIKE_PAGE] ✓ fan_status.php thành công (page_id={PAGE_ID})")
-                                return {"success": True, "error": None, "id": PAGE_ID}
-                            # payload = None cũng có thể OK (already liked)
-                            print(f"[LIKE_PAGE] ✓ fan_status.php OK - đã like (payload=None có thể đã like trước)")
+                        if not errors:
+                            print(f"[LIKE_PAGE] ✓ fan_status.php thành công (page_id={PAGE_ID})")
                             return {"success": True, "error": None, "id": PAGE_ID}
+                        print(f"[LIKE_PAGE] fan_status lỗi: {str(errors)[:120]}")
                     except json.JSONDecodeError:
-                        # Nếu không parse được JSON nhưng HTTP 200 thì vẫn có thể OK
                         if 'errorDescription' not in resp_text and 'error_msg' not in resp_text:
-                            print(f"[LIKE_PAGE] ✓ fan_status.php HTTP 200 (non-JSON response)")
+                            print(f"[LIKE_PAGE] ✓ fan_status.php HTTP 200 (non-JSON)")
                             return {"success": True, "error": None, "id": PAGE_ID}
-                        print(f"[LIKE_PAGE] fan_status lỗi (non-JSON): {resp_text[:200]}")
                 else:
                     print(f"[LIKE_PAGE] fan_status HTTP {fan_resp.status_code}")
             except Exception as e1:
                 print(f"[LIKE_PAGE] fan_status exception: {e1}")
 
-            # ================================================
-            # APPROACH 2: GraphQL — thử nhiều format variables
-            # cho doc_id 24681394398162286 (đã xác nhận tồn tại)
-            # ================================================
-            print("[LIKE_PAGE] Thu GraphQL fallback...")
-
-            # Các format variables cần thử (noncoercible = sai kiểu dữ liệu)
-            CONFIRMED_DOC_ID = '24681394398162286'
-            uid = self.session.user_id
-            variable_formats = [
-                # Format 1: source=null, tracking=null (bỏ source)
-                f'{{"input":{{"is_tracking_encrypted":false,"page_id":"{PAGE_ID}","source":null,"tracking":null,"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
-                # Format 2: source=TIMELINE (enum uppercase), tracking=[]
-                f'{{"input":{{"is_tracking_encrypted":false,"page_id":"{PAGE_ID}","source":"TIMELINE","tracking":[],"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
-                # Format 3: không có source và tracking
-                f'{{"input":{{"page_id":"{PAGE_ID}","actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
-                # Format 4: source=PROFILE
-                f'{{"input":{{"is_tracking_encrypted":false,"page_id":"{PAGE_ID}","source":"PROFILE","tracking":[],"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
-                # Format 5: không có is_tracking_encrypted
-                f'{{"input":{{"page_id":"{PAGE_ID}","source":null,"tracking":null,"actor_id":"{uid}","client_mutation_id":"1"}},"scale":1}}',
-            ]
-
-            base_payload = {
-                'av': uid,
-                '__user': uid,
-                '__req': NumberEncoder.to_base36(self.payload_builder.request_counter + 1),
-                '__rev': self.session.revision,
-                'fb_dtsg': self.session.token,
-                'jazoest': self.session.jazoest,
-                'lsd': self.session.lsd,
-                '__spin_r': self.session.revision,
-                'fb_api_caller_class': 'RelayModern',
-                'fb_api_req_friendly_name': 'CometPageLikeButtonMutation',
-                'server_timestamps': 'true',
-                'doc_id': CONFIRMED_DOC_ID,
-            }
-
-            last_error = None
-            for i, var_fmt in enumerate(variable_formats, 1):
-                self.payload_builder.request_counter += 1
-                payload = {**base_payload,
-                           '__req': NumberEncoder.to_base36(self.payload_builder.request_counter),
-                           'variables': var_fmt}
-                response = requests.post(
-                    'https://www.facebook.com/api/graphql/',
-                    headers=self.header,
-                    data=payload,
-                    proxies=self.proxies,
-                    timeout=15
-                )
-                if response.status_code != 200:
-                    last_error = f"HTTP {response.status_code}"
-                    continue
-                try:
-                    resp_json = response.json()
-                except Exception:
-                    last_error = f"Non-JSON: {response.text[:200]}"
-                    continue
-                errors = resp_json.get("errors", [])
-                if errors:
-                    err_msg = errors[0].get("message", str(errors[0]))
-                    last_error = f"format#{i}: {err_msg}"
-                    print(f"[LIKE_PAGE] GraphQL format#{i} -> {err_msg[:100]}")
-                    continue
-                data = resp_json.get("data", {})
-                if data is not None:
-                    print(f"[LIKE_PAGE] GraphQL thanh cong (format#{i}, doc_id={CONFIRMED_DOC_ID})")
-                    return {"success": True, "error": None, "id": PAGE_ID}
-                last_error = f"data rong (format#{i})"
-
-            print(f"[LIKE_PAGE] ✗ Cả 2 phương pháp đều thất bại. Lỗi cuối: {last_error}")
+            print(f"[LIKE_PAGE] ✗ Tất cả phương pháp đều thất bại. Lỗi cuối: {last_error}")
             return {"success": False, "error": last_error or "All methods failed"}
 
         except Exception as e:
