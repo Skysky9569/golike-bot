@@ -329,11 +329,27 @@ def tiktok_menu(auth_token: str) -> None:
             logger.info(f"Thiết bị uiautomator2 đã lưu: {saved_ip_port}")
             chon_saved = input(colored("👉 Bạn muốn tiếp tục dùng thiết bị này? (y/n, Enter là Có): ", "green")).strip().lower()
             if chon_saved in ["y", "yes", ""]:
-                use_saved = True
-                open_method = "u2"
-                current_device = saved_ip_port
-                adb_manager = ADBManager()
-                logger.info(f"Tái sử dụng thiết bị u2: {current_device}")
+                if UI_AUTOMATION_AVAILABLE:
+                    print(colored(f"⏳ Đang kiểm tra kết nối uiautomator2 đến thiết bị đã lưu {saved_ip_port}...", "yellow"))
+                    test_automator = TikTokUIAutomator(device_id=saved_ip_port)
+                    if test_automator.connect():
+                        print(colored("✅ Kết nối uiautomator2 thành công!", "green", bold=True))
+                        test_automator.disconnect()
+                        use_saved = True
+                        open_method = "u2"
+                        current_device = saved_ip_port
+                        adb_manager = ADBManager()
+                        logger.info(f"Tái sử dụng thiết bị u2: {current_device}")
+                    else:
+                        print(colored(f"❌ Kết nối uiautomator2 thất bại đến {saved_ip_port}!", "red", bold=True))
+                        print(colored("Vui lòng thiết lập kết nối mới.", "yellow"))
+                        use_saved = False
+                else:
+                    use_saved = True
+                    open_method = "u2"
+                    current_device = saved_ip_port
+                    adb_manager = ADBManager()
+                    logger.info(f"Tái sử dụng thiết bị u2: {current_device}")
     elif saved_open_method in ["termux", "manual"]:
         method_desc = "Termux" if saved_open_method == "termux" else "Chế độ Thủ công (Bạn tự Click bằng tay)"
         logger.info(f"Phương thức mở link trước đó: {method_desc}")
@@ -358,76 +374,117 @@ def tiktok_menu(auth_token: str) -> None:
 
     # 2. Nếu không dùng lại cấu hình cũ, thiết lập mới
     if not use_saved:
-        print(colored("════════════════════════════════════════════════", "white"))
-        print(colored("📱 Cấu hình Kết nối & Auto Click:", "cyan", bold=True))
-        print(colored("   [1] ⭐ Chạy TỰ ĐỘNG: Mở Link & Tự Auto Click (Dùng ADB cho PC/Giả lập)", "white"))
-        print(colored("   [2] 📱 Chạy qua WiFi (uiautomator2): Nhập IP:Port điện thoại để kết nối", "cyan"))
-        print(colored("   [3] ✍️  Chạy Thủ Công: Chỉ hiện Link, bạn TỰ CLICK BẰNG TAY trên điện thoại", "white"))
-        print(colored("   [4] 🔍 Tìm kiếm user TikTok để Follow (dùng thanh search trong app)", "yellow"))
-        print(colored("════════════════════════════════════════════════", "white"))
-
         while True:
-            conn_choice = input(colored("👉 Chọn phương thức kết nối (1-4, Mặc định 1): ", "green")).strip()
-            if conn_choice in ["1", ""]:
-                open_method = "adb"
-                break
-            elif conn_choice == "2":
-                open_method = "u2"
-                break
-            elif conn_choice == "3":
-                open_method = "manual"
-                break
-            elif conn_choice == "4":
-                open_method = "search"
-                break
-            else:
-                logger.warning("Lựa chọn không hợp lệ, hãy thử lại!")
+            print(colored("════════════════════════════════════════════════", "white"))
+            print(colored("📱 Cấu hình Kết nối & Auto Click:", "cyan", bold=True))
+            print(colored("   [1] ⭐ Chạy TỰ ĐỘNG: Mở Link & Tự Auto Click (Dùng ADB cho PC/Giả lập)", "white"))
+            print(colored("   [2] 📱 Chạy qua WiFi (uiautomator2): Nhập IP:Port điện thoại để kết nối", "cyan"))
+            print(colored("   [3] ✍️  Chạy Thủ Công: Chỉ hiện Link, bạn TỰ CLICK BẰNG TAY trên điện thoại", "white"))
+            print(colored("   [4] 🔍 Tìm kiếm user TikTok để Follow (dùng thanh search trong app)", "yellow"))
+            print(colored("════════════════════════════════════════════════", "white"))
 
-        if open_method == "adb":
-            adb_manager = ADBManager()
-            current_device = adb_manager.select_device()
-            if not current_device:
-                logger.warning("Chưa chọn được thiết bị cụ thể! Hệ thống sẽ cố kết nối đến ADB mặc định...")
-            adb_config["open_method"] = "adb"
-            adb_config["current_device"] = current_device
-            save_adb_config(adb_config)
-        elif open_method == "u2":
-            print(colored("\n📡 KẾT NỐI UIAUTOMATOR2 QUA WIFI:", "cyan"))
             while True:
-                ip_port = input(colored("👉 Nhập IP:Port điện thoại (ví dụ: 192.168.1.10:5555 hoặc 192.168.1.10): ", "green")).strip()
-                if ":" in ip_port:
-                    parts = ip_port.split(":")
-                    if len(parts) == 2 and parts[1].isdigit() and parts[0]:
-                        break
-                elif ip_port:
-                    ip_port = f"{ip_port}:5555"
+                conn_choice = input(colored("👉 Chọn phương thức kết nối (1-4, Mặc định 1): ", "green")).strip()
+                if conn_choice in ["1", ""]:
+                    open_method = "adb"
                     break
-                logger.warning("Định dạng không hợp lệ! Nhập dạng IP:Port hoặc chỉ IP (vd: 192.168.1.10:5555)")
-            current_device = ip_port
-            adb_manager = ADBManager()
-            logger.info(f"Sẽ kết nối uiautomator2 đến: {current_device}")
-            save_choice = input(colored("💾 Lưu thiết bị này lại để dùng nhanh lần sau? (y/n, Enter là Có): ", "green")).strip().lower()
-            if save_choice in ["y", "yes", ""]:
-                adb_config["open_method"] = "u2"
+                elif conn_choice == "2":
+                    open_method = "u2"
+                    break
+                elif conn_choice == "3":
+                    open_method = "manual"
+                    break
+                elif conn_choice == "4":
+                    open_method = "search"
+                    break
+                else:
+                    logger.warning("Lựa chọn không hợp lệ, hãy thử lại!")
+
+            if open_method == "adb":
+                adb_manager = ADBManager()
+                current_device = adb_manager.select_device()
+                if not current_device:
+                    logger.warning("Chưa chọn được thiết bị cụ thể! Hệ thống sẽ cố kết nối đến ADB mặc định...")
+                adb_config["open_method"] = "adb"
                 adb_config["current_device"] = current_device
                 save_adb_config(adb_config)
-                logger.info(f"Đã lưu thiết bị: {current_device}")
+                break
+            elif open_method == "u2":
+                print(colored("\n📡 KẾT NỐI UIAUTOMATOR2 QUA WIFI:", "cyan"))
+                u2_connected = False
+                while True:
+                    ip_port = input(colored("👉 Nhập IP:Port điện thoại (ví dụ: 192.168.1.10:5555 hoặc 192.168.1.10) hoặc nhập 'quay lai' để chọn lại phương thức: ", "green")).strip()
+                    if ip_port.lower() in ["quay lai", "quay lại", "back", "q"]:
+                        break
+                    
+                    if ":" in ip_port:
+                        parts = ip_port.split(":")
+                        if len(parts) == 2 and parts[1].isdigit() and parts[0]:
+                            pass
+                        else:
+                            logger.warning("Định dạng không hợp lệ! Nhập dạng IP:Port hoặc chỉ IP (vd: 192.168.1.10:5555)")
+                            continue
+                    elif ip_port:
+                        ip_port = f"{ip_port}:5555"
+                    else:
+                        logger.warning("Vui lòng nhập IP:Port hoặc IP!")
+                        continue
+                    
+                    current_device = ip_port
+                    if UI_AUTOMATION_AVAILABLE:
+                        print(colored(f"⏳ Đang kiểm tra kết nối uiautomator2 đến {current_device}...", "yellow"))
+                        test_automator = TikTokUIAutomator(device_id=current_device)
+                        if test_automator.connect():
+                            print(colored("✅ Kết nối uiautomator2 thành công!", "green", bold=True))
+                            test_automator.disconnect()
+                            u2_connected = True
+                            break
+                        else:
+                            print(colored(f"❌ Kết nối uiautomator2 thất bại đến {current_device}!", "red", bold=True))
+                            print(colored("Vui lòng kiểm tra xem:", "yellow"))
+                            print(colored("  1. Điện thoại đã bật chế độ gỡ lỗi USB (USB Debugging) chưa?", "yellow"))
+                            print(colored("  2. Điện thoại và máy tính/Termux có kết nối chung một mạng Wifi không?", "yellow"))
+                            print(colored("  3. Cổng port hoặc địa chỉ IP có chính xác không?", "yellow"))
+                            print(colored("  4. Đã khởi động dịch vụ uiautomator2 trên điện thoại chưa?", "yellow"))
+                            
+                            chon_thu_lai = input(colored("👉 Bạn có muốn thử lại địa chỉ khác? (y/n, Enter là Có): ", "green")).strip().lower()
+                            if chon_thu_lai not in ["y", "yes", ""]:
+                                break
+                    else:
+                        print(colored("⚠️ Module uiautomator2 không khả dụng. Bỏ qua kiểm tra kết nối.", "yellow"))
+                        u2_connected = True
+                        break
+                
+                if u2_connected:
+                    adb_manager = ADBManager()
+                    logger.info(f"Sẽ kết nối uiautomator2 đến: {current_device}")
+                    save_choice = input(colored("💾 Lưu thiết bị này lại để dùng nhanh lần sau? (y/n, Enter là Có): ", "green")).strip().lower()
+                    if save_choice in ["y", "yes", ""]:
+                        adb_config["open_method"] = "u2"
+                        adb_config["current_device"] = current_device
+                        save_adb_config(adb_config)
+                        logger.info(f"Đã lưu thiết bị: {current_device}")
+                    else:
+                        adb_config["open_method"] = "u2"
+                        adb_config["current_device"] = None
+                        save_adb_config(adb_config)
+                    break
+                else:
+                    continue
+            elif open_method == "search":
+                adb_manager = ADBManager()
+                current_device = adb_manager.select_device()
+                if not current_device:
+                    logger.warning("Chưa chọn được thiết bị cụ thể!")
+                adb_config["open_method"] = "search"
+                adb_config["current_device"] = current_device
+                save_adb_config(adb_config)
+                break
             else:
-                adb_config["open_method"] = "u2"
+                adb_config["open_method"] = open_method
                 adb_config["current_device"] = None
                 save_adb_config(adb_config)
-        elif open_method == "search":
-            adb_manager = ADBManager()
-            current_device = adb_manager.select_device()
-            if not current_device:
-                logger.warning("Chưa chọn được thiết bị cụ thể!")
-            adb_config["open_method"] = "search"
-            adb_config["current_device"] = current_device
-            save_adb_config(adb_config)
-        else:
-            adb_config["open_method"] = open_method
-            adb_config["current_device"] = None
-            save_adb_config(adb_config)
+                break
 
     # Lấy danh sách acc
     api_client = GolikeAPIClient()
@@ -585,14 +642,29 @@ def tiktok_menu(auth_token: str) -> None:
     if UI_AUTOMATION_AVAILABLE:
         try:
             ui_automator = TikTokUIAutomator(device_id=current_device)
+            is_connected = True
             if open_method == "u2":
-                ui_automator.connect()
-            logger.info("UI Automation đã sẵn sàng")
-            print(colored("🤖 [Hệ thống] Đã kích hoạt thành công Module Auto Click!", "green", bold=True))
+                is_connected = ui_automator.connect()
+            
+            if is_connected:
+                logger.info("UI Automation đã sẵn sàng")
+                print(colored("🤖 [Hệ thống] Đã kích hoạt thành công Module Auto Click!", "green", bold=True))
+            else:
+                logger.error("Không thể kết nối đến uiautomator2")
+                print(colored("❌ Không thể kết nối đến uiautomator2! Thiết bị không online.", "red", bold=True))
+                ui_automator = None
+                if open_method == "u2":
+                    print(colored("🚨 Chế độ uiautomator2 yêu cầu kết nối hoạt động. Dừng chạy bot.", "red", bold=True))
+                    input(colored("Nhấn Enter để quay lại...", "white"))
+                    return
         except Exception as e:
             logger.warning(f"Không thể tạo UI automator: {e}")
             print(colored(f"⚠️ Không thể khởi động UI automator: {e}", "yellow"))
             ui_automator = None
+            if open_method == "u2":
+                print(colored("🚨 Chế độ uiautomator2 yêu cầu kết nối hoạt động. Dừng chạy bot.", "red", bold=True))
+                input(colored("Nhấn Enter để quay lại...", "white"))
+                return
 
     if open_method == "u2" and isinstance(job_processor, U2JobProcessor) and ui_automator and ui_automator._u2:
         job_processor._u2_device = ui_automator._u2

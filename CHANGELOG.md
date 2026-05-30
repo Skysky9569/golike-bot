@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v1.12.8] - 2026-05-30
+
+### Cải Tiến & Kiểm Soát (Improved & Controlled)
+- **Kiểm tra kết nối uiautomator2 WiFi trước khi chạy**:
+  - Tự động kiểm tra trạng thái hoạt động của thiết bị uiautomator2 ngay khi người dùng nhập IP:Port hoặc chọn tiếp tục dùng thiết bị đã lưu.
+  - Hiển thị hướng dẫn sửa lỗi và cho phép nhập lại IP:Port hoặc đổi phương thức kết nối nếu thiết bị không online.
+  - Ngăn ngừa tình trạng bot tự động nhận và cày job khi kết nối đến thiết bị WiFi thực tế đã bị ngắt.
+
 ## [v1.12.3] - 2026-05-28
 
 ### Thêm Mới & Sửa Lỗi (Added & Fixed)

@@ -1,6 +1,6 @@
 {
-  "version": "1.12.7",
+  "version": "1.12.8",
   "release_date": "2026-05-30",
-  "changelog": "v1.12.7 - Đồng bộ fb_web_api.py; Xóa file thừa/legacy; Sửa lỗi NameError: selenium_driver trên Termux; Thêm menu cấu hình token 't' trong main.py.",
-  "previous_version": "1.12.6"
+  "changelog": "v1.12.8 - Kiểm tra kết nối uiautomator2 ngay khi kết nối qua WiFi hoặc dùng thiết bị đã lưu; Tự động dừng bot nếu thiết bị không online.",
+  "previous_version": "1.12.7"
 }
