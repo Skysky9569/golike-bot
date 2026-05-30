@@ -143,9 +143,26 @@ def prompt_and_save_token(cred_manager: CredentialManager, validator: InputValid
         g_device_id = str(uuid.uuid4())
         print(colored(f"💡 Tự động tạo g-device-id: {g_device_id}", "cyan"))
 
-    # Hỏi t token (version token từ browser DevTools)
-    print(colored("💡 Hướng dẫn lấy 't' token: Mở app.golike.net → F12 → Network → bắt request đến gateway.golike.net → copy giá trị header 't'", "cyan"))
-    t_token = input(colored("Nhập 't' header token (bắt buộc để tránh lỗi 403 version, Enter để bỏ qua): ", "green")).strip() or None
+    # Chọn cơ chế token 't'
+    print(colored("\n⚙️ CHỌN PHƯƠNG THỨC TẠO TOKEN 't' (TRÁNH LỖI 403 VERSION):", "cyan"))
+    print(colored("  [1] Tự động sinh động theo thời gian hệ thống (Mặc định - Khuyên dùng)", "white"))
+    print(colored("  [2] Sử dụng token tĩnh mặc định (VFZSak5FMUVRVFZQUkVrMVRYYzlQUT09)", "white"))
+    print(colored("  [3] Nhập token 't' thủ công từ trình duyệt DevTools", "white"))
+
+    choice = input(colored("Lựa chọn của bạn (1/2/3, mặc định 1): ", "green")).strip()
+
+    if choice == "2":
+        t_token = "VFZSak5FMUVRVFZQUkVrMVRYYzlQUT09"
+        print(colored("✅ Đã chọn sử dụng token tĩnh mặc định.", "green"))
+    elif choice == "3":
+        print(colored("💡 Hướng dẫn: Mở app.golike.net -> F12 -> Network -> bắt request đến gateway.golike.net -> copy giá trị header 't'", "cyan"))
+        t_token = input(colored("Nhập token 't' thủ công: ", "green")).strip()
+        while not t_token:
+            t_token = input(colored("Token không được để trống. Nhập lại: ", "green")).strip()
+        print(colored("✅ Đã ghi nhận token tĩnh thủ công.", "green"))
+    else:
+        t_token = None
+        print(colored("✅ Đã chọn tự động sinh động theo thời gian hệ thống (Mặc định).", "green"))
 
     if cred_manager.save_auth(label, token, g_auth, g_device_id, t_token):
         print(colored(f"[✔] Đã lưu token với nhãn '{label}'!", "green"))
