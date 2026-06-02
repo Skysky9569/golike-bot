@@ -88,7 +88,12 @@ from golike_core.adb_manager import colored
 from ui.console import menu, banner, check_for_updates, CURRENT_VERSION, input_int
 from ui.adb_menu import adb_menu
 from ui.tiktok_flow import tiktok_menu
-from ui.ios_flow import ios_tiktok_menu
+try:
+    from ui.ios_flow import ios_tiktok_menu
+    HAS_IOS_FLOW = True
+except ImportError:
+    HAS_IOS_FLOW = False
+    ios_tiktok_menu = None
 import test_golike_fb_web
 
 try:
@@ -286,7 +291,12 @@ def main() -> None:
                 input(colored("Nhấn Enter để quay lại...", "white"))
             continue
         elif choose == "7":
-            ios_tiktok_menu()
+            if HAS_IOS_FLOW and ios_tiktok_menu:
+                ios_tiktok_menu()
+            else:
+                print(colored("\n❌ Chế độ iOS Automation chưa khả dụng trên thiết bị này.", "red"))
+                print(colored("💡 Tính năng này yêu cầu Appium-Python-Client và thư mục golike_ios.", "yellow"))
+                input(colored("\nNhấn Enter để quay lại...", "white"))
             continue
         elif choose == "3":
             run_facebook_selenium_bot()
