@@ -24,10 +24,15 @@ def load_adb_config() -> Dict[str, Any]:
     if os.path.exists(ADB_CONFIG_FILE):
         try:
             with open(ADB_CONFIG_FILE, "r", encoding="utf8") as f:
-                return json.load(f)
+                config = json.load(f)
+                # Ensure selected_adb_path exists
+                if "selected_adb_path" not in config:
+                    config["selected_adb_path"] = None
+                return config
         except (json.JSONDecodeError, IOError) as e:
             logger.debug(f"Loi doc adb_config.json: {e}")
-    return {"devices": [], "current_device": None, "open_method": "termux"}
+    # Default config
+    return {"devices": [], "current_device": None, "open_method": "termux", "selected_adb_path": None}
 
 
 def save_adb_config(config: Dict[str, Any]) -> None:
@@ -86,14 +91,32 @@ class ADBManager:
         self.adb_path = adb_path if adb_path else self._find_adb_path()
         self.selected_device: Optional[str] = None
 
+    def _find_system_adb(self):
+        """Find system ADB executable"""
+        try:
+            result = subprocess.run(["which", "adb"], capture_output=True, text=True)
+            if result.returncode == 0:
+                return "adb"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        return "adb"
+
     def _find_adb_path(self) -> str:
         """Tim duong dan adb.exe, uu tien thu muc ADB noi bo cua du an"""
         # 1. Uu tien 1: ADB folder canh file main.py hien tai
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         local_path = os.path.join(base_dir, "ADB", "adb.exe")
         if os.path.exists(local_path):
-            logger.info(f"Su dung local ADB: {local_path}")
-            return local_path
+            # Check if we're on Windows or if it's a valid executable
+            if os.name == 'nt':  # Windows
+                logger.info(f"Su dung local ADB: {local_path}")
+                return local_path
+            else:
+                # On non-Windows systems, try to use system ADB instead
+                system_adb = self._find_system_adb()
+                if system_adb != "adb":
+                    logger.info(f"Su dung local ADB: {local_path} -> {system_adb}")
+                return system_adb
 
         # 2. Uu tien 2: Kiem tra PATH moi truong
         try:
@@ -108,14 +131,16 @@ class ADBManager:
         try:
             config_path = CONFIG.adb_path
             if config_path and os.path.exists(config_path):
-                logger.info(f"Su dung ADB tu config: {config_path}")
-                return config_path
+                # Check if the configured path is valid for the current platform
+                if os.path.exists(config_path) and (os.name == 'nt' or not config_path.endswith('.exe')):
+                    logger.info(f"Su dung ADB tu config: {config_path}")
+                    return config_path
         except Exception:
             pass
 
         # 4. Fallback: Hardcoded path
         common_path = r"D:\pythonadb\ADB\adb.exe"
-        if os.path.exists(common_path):
+        if os.path.exists(common_path) and os.name == 'nt':
             logger.info(f"Su dung ADB path mac dinh: {common_path}")
             return common_path
 

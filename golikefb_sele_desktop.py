@@ -533,6 +533,53 @@ ACTION_HANDLERS = {
 # MAIN BOT LOGIC
 # ============================================================
 
+def cleanup():
+    """Dọn dẹp các tiến trình Chrome/Driver chạy ngầm"""
+    # 1. Thử đóng driver qua Selenium trước
+    # (Đã xử lý trong close_browser)
+
+    # 2. Dọn dẹp cứng các tiến trình cứng đầu
+    if sys.platform == 'win32':
+        import subprocess
+        try:
+            # Chỉ diệt chrome.exe được spawn bởi chromedriver.exe hoặc có --remote-debugging-port
+            ps_cmd = (
+                "$cdPids = (Get-CimInstance Win32_Process -Filter \"Name='chromedriver.exe'\" | "
+                "ForEach-Object { $_.ProcessId }); "
+                "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
+                "Where-Object { "
+                "($_.CommandLine -like '*--remote-debugging-port*') -or "
+                "($cdPids -contains $_.ParentProcessId) "
+                "} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+            )
+            subprocess.run(["powershell", "-Command", ps_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+        # Tắt driver
+        os.system("taskkill /f /im chromedriver.exe /T >nul 2>&1")
+    elif sys.platform == 'darwin':
+        import subprocess
+        try:
+            # macOS: Diệt các tiến trình Chrome được mở bởi Selenium (có port debugging)
+            cmd = "ps aux | grep -E 'Google Chrome.*--remote-debugging-port' | grep -v grep | awk '{print $2}' | xargs kill -9"
+            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Tắt hoàn toàn chromedriver
+            subprocess.run(["pkill", "-f", "chromedriver"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+
+# Fix encoding cho Windows console
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
+
 class FacebookDesktopBot:
     """Facebook Desktop Bot - API-driven jobs, browser execution"""
 
@@ -583,6 +630,9 @@ class FacebookDesktopBot:
             except Exception:
                 pass
             self.driver = None
+        
+        # Dọn dẹp triệt để
+        cleanup()
 
     def fetch_facebook_accounts(self) -> List[Dict[str, Any]]:
         """Fetch Facebook accounts from GoLike API.

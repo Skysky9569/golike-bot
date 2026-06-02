@@ -2,6 +2,7 @@
 ADB WiFi/USB management menu.
 """
 import os
+import subprocess
 import time
 
 from golike_core.adb_manager import ADBManager, load_adb_config, save_adb_config, colored
@@ -184,3 +185,94 @@ def adb_menu() -> None:
                 save_adb_config(config)
                 print(colored(f"✅ Đã xóa thành công địa chỉ IP: {ip}", "green"))
                 time.sleep(2)
+
+        elif choice == "7":
+            # Chọn nguồn ADB
+            print(colored("\n⚙️  CHỌN NGUỒN ADB:", "cyan"))
+
+            # Get current ADB path for display
+            current_adb_path = adb_manager.adb_path
+            if current_adb_path == "adb":
+                current_display = "adb (từ PATH)"
+            else:
+                current_display = current_adb_path
+
+            print(colored(f"🔧 ADB hiện tại: {current_display}", "white"))
+            print(colored("  [1] ADB từ Homebrew (tự động phát hiện)", "yellow"))
+            print(colored("  [2] ADB cục bộ trong thư mục dự án", "yellow"))
+            print(colored("  [3] Nhập đường dẫn tùy chỉnh", "yellow"))
+            print(colored("  [0] Quay lại", "yellow"))
+
+            source_choice = input(colored("👉 Chọn nguồn ADB: ", "green")).strip()
+
+            if source_choice == "0":
+                continue
+            elif source_choice == "1":
+                # Tự động phát hiện ADB từ Homebrew/PATH
+                print(colored("\n🔍 Đang phát hiện ADB từ PATH...", "cyan"))
+                try:
+                    result = subprocess.run(["which", "adb"], capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0 and result.stdout.strip():
+                        detected_path = result.stdout.strip()
+                        # Verify it works
+                        test_result = subprocess.run([detected_path, "version"], capture_output=True, text=True, timeout=5)
+                        if test_result.returncode == 0:
+                            config["selected_adb_path"] = detected_path
+                            save_adb_config(config)
+                            # Update current ADB manager instance
+                            adb_manager.adb_path = detected_path
+                            print(colored(f"✅ Đã chọn ADB từ PATH: {detected_path}", "green"))
+                        else:
+                            print(colored("❌ ADB từ PATH không hoạt động correctamente!", "red"))
+                    else:
+                        print(colored("❌ Không tìm thấy adb trong PATH!", "red"))
+                except Exception as e:
+                    print(colored(f"❌ Lỗi khi phát hiện ADB: {e}", "red"))
+                time.sleep(2)
+
+            elif source_choice == "2":
+                # ADB cục bộ trong dự án
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                local_adb_path = os.path.join(base_dir, "ADB", "adb")
+                # Check for both adb and adb.exe
+                if not os.path.exists(local_adb_path):
+                    local_adb_path = os.path.join(base_dir, "ADB", "adb.exe")
+
+                if os.path.exists(local_adb_path):
+                    config["selected_adb_path"] = local_adb_path
+                    save_adb_config(config)
+                    # Update current ADB manager instance
+                    adb_manager.adb_path = local_adb_path
+                    print(colored(f"✅ Đã chọn ADB cục bộ: {local_adb_path}", "green"))
+                else:
+                    print(colored("❌ Không tìm thấy ADB cục bộ dalam thư mục ADB/!", "red"))
+                time.sleep(2)
+
+            elif source_choice == "3":
+                # Nhập đường dẫn tùy chỉnh
+                custom_path = input(colored("👉 Nhập đường dẫn đầy đủ tới file adb executable: ", "green")).strip()
+                if custom_path:
+                    # Expand ~ and handle quotes
+                    custom_path = os.path.expanduser(custom_path.strip().strip('"\''))
+                    if os.path.exists(custom_path):
+                        # Test if it's actually adb
+                        try:
+                            test_result = subprocess.run([custom_path, "version"], capture_output=True, text=True, timeout=5)
+                            if test_result.returncode == 0:
+                                config["selected_adb_path"] = custom_path
+                                save_adb_config(config)
+                                # Update current ADB manager instance
+                                adb_manager.adb_path = custom_path
+                                print(colored(f"✅ Đã chọn ADB tùy chỉnh: {custom_path}", "green"))
+                            else:
+                                print(colored("❌ Đường dẫn không phải là file adb hợp lệ!", "red"))
+                        except Exception:
+                            print(colored("❌ Không thể thực thi file đó hoặc không phải là adb!", "red"))
+                    else:
+                        print(colored("❌ Đường dẫn không tồn tại!", "red"))
+                else:
+                    print(colored("❌ Đường dẫn không được để trống!", "red"))
+                time.sleep(2)
+            else:
+                print(colored("❌ Lựa chọn không hợp lệ!", "red"))
+                time.sleep(1)

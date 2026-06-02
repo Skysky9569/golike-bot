@@ -7,6 +7,7 @@ import time
 import os
 import re
 import urllib.request
+import ssl
 from typing import Optional, Dict, Any, List
 
 from selenium import webdriver as selenium_driver
@@ -214,9 +215,20 @@ CLICK_SAFE_JS = """
 var el = arguments[0];
 if (el) {
     el.scrollIntoView({behavior: 'smooth', block: 'center'});
-    el.style.visibility = 'visible';
-    el.style.display = 'block';
-    el.click();
+    
+    function fire(type) {
+        var ev = new MouseEvent(type, {
+            bubbles: true, cancelable: true, view: window, buttons: 1
+        });
+        el.dispatchEvent(ev);
+    }
+    
+    fire('mousedown');
+    setTimeout(function() {
+        fire('mouseup');
+        fire('click');
+        if (typeof el.click === 'function') el.click();
+    }, 100);
     return true;
 }
 return false;
@@ -353,6 +365,25 @@ def parse_cookie_string(cookie_str: str) -> List[Dict[str, Any]]:
 
 SELECTORS = {
     "like_button": [
+        # Siêu chính xác: div chứa icon like đặc trưng của FB Desktop (Comet)
+        'div[data-ad-rendering-role="like_button"]',
+        '//div[@data-ad-rendering-role="like_button"]/ancestor::div[@role="button"]',
+        
+        # XPath cực kỳ chính xác dựa trên SVG path (Thumb icon)
+        '//*[local-name()="path" and starts-with(@d, "M10.999.5a2.5")]/ancestor::div[@role="button"]',
+        '//*[local-name()="path" and starts-with(@d, "M10.999.5a2.5")]/ancestor::span/ancestor::div[@role="button"]',
+        
+        # Nút dựa trên text "Thích" lồng trong cấu trúc div/span của Comet
+        '//div[@role="button"]//span[text()="Thích"]',
+        '//div[@role="button"]//span[text()="Like"]',
+        
+        # Desktop (Comet) - Aria labels
+        'div[aria-label="Thích"][role="button"]',
+        'div[aria-label="Like"][role="button"]',
+        'div[aria-label="Thích bài viết"]',
+        'div[aria-label="Like post"]',
+        
+        # Mobile/mbasic
         'a[href*="/reactions/picker/"]',
         'a[href*="/like/"]',
         'a[data-store*="reaction"]',
@@ -364,16 +395,70 @@ SELECTORS = {
         'a[href*="/a/subscribe.php"]',
         'a[href*="/subscribe.php"]',
         'a[ajaxify*="subscribe"]',
+        # Desktop
+        'div[aria-label="Theo dõi"]',
+        'div[aria-label="Follow"]',
+        '//span[text()="Theo dõi"]',
+        '//span[text()="Follow"]',
     ],
     "like_page_button": [
+        # Ưu tiên các nút Theo dõi (Follow) cho job like_page
+        '//div[@role="button"]//span[text()="Theo dõi"]',
+        '//div[@role="button"]//span[text()="Follow"]',
+        '//span[text()="Theo dõi"]/ancestor::div[@role="button"]',
+        '//span[text()="Follow"]/ancestor::div[@role="button"]',
+
+        # Nút Thích trang truyền thống
         'a[href*="/a/like.php"]',
         'a[ajaxify*="like"]',
         'button[name="like"]',
+        # Desktop
+        'div[aria-label="Thích"][role="button"]',
+        'div[aria-label="Like"][role="button"]',
     ],
+
     "reaction_options": [
         'div[data-store*="reaction"] a',
         'a[href*="reaction_type="]',
+        # Desktop (Comet) - Vietnamese labels
+        'div[role="dialog"] div[aria-label="Yêu thích"][role="button"]',
+        'div[role="dialog"] div[aria-label="Thương thương"][role="button"]',
+        'div[role="dialog"] div[aria-label="Haha"][role="button"]',
+        'div[role="dialog"] div[aria-label="Wow"][role="button"]',
+        'div[role="dialog"] div[aria-label="Buồn"][role="button"]',
+        'div[role="dialog"] div[aria-label="Phẫn nộ"][role="button"]',
+        # Desktop (Comet) - General / English labels
+        'div[aria-label*="Love"]',
+        'div[aria-label*="Care"]',
+        'div[aria-label*="Haha"]',
+        'div[aria-label*="Wow"]',
+        'div[aria-label*="Sad"]',
+        'div[aria-label*="Angry"]',
     ],
+    "action_bar_anchors": [
+        '//div[@role="button"]//span[text()="Bình luận"]',
+        '//div[@role="button"]//span[text()="Chia sẻ"]',
+        '//div[@role="button"]//span[text()="Comment"]',
+        '//div[@role="button"]//span[text()="Share"]',
+        # Mobile
+        'a[href*="/comment/"]',
+        'a[href*="/share/"]',
+    ],
+    "liked_state": [
+        '//div[@role="button"]//span[text()="Bỏ thích"]',
+        '//div[@role="button"]//span[text()="Unlike"]',
+        '//div[@aria-pressed="true"]',
+        'a[href*="/unlike/"]',
+    ],
+    "not_found": [
+        '//h2[contains(text(), "không xem được nội dung")]',
+        '//h2[contains(text(), "not found")]',
+        '//span[contains(text(), "không hiển thị")]',
+        '//span[contains(text(), "không tìm thấy trang")]',
+        '//span[contains(text(), "đã xóa nội dung")]',
+        '//div[contains(text(), "không xem được nội dung")]',
+        '//h2[contains(text(), "không khả dụng")]',
+    ]
 }
 
 # Facebook internal reaction IDs dung khi goi API/URL
@@ -383,19 +468,51 @@ REACTION_MAP = {
     "haha": "4", "wow": "5", "sad": "6", "angry": "7",
 }
 
+# Nhãn tiếng Việt cho Facebook Desktop (Comet)
+REACTION_LABELS = {
+    "like": "Thích",
+    "love": "Yêu thích",
+    "care": "Thương thương",
+    "haha": "Haha",
+    "wow": "Wow",
+    "sad": "Buồn",
+    "angry": "Phẫn nộ",
+}
+
 
 def find_element_safe(driver, selectors: List[str], timeout: float = 5) -> Any:
-    """Tìm element với nhiều selector dự phòng"""
+    """Tìm element với ưu tiên vùng Main/Article để tránh click nhầm"""
     end = time.time() + timeout
     while time.time() < end:
+        # THỬ 1: Tìm trong vùng Main/Article trước (CHÍNH XÁC NHẤT)
         for sel in selectors:
             try:
-                el = driver.find_element(By.CSS_SELECTOR, sel)
+                # Nếu selector chưa có tiền tố, thử thêm tiền tố article
+                if not sel.startswith("//") and not sel.startswith("("):
+                    scoped_sel = f"article {sel}, [role='main'] {sel}"
+                    elems = driver.find_elements(By.CSS_SELECTOR, scoped_sel)
+                    for el in elems:
+                        if el.is_displayed(): return el
+                
+                # Nếu là XPath, nó thường đã được scoped trong SELECTORS
+                if sel.startswith("//"):
+                    el = driver.find_element(By.XPATH, sel)
+                    if el.is_displayed(): return el
+            except: pass
+
+        # THỬ 2: Tìm toàn trang (DỰ PHÒNG)
+        for sel in selectors:
+            try:
+                if sel.startswith("/") or sel.startswith("("):
+                    el = driver.find_element(By.XPATH, sel)
+                else:
+                    el = driver.find_element(By.CSS_SELECTOR, sel)
+                
                 if el and el.is_displayed():
                     return el
             except Exception:
                 pass
-        time.sleep(0.3)
+        time.sleep(0.4)
     return None
 
 
@@ -412,12 +529,26 @@ def human_delay(min_s: float = 0.5, max_s: float = 1.8) -> None:
     time.sleep(round(t, 3))
 
 
-def click_js(driver, element) -> bool:
-    """Click an toàn bằng JavaScript (không simulate mouse)"""
+def click_js(driver, element, label: str = "nút") -> bool:
+    """Click an toàn bằng JavaScript có scroll và thông báo"""
     try:
+        driver.execute_script(
+            """
+            var el = arguments[0];
+            if (el) {
+                el.scrollIntoView({behavior: 'smooth', block: 'center'});
+                el.style.border = '3px solid red'; // Highlight đậm hơn
+                el.style.backgroundColor = 'rgba(255, 0, 0, 0.2)'; 
+            }
+            """,
+            element
+        )
+        time.sleep(1.0) # Chờ quan sát
         driver.execute_script(CLICK_SAFE_JS, element)
+        print(f"   [✓] Đã click {label}")
         return True
-    except Exception:
+    except Exception as e:
+        print(f"   [✗] Lỗi khi click {label}: {e}")
         return False
 
 
@@ -552,13 +683,40 @@ class FacebookSeleniumBot:
             return False
 
     def stop(self) -> None:
-        """Đóng browser"""
+        """Đóng browser và dọn dẹp tiến trình"""
         if self.driver:
             try:
                 self.driver.quit()
             except Exception:
                 pass
             self.driver = None
+        
+        # Dọn dẹp triệt để tiến trình chạy ngầm
+        import sys
+        if sys.platform == 'win32':
+            import subprocess
+            try:
+                ps_cmd = (
+                    "$cdPids = (Get-CimInstance Win32_Process -Filter \"Name='chromedriver.exe'\" | "
+                    "ForEach-Object { $_.ProcessId }); "
+                    "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
+                    "Where-Object { "
+                    "($_.CommandLine -like '*--remote-debugging-port*') -or "
+                    "($cdPids -contains $_.ParentProcessId) "
+                    "} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+                )
+                subprocess.run(["powershell", "-Command", ps_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                os.system("taskkill /f /im chromedriver.exe /T >nul 2>&1")
+            except Exception:
+                pass
+        elif sys.platform == 'darwin':
+            import subprocess
+            try:
+                cmd = "ps aux | grep -E 'Google Chrome.*--remote-debugging-port' | grep -v grep | awk '{print $2}' | xargs kill -9"
+                subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["pkill", "-f", "chromedriver"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
 
     def _inject_cookies(self) -> None:
         """Bơm cookie Facebook vào browser"""
@@ -607,39 +765,48 @@ class FacebookSeleniumBot:
 
     # ---- Tab helpers ----
 
-    def _open_job_tab(self, link: str) -> Optional[str]:
+    def _open_job_tab(self, link: str, current_tab_only: bool = False) -> Optional[str]:
         """Mở link Facebook job trong tab mới, trả về main tab handle"""
         if not self.driver:
             return None
 
-        # Resolve naked IDs (e.g. facebook.com/123456) using Desktop User-Agent 
-        # because mobile FB shows "content not found" for them
+        # Resolve naked IDs
         if re.match(r'^https?://(www\.|m\.|mbasic\.)?facebook\.com/\d+/?$', link.split('?')[0]):
             try:
+                ctx = ssl._create_unverified_context()
                 r = urllib.request.Request(link, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-                resp = urllib.request.urlopen(r, timeout=5)
+                resp = urllib.request.urlopen(r, timeout=5, context=ctx)
                 final_url = resp.geturl()
-                
-                # Uu tien url redirect neu no la link post/reel cu the
                 if 'login' not in final_url and 'facebook.com/' in final_url and re.search(r'/(videos|reel|posts|photos)/', final_url):
                     link = final_url
                 else:
                     html = resp.read().decode('utf-8', errors='ignore')
                     canonical = re.search(r'canonical.*?href=[\x22\x27](.*?)[\x22\x27]', html)
-                    if canonical:
-                        link = canonical.group(1)
+                    if canonical: link = canonical.group(1)
             except Exception as e:
                 logger.warning("[%s] Lỗi resolve link ID trần: %s" % (self.profile_name, str(e)))
 
-        # Nếu link là reel, mbasic không hỗ trợ đường dẫn /reel/, phải chuyển thành video.php
+        # Chuyển link sang mbasic
         match_reel = re.search(r'/reel/(\d+)', link)
         if match_reel:
             link = f"https://mbasic.facebook.com/video.php?v={match_reel.group(1)}"
         else:
-            # Chuyển link sang mbasic để tương tác nhẹ hơn và tránh block
             link = link.replace("www.facebook.com", "mbasic.facebook.com")
             link = link.replace("m.facebook.com", "mbasic.facebook.com")
             link = link.replace("://facebook.com", "://mbasic.facebook.com")
+
+        if current_tab_only:
+            print(f"[*] Đang tải trang: {link[:60]}...")
+            try:
+                if self.driver.current_url != link:
+                    self.driver.get(link)
+                # Đợi trang load xong (ready state)
+                WebDriverWait(self.driver, 10).until(lambda d: d.execute_script('return document.readyState') == 'complete')
+                time.sleep(2)
+            except Exception:
+                self.driver.get(link)
+                time.sleep(3)
+            return "current"
 
         main_tab = self.driver.current_window_handle
         self.driver.execute_script("window.open('');")
@@ -656,8 +823,13 @@ class FacebookSeleniumBot:
             return None
 
         self.driver.switch_to.window(new_tab)
+        print(f"[*] Đang tải trang: {link[:60]}...")
         self.driver.get(link)
-        time.sleep(2)
+        # Đợi trang load xong
+        try:
+            WebDriverWait(self.driver, 10).until(lambda d: d.execute_script('return document.readyState') == 'complete')
+            time.sleep(2)
+        except: pass
         return main_tab
 
     def _close_job_tab(self, main_tab: str) -> None:
@@ -672,89 +844,214 @@ class FacebookSeleniumBot:
             if self.driver.window_handles:
                 self.driver.switch_to.window(self.driver.window_handles[0])
 
+    def _check_content_available(self) -> Dict[str, Any]:
+        """Kiểm tra bài viết/trang có tồn tại hay bị lỗi không"""
+        try:
+            # 1. Kiểm tra selector "not found"
+            found_err = find_element_safe(self.driver, SELECTORS["not_found"], timeout=3)
+            if found_err:
+                err_text = found_err.text.strip() or "Nội dung không khả dụng"
+                return {"success": False, "error": f"Facebook báo lỗi: {err_text}", "is_not_found": True}
+            
+            # 2. Kiểm tra text trong body nếu selector hụt
+            page_text = self.driver.page_source.lower()
+            err_keywords = [
+                "bạn hiện không xem được nội dung này",
+                "nội dung này hiện không hiển thị",
+                "trang này không hiển thị",
+                "không tìm thấy trang",
+                "đã xóa nội dung",
+                "content not found",
+                "page not found"
+            ]
+            for kw in err_keywords:
+                if kw in page_text:
+                    return {"success": False, "error": f"Nội dung bị lỗi hoặc đã xóa ({kw})", "is_not_found": True}
+            
+            return {"success": True}
+        except Exception:
+            return {"success": True} # Giả định OK nếu lỗi check
+
     # ---- DOM Actions ----
 
-    def do_like(self, link: str) -> Dict[str, Any]:
+    def do_like(self, link: str, current_tab_only: bool = False) -> Dict[str, Any]:
         """Like bài viết"""
-        main_tab = self._open_job_tab(link)
+        main_tab = self._open_job_tab(link, current_tab_only=current_tab_only)
         if not main_tab:
             return {"success": False, "error": "Không thể mở tab"}
 
+        # KIỂM TRA BÀI VIẾT CÓ TỒN TẠI KHÔNG
+        check = self._check_content_available()
+        if not check.get("success"):
+            if not current_tab_only: self._close_job_tab(main_tab)
+            return check
+
         try:
+            print("[*] Đang tìm nút LIKE...")
             btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=6)
             if not btn:
-                self._close_job_tab(main_tab)
+                if not current_tab_only: self._close_job_tab(main_tab)
                 return {"success": False, "error": "Không tìm thấy nút like"}
 
-            ok = click_js(self.driver, btn)
+            ok = click_js(self.driver, btn, label="nút LIKE")
             time.sleep(1)
-            self._close_job_tab(main_tab)
+            if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": ok}
 
         except Exception as e:
-            self._close_job_tab(main_tab)
+            if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": False, "error": str(e)}
 
-    def do_reaction(self, link: str, reaction_type: str = "LIKE") -> Dict[str, Any]:
+    def do_reaction(self, link: str, reaction_type: str = "LIKE", current_tab_only: bool = False) -> Dict[str, Any]:
         """Thả reaction (like, love, haha, wow, sad, angry, care)"""
         reaction_num = REACTION_MAP.get(reaction_type.lower(), "1")
-        main_tab = self._open_job_tab(link)
+        main_tab = self._open_job_tab(link, current_tab_only=current_tab_only)
         if not main_tab:
             return {"success": False, "error": "Không thể mở tab"}
+
+        # KIỂM TRA BÀI VIẾT CÓ TỒN TẠI KHÔNG
+        check = self._check_content_available()
+        if not check.get("success"):
+            if not current_tab_only: self._close_job_tab(main_tab)
+            return check
 
         try:
             if reaction_type.lower() == "like":
+                print("[*] Đang tìm nút LIKE...")
                 btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=6)
                 if btn:
-                    ok = click_js(self.driver, btn)
+                    ok = click_js(self.driver, btn, label="nút LIKE")
                     time.sleep(1)
-                    self._close_job_tab(main_tab)
+                    if not current_tab_only: self._close_job_tab(main_tab)
                     return {"success": ok}
-                self._close_job_tab(main_tab)
+                if not current_tab_only: self._close_job_tab(main_tab)
                 return {"success": False, "error": "Không tìm thấy nút like"}
 
             # Reaction khác: long-press để mở menu
+            print(f"[*] Đang thực hiện thả cảm xúc: {reaction_type.upper()}...")
             btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=6)
             if not btn:
-                self._close_job_tab(main_tab)
+                if not current_tab_only: self._close_job_tab(main_tab)
                 return {"success": False, "error": "Không tìm thấy nút like"}
 
+            # Highlight và cuộn tới nút
+            self.driver.execute_script(
+                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'}); arguments[0].style.border='3px solid red';", 
+                btn
+            )
+            time.sleep(1.0)
+
+            # 2. GIẢ LẬP NHẤN GIỮ (LONG-PRESS) QUA JAVASCRIPT
             self.driver.execute_script("""
                 var el = arguments[0];
-                var ev = new MouseEvent('mousedown', {bubbles: true});
-                el.dispatchEvent(ev);
-            """, btn)
-            time.sleep(0.8)
+                var rect = el.getBoundingClientRect();
+                var x = rect.left + rect.width / 2;
+                var y = rect.top + rect.height / 2;
 
+                function fire(type, hold) {
+                    var ev = new MouseEvent(type, {
+                        bubbles: true, cancelable: true, view: window, 
+                        buttons: 1, clientX: x, clientY: y
+                    });
+                    el.dispatchEvent(ev);
+                }
+                
+                fire('mousedown');
+                // Giữ trạng thái nhấn trong 1.5 giây
+                setTimeout(function() {
+                    fire('mouseup');
+                }, 1500);
+            """, btn)
+            
+            print("[*] Đang đợi bảng cảm xúc hiện ra...")
+            time.sleep(2.5) # Đợi menu hiện ra hoàn toàn
+
+            # 3. TRUY QUÉT VÀ CLICK CẢM XÚC TRONG DIALOG/TOOLBAR
+            vn_label = REACTION_LABELS.get(reaction_type.lower(), "")
+            en_label = reaction_type.capitalize()
+            
+            print(f"[*] Tìm cảm xúc: {vn_label} ({en_label})...")
+            
+            click_result = self.driver.execute_script("""
+                var vn = arguments[0].toLowerCase();
+                var en = arguments[1].toLowerCase();
+                var rid = arguments[2];
+                
+                // Tìm trong mọi dialog, toolbar, và role="tooltip"
+                var containers = document.querySelectorAll('div[role="dialog"], div[role="toolbar"], div[role="tooltip"], .x78zum5');
+                var foundBtn = null;
+
+                for (var i = 0; i < containers.length; i++) {
+                    var buttons = containers[i].querySelectorAll('div[role="button"], a[role="button"], div[aria-label]');
+                    for (var j = 0; j < buttons.length; j++) {
+                        var b = buttons[j];
+                        var label = (b.getAttribute('aria-label') || "").toLowerCase();
+                        var text = (b.innerText || "").toLowerCase();
+                        var href = (b.getAttribute('href') || "").toLowerCase();
+                        
+                        if ((vn && label.includes(vn)) || (en && label.includes(en)) || 
+                            (vn && text.includes(vn)) || (en && text.includes(en)) ||
+                            href.includes("reaction_type=" + rid)) {
+                            foundBtn = b;
+                            break;
+                        }
+                    }
+                    if (foundBtn) break;
+                }
+
+                if (foundBtn) {
+                    foundBtn.style.border = '5px solid blue';
+                    foundBtn.style.backgroundColor = 'yellow';
+                    
+                    // Click combo: MouseEvent sequence + .click()
+                    ['mousedown', 'mouseup', 'click'].forEach(type => {
+                        foundBtn.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
+                    });
+                    if (typeof foundBtn.click === 'function') foundBtn.click();
+                    return true;
+                    return true;
+                }
+                return false;
+            """, vn_label, en_label, reaction_num)
+
+            if click_result:
+                print(colored(f"   [✓] Đã click {reaction_type.upper()} THÀNH CÔNG qua JavaScript", "green"))
+                time.sleep(1.5)
+                if not current_tab_only: self._close_job_tab(main_tab)
+                return {"success": True}
+            
+            # Fallback nếu JS hụt
+            print("[!] JS không tìm thấy nút, thử lại bằng Selenium selector...")
             try:
-                rbtn = WebDriverWait(self.driver, 3).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'a[href*="reaction_type=' + reaction_num + '"]'))
-                )
-                ok = click_js(self.driver, rbtn)
-                time.sleep(1)
-                self._close_job_tab(main_tab)
-                return {"success": ok}
-            except TimeoutException:
                 rbtn = find_element_safe(self.driver, SELECTORS["reaction_options"], timeout=2)
                 if rbtn:
-                    ok = click_js(self.driver, rbtn)
+                    ok = click_js(self.driver, rbtn, label=f"cảm xúc {reaction_type.upper()} (fallback)")
                     time.sleep(1)
-                    self._close_job_tab(main_tab)
+                    if not current_tab_only: self._close_job_tab(main_tab)
                     return {"success": ok}
-                self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút reaction"}
+            except: pass
+            
+            if not current_tab_only: self._close_job_tab(main_tab)
+            return {"success": False, "error": f"Không thể click cảm xúc {reaction_type.upper()}"}
 
         except Exception as e:
-            self._close_job_tab(main_tab)
+            if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": False, "error": str(e)}
 
-    def do_follow(self, link: str) -> Dict[str, Any]:
+    def do_follow(self, link: str, current_tab_only: bool = False) -> Dict[str, Any]:
         """Follow người dùng"""
-        main_tab = self._open_job_tab(link)
+        main_tab = self._open_job_tab(link, current_tab_only=current_tab_only)
         if not main_tab:
             return {"success": False, "error": "Không thể mở tab"}
 
+        # KIỂM TRA TRANG CÓ TỒN TẠI KHÔNG
+        check = self._check_content_available()
+        if not check.get("success"):
+            if not current_tab_only: self._close_job_tab(main_tab)
+            return check
+
         try:
+            print("[*] Đang tìm nút FOLLOW...")
             btn = find_element_safe(self.driver, SELECTORS["follow_button"], timeout=8)
             if not btn:
                 try:
@@ -769,63 +1066,70 @@ class FacebookSeleniumBot:
                     pass
 
             if not btn:
-                self._close_job_tab(main_tab)
+                if not current_tab_only: self._close_job_tab(main_tab)
                 return {"success": False, "error": "Không tìm thấy nút follow"}
 
-            ok = click_js(self.driver, btn)
+            ok = click_js(self.driver, btn, label="nút FOLLOW")
             time.sleep(1.5)
             page = self.driver.page_source.lower()
             verified = "đang theo dõi" in page or "following" in page or "hủy theo dõi" in page
-            self._close_job_tab(main_tab)
+            if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": verified or ok}
 
         except Exception as e:
-            self._close_job_tab(main_tab)
+            if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": False, "error": str(e)}
 
-    def do_like_page(self, link: str) -> Dict[str, Any]:
+    def do_like_page(self, link: str, current_tab_only: bool = False) -> Dict[str, Any]:
         """Like fanpage"""
-        main_tab = self._open_job_tab(link)
+        main_tab = self._open_job_tab(link, current_tab_only=current_tab_only)
         if not main_tab:
             return {"success": False, "error": "Không thể mở tab"}
 
+        # KIỂM TRA TRANG CÓ TỒN TẠI KHÔNG
+        check = self._check_content_available()
+        if not check.get("success"):
+            if not current_tab_only: self._close_job_tab(main_tab)
+            return check
+
         try:
+            print("[*] Đang tìm nút LIKE hoặc FOLLOW PAGE...")
             btn = find_element_safe(self.driver, SELECTORS["like_page_button"], timeout=8)
             if not btn:
                 try:
                     links = self.driver.find_elements(By.TAG_NAME, "a")
                     for a in links:
                         txt = (a.text or "").lower().strip()
-                        if txt in ("thích", "like", "thich"):
+                        if txt in ("thích", "like", "thich", "theo dõi", "follow"):
                             btn = a
                             break
                 except Exception:
                     pass
 
             if not btn:
-                self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút like page"}
+                if not current_tab_only: self._close_job_tab(main_tab)
+                return {"success": False, "error": "Không tìm thấy nút like/follow page"}
 
-            ok = click_js(self.driver, btn)
+            ok = click_js(self.driver, btn, label="nút LIKE/FOLLOW PAGE")
             time.sleep(1.5)
-            self._close_job_tab(main_tab)
+            if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": ok}
 
         except Exception as e:
-            self._close_job_tab(main_tab)
+            if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": False, "error": str(e)}
 
     # ---- Job Dispatcher ----
 
-    def process_job(self, job_type: str, link: str) -> Dict[str, Any]:
+    def process_job(self, job_type: str, link: str, current_tab_only: bool = False) -> Dict[str, Any]:
         """Dispatch job đến đúng handler"""
         jt = job_type.lower()
 
         if jt in ("like", "love", "haha", "wow", "sad", "angry", "care"):
-            return self.do_reaction(link, jt)
+            return self.do_reaction(link, jt, current_tab_only=current_tab_only)
         elif jt == "follow":
-            return self.do_follow(link)
+            return self.do_follow(link, current_tab_only=current_tab_only)
         elif jt in ("lik_page", "like_page"):
-            return self.do_like_page(link)
+            return self.do_like_page(link, current_tab_only=current_tab_only)
         else:
             return {"success": False, "error": "Loại job không hỗ trợ: " + jt}

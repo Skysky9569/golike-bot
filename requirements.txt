@@ -7,6 +7,12 @@ requests>=2.31.0
 # Browser automation (Windows/Linux only - not Termux)
 selenium>=4.15.0
 
+# WebDriver Management
+webdriver-manager>=4.0.1
+
+# HTTP client with curl impersonation
+curl-cffi>=0.6.2
+
 # Playwright for E2E testing
 playwright>=1.40.0
 
@@ -24,3 +30,6 @@ psutil>=5.9.0
 
 # Termux compatibility (auto-detect)
 # No special package needed - uses standard library
+
+# iOS automation
+Appium-Python-Client>=3.1.0

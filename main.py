@@ -88,6 +88,7 @@ from golike_core.adb_manager import colored
 from ui.console import menu, banner, check_for_updates, CURRENT_VERSION, input_int
 from ui.adb_menu import adb_menu
 from ui.tiktok_flow import tiktok_menu
+from ui.ios_flow import ios_tiktok_menu
 import test_golike_fb_web
 
 try:
@@ -268,11 +269,25 @@ def main() -> None:
 
     while True:
         menu()
-        choose = input(colored("🥇 Nhập Lựa Chọn (0-6): ", "white")).strip()
+        choose = input(colored("🥇 Nhập Lựa Chọn (0-8): ", "white")).strip()
 
         if choose == "0":
             print(colored("👋 Tạm biệt!", "green"))
             break
+        elif choose == "8":
+            print(colored("\n🧹 Đang dọn dẹp các tiến trình Chrome & Driver chạy ngầm...", "yellow"))
+            try:
+                import golikefb_sele
+                golikefb_sele.cleanup()
+                print(colored("✅ Dọn dẹp hoàn tất! Hệ thống đã sạch sẽ.", "green"))
+                input(colored("Nhấn Enter để quay lại...", "white"))
+            except Exception as e:
+                print(colored(f"❌ Lỗi khi dọn dẹp: {e}", "red"))
+                input(colored("Nhấn Enter để quay lại...", "white"))
+            continue
+        elif choose == "7":
+            ios_tiktok_menu()
+            continue
         elif choose == "3":
             run_facebook_selenium_bot()
         elif choose == "4":

@@ -737,6 +737,8 @@ class FB_API:
                 ('CometPageLikeButtonMutation', '24681394398162286'),
                 ('CometPageLikeButtonMutation', '6390606484378696'),
                 ('CometPageLikeButtonMutation', '7024407287661374'),
+                ('CometPageLikeButtonMutation', '5415712171801844'),
+                ('CometPageLikeButtonMutation', '7650380311700650'),
             ]
             for mutation_name, did in KNOWN_DOC_IDS:
                 if not any(d[1] == did for d in doc_ids_to_try):
@@ -758,14 +760,26 @@ class FB_API:
                     friendly_name = mutation_label
 
                 # Các format variables cần thử
-                variable_formats = [
-                    # Format A: source=null, tracking=null (đơn giản nhất)
-                    json.dumps({"input": {"is_tracking_encrypted": False, "page_id": PAGE_ID, "source": None, "tracking": None, "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
-                    # Format B: không có source, tracking, is_tracking_encrypted (tối giản)
-                    json.dumps({"input": {"page_id": PAGE_ID, "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
-                    # Format C: source="PROFILE", tracking=[]
-                    json.dumps({"input": {"is_tracking_encrypted": False, "page_id": PAGE_ID, "source": "PROFILE", "tracking": [], "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
-                ]
+                # Lưu ý: Profile Plus thường dùng 'profile_id', Page thường dùng 'page_id'
+                variable_formats = []
+                
+                if friendly_name == 'CometProfilePlusLikeMutation':
+                    variable_formats = [
+                        # Format cho Profile Plus
+                        json.dumps({"input": {"is_tracking_encrypted": False, "profile_id": PAGE_ID, "source": "profile_plus_fan_button", "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                        json.dumps({"input": {"profile_id": PAGE_ID, "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                    ]
+                else:
+                    variable_formats = [
+                        # Format A: source=null, tracking=null (đơn giản nhất)
+                        json.dumps({"input": {"is_tracking_encrypted": False, "page_id": PAGE_ID, "source": None, "tracking": None, "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                        # Format B: không có source, tracking, is_tracking_encrypted (tối giản)
+                        json.dumps({"input": {"page_id": PAGE_ID, "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                        # Format C: source="PROFILE", tracking=[]
+                        json.dumps({"input": {"is_tracking_encrypted": False, "page_id": PAGE_ID, "source": "PROFILE", "tracking": [], "actor_id": uid, "client_mutation_id": "1"}, "scale": 1}),
+                        # Format D: source="page_profile"
+                        json.dumps({"input": {"is_tracking_encrypted": False, "page_id": PAGE_ID, "source": "page_profile", "tracking": None, "actor_id": uid, "client_mutation_id": "2"}, "scale": 1}),
+                    ]
 
                 for var_idx, var_fmt in enumerate(variable_formats, 1):
                     attempt += 1
@@ -820,8 +834,8 @@ class FB_API:
                         err_msg = errors[0].get("message", str(errors[0]))
                         last_error = f"{friendly_name} fmt#{var_idx}: {err_msg}"
                         # Nếu noncoercible → thử format khác
-                        if "noncoercible" in err_msg.lower():
-                            print(f"[LIKE_PAGE] #{attempt} {friendly_name} fmt#{var_idx} -> noncoercible (thử tiếp)")
+                        if "noncoercible" in err_msg.lower() or "field_exception" in err_msg.lower():
+                            print(f"[LIKE_PAGE] #{attempt} {friendly_name} fmt#{var_idx} -> {err_msg[:40]}... (thử tiếp)")
                             continue
                         # Lỗi khác → in ra nhưng vẫn thử tiếp
                         print(f"[LIKE_PAGE] #{attempt} {friendly_name} fmt#{var_idx} -> {err_msg[:80]}")
@@ -830,9 +844,16 @@ class FB_API:
                     # Thành công!
                     data = resp_json.get("data", {})
                     if data is not None:
-                        print(f"[LIKE_PAGE] ✓ Thành công! ({friendly_name}, doc_id={try_doc_id}, fmt#{var_idx})")
-                        # Cache doc_id thành công
-                        FacebookSession._cached_like_page_doc_id = try_doc_id
+                        # Kiểm tra xem có field thành công không
+                        # CometPageLikeButtonMutation -> page_like
+                        # CometProfilePlusLikeMutation -> profile_plus_subscribe
+                        if data.get('page_like') or data.get('profile_plus_subscribe') or data.get('page_like_button'):
+                            print(f"[LIKE_PAGE] ✓ Thành công! ({friendly_name}, doc_id={try_doc_id}, fmt#{var_idx})")
+                            FacebookSession._cached_like_page_doc_id = try_doc_id
+                            return {"success": True, "error": None, "id": PAGE_ID}
+                        
+                        # Nếu data rỗng nhưng không có lỗi, có thể vẫn thành công hoặc page đã like rồi
+                        print(f"[LIKE_PAGE] ⚠ Data rỗng nhưng không lỗi ({friendly_name}, fmt#{var_idx}). Coi như thành công?")
                         return {"success": True, "error": None, "id": PAGE_ID}
 
                     last_error = f"data rỗng ({friendly_name} fmt#{var_idx})"
@@ -857,29 +878,35 @@ class FB_API:
                     "cookie": self.cookie,
                     "x-requested-with": "XMLHttpRequest",
                 }
-                fan_resp = requests.post(
+                # Thử cả 2 endpoint có thể
+                endpoints = [
                     'https://www.facebook.com/ajax/pages/fan_status.php',
-                    headers=fan_header,
-                    data=fan_payload,
-                    proxies=self.proxies,
-                    timeout=15
-                )
-                if fan_resp.status_code == 200:
-                    resp_text = fan_resp.text.strip()
-                    clean = resp_text.replace('for (;;);', '').strip()
+                    'https://www.facebook.com/ajax/profile/fan_status.php'
+                ]
+                for ep in endpoints:
                     try:
-                        rj = json.loads(clean)
-                        errors = rj.get('errors', []) or rj.get('error', [])
-                        if not errors:
-                            print(f"[LIKE_PAGE] ✓ fan_status.php thành công (page_id={PAGE_ID})")
-                            return {"success": True, "error": None, "id": PAGE_ID}
-                        print(f"[LIKE_PAGE] fan_status lỗi: {str(errors)[:120]}")
-                    except json.JSONDecodeError:
-                        if 'errorDescription' not in resp_text and 'error_msg' not in resp_text:
-                            print(f"[LIKE_PAGE] ✓ fan_status.php HTTP 200 (non-JSON)")
-                            return {"success": True, "error": None, "id": PAGE_ID}
-                else:
-                    print(f"[LIKE_PAGE] fan_status HTTP {fan_resp.status_code}")
+                        fan_resp = requests.post(
+                            ep,
+                            headers=fan_header,
+                            data=fan_payload,
+                            proxies=self.proxies,
+                            timeout=15
+                        )
+                        if fan_resp.status_code == 200:
+                            resp_text = fan_resp.text.strip()
+                            clean = resp_text.replace('for (;;);', '').strip()
+                            try:
+                                rj = json.loads(clean)
+                                errors = rj.get('errors', []) or rj.get('error', [])
+                                if not errors:
+                                    print(f"[LIKE_PAGE] ✓ {ep.split('/')[-1]} thành công (page_id={PAGE_ID})")
+                                    return {"success": True, "error": None, "id": PAGE_ID}
+                            except json.JSONDecodeError:
+                                if 'errorDescription' not in resp_text and 'error_msg' not in resp_text:
+                                    print(f"[LIKE_PAGE] ✓ {ep.split('/')[-1]} HTTP 200 (non-JSON)")
+                                    return {"success": True, "error": None, "id": PAGE_ID}
+                    except Exception:
+                        continue
             except Exception as e1:
                 print(f"[LIKE_PAGE] fan_status exception: {e1}")
 

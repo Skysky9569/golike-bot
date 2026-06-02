@@ -1,6 +1,6 @@
 {
-  "version": "1.12.10",
-  "release_date": "2026-05-30",
-  "changelog": "v1.12.10 - Tự động chạy lệnh 'adb connect' khi kết nối uiautomator2 qua WiFi để tránh lỗi thiết bị ngoại tuyến (offline) trên ADB server.",
-  "previous_version": "1.12.9"
+  "version": "1.13.0",
+  "release_date": "2026-06-02",
+  "changelog": "v1.13.0 - Chế độ Full DOM (100% Selenium), Tự động giả lập Mobile UI (CDP), Tối ưu macOS và thả cảm xúc (Love, Haha...) chuyên nghiệp.",
+  "previous_version": "1.12.10"
 }

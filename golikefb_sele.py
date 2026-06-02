@@ -1,3 +1,20 @@
+import time
+import os
+import random
+import sys
+import re
+import requests
+import json
+import threading
+import signal
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+# Environment and CLI
+from dotenv import load_dotenv
+from time import sleep
+
+# Selenium
 from selenium import webdriver as selenium_driver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -6,12 +23,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
-from typing import Optional
 from webdriver_manager.chrome import ChromeDriverManager
-import time
-import os
-import random
-from dotenv import load_dotenv
+
+# Local modules
+from golike_core.adb_manager import colored
+from golike_core.security import CredentialManager, InputValidator
+from golike_facebook.fb_web_api import FacebookSession
+from golike_facebook.selenium_fb import FacebookSeleniumBot
+
+# Impersonation
+from curl_cffi import requests as cffi_requests
 
 # Load environment variables
 load_dotenv()
@@ -163,15 +184,6 @@ def smart_sleep(seconds: int):
         print(" " * 30, end="\r")  # clear line
     else:
         time.sleep(secs)
-import sys
-import os
-import re
-import requests
-import json
-from datetime import datetime
-from time import sleep
-import threading
-
 # ================= 2CAPTCHA CAPTCHA SOLVER =================
 _2CAPTCHA_API_BASE = "https://api.2captcha.com"
 _2CAPTCHA_POLL_INTERVAL = 5  # seconds
@@ -677,6 +689,8 @@ def job_limit_reached(driver):
 # ======== TÌM NÚT "TRÌNH DUYỆT" (BROWSER BUTTON) ========
 
 _BROWSER_BTN_SELECTORS = [
+    # XPATH dựa theo icon chrome.svg
+    ("xpath", "//a[.//img[contains(@src, 'chrome.svg')]]"),
     # XPATH dựa theo text h6 bên trong thẻ <a>
     ("xpath", "//a[.//h6[normalize-space()='Trình duyệt']]"),
     ("xpath", "//a[.//h6[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'trình duyệt')]]"),
@@ -892,7 +906,7 @@ def cleanup():
                 pass
         active_drivers.clear()
 
-    # 2. Dọn dẹp cứng các tiến trình cứng đầu trên Windows
+    # 2. Dọn dẹp cứng các tiến trình cứng đầu
     if sys.platform == 'win32':
         import subprocess
         try:
@@ -913,6 +927,18 @@ def cleanup():
 
         # Tắt driver
         os.system("taskkill /f /im chromedriver.exe /T >nul 2>&1")
+    elif sys.platform == 'darwin':
+        import subprocess
+        try:
+            # macOS: Diệt các tiến trình Chrome được mở bởi Selenium (có port debugging)
+            # Dùng ps + grep để tìm PID và kill
+            cmd = "ps aux | grep -E 'Google Chrome.*--remote-debugging-port' | grep -v grep | awk '{print $2}' | xargs kill -9"
+            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Tắt hoàn toàn chromedriver
+            subprocess.run(["pkill", "-f", "chromedriver"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
 # Global flag để kiểm soát việc dừng tool
 STOP_FLAG = False
@@ -1900,7 +1926,7 @@ def run_single_mode():
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
     options.add_argument("--no-sandbox")
-    options.add_argument(f"user-agent={device_profile['user_agent']}")
+    # options.add_argument(f"user-agent={device_profile['user_agent']}") # Đã loại bỏ để không ảnh hưởng toàn cục trình duyệt
     options.add_argument(f"--window-size={device_profile['viewport_width']},{device_profile['viewport_height']}")
     
     # Block WebRTC IP Leaks
@@ -1931,6 +1957,13 @@ def run_single_mode():
     # Inject stealth script để conceal automation và randomize navigator properties
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": STEALTH_INJECTION_SCRIPT
+    })
+
+    # Chỉ set User-Agent mobile cho tab hiện tại (tab dùng để chạy Golike)
+    # Điều này giúp Facebook không bị ảnh hưởng nếu mở ở tab khác
+    driver.execute_cdp_cmd("Network.setUserAgentOverride", {
+        "userAgent": device_profile['user_agent'],
+        "platform": device_profile['platform']
     })
 
     try:
@@ -2552,7 +2585,7 @@ def setup_bot_profile(profile_data, idx, global_2captcha_api_key=None):
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
-    options.add_argument(f"user-agent={device_profile['user_agent']}")
+    # options.add_argument(f"user-agent={device_profile['user_agent']}") # Đã loại bỏ để không ảnh hưởng toàn cục trình duyệt
     options.add_argument(f"--window-size={device_profile['viewport_width']},{device_profile['viewport_height']}")
     
     # Block WebRTC IP Leaks
@@ -2588,6 +2621,13 @@ def setup_bot_profile(profile_data, idx, global_2captcha_api_key=None):
     # Inject stealth script để conceal automation và randomize navigator properties
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": STEALTH_INJECTION_SCRIPT
+    })
+
+    # Chỉ set User-Agent mobile cho tab hiện tại (tab dùng để chạy Golike)
+    # Điều này giúp Facebook không bị ảnh hưởng nếu mở ở tab khác
+    driver.execute_cdp_cmd("Network.setUserAgentOverride", {
+        "userAgent": device_profile['user_agent'],
+        "platform": device_profile['platform']
     })
 
     try:
@@ -3357,6 +3397,345 @@ def _switch_to_next_account(driver, bot, cookie_list, current_idx, proxy_arg, sa
     return bot_moi, driver_moi, next_idx, name_run, uid_run
 
 
+def run_selenium_dom_mode():
+    """Chế độ 100% Selenium DOM - Không dùng API GoLike hay FB"""
+    global STOP_FLAG
+    STOP_FLAG = False
+
+    print(colored("\n🚀 KHỞI ĐỘNG CHẾ ĐỘ FULL DOM (100% SELENIUM)", "yellow", bold=True))
+    print(colored("Mọi thao tác Nhận job, Làm việc, Hoàn thành đều thực hiện trên trình duyệt.", "white"))
+
+    # 1. Thu thập thông tin ban đầu
+    golike_user, golike_pass = get_golike_credentials()
+    cookie_list = load_multi_cookies()
+    if not cookie_list:
+        cookie_fb = load_cookie()
+        # Nếu cookie trả về là encrypted, decrypt nó
+        if cookie_fb and "c_user=" not in cookie_fb and hasattr(cred_manager, '_decrypt'):
+            try: cookie_fb = cred_manager._decrypt(cookie_fb)
+            except: pass
+        cookie_list = [cookie_fb]
+
+    # 2. Cấu hình Proxy
+    proxy_input = input("🌐 Nhập proxy (IP:PORT hoặc IP:PORT:USER:PASS) hoặc Enter để bỏ qua: ").strip()
+    proxy_info = parse_proxy_url(proxy_input) if proxy_input else None
+    proxy_arg = proxy_info["chrome_arg"] if proxy_info else None
+    proxy_auth_ext = _build_proxy_auth_extension(proxy_info) if proxy_info and proxy_info["has_auth"] else None
+
+    # 3. Khởi chạy trình duyệt (Giao diện Desktop ban đầu để login dễ dàng)
+    device_profile = get_random_device_profile()
+    options = Options()
+    options.add_argument("--lang=vi-VN")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(f"--window-size={device_profile['viewport_width']},{device_profile['viewport_height']}")
+    if proxy_arg: options.add_argument(f"--proxy-server={proxy_arg}")
+    if proxy_auth_ext: options.add_argument("--load-extension=%s" % proxy_auth_ext)
+
+    print("[*] Đang mở trình duyệt...")
+    driver = selenium_driver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    with drivers_lock:
+        active_drivers.append(driver)
+
+    # Ẩn automation qua CDP
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": STEALTH_INJECTION_SCRIPT})
+    
+    try:
+        # 4. Đăng nhập GoLike
+        print(colored("[*] Đang điều hướng đến trang Đăng nhập GoLike...", "yellow"))
+        driver.get("https://app.golike.net/login")
+        time.sleep(3)
+        
+        try:
+            # Kiểm tra xem có đang ở trang login không
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input')))
+            
+            log_thread("GoLike", "Đang nhập tài khoản...")
+            driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input').send_keys(golike_user)
+            driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input').send_keys(golike_pass)
+            
+            # Click login
+            login_btn = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button')
+            human_click(driver, login_btn)
+            
+            if not handle_2captcha_captcha(driver, "https://app.golike.net/login"):
+                print(colored("\n[!] PHÁT HIỆN CAPTCHA: Vui lòng giải tay trên trình duyệt.", "magenta", bold=True))
+                input(colored("👉 Giải xong Captcha (nếu có), hãy ấn [ENTER] tại đây để tool tiếp tục...", "white"))
+            
+            # Kiểm tra xem login thành công chưa
+            print(colored("[*] Đăng nhập xong. Đang chờ ổn định...", "yellow"))
+            time.sleep(3)
+
+            # ========================================================
+            # BƯỚC MỚI: HỎI VỀ MOBILE UI SAU KHI LOGIN
+            # ========================================================
+            print(colored("\n📱 CHẾ ĐỘ GIAO DIỆN MOBILE (DÀNH CHO GOLIKE TAB):", "cyan"))
+            print("  [1] Tự động (Tool tự ép giao diện Mobile qua code - Khuyên dùng)")
+            print("  [2] Thủ công (Bạn tự ấn F12 -> Network conditions -> Đổi User-Agent)")
+            ua_choice = input(colored("👉 Lựa chọn của bạn (1/2, mặc định 1): ", "green")).strip()
+            
+            if ua_choice != "2":
+                # ÉP TAB HIỆN TẠI (GOLIKE) SANG MOBILE UA
+                driver.execute_cdp_cmd("Network.setUserAgentOverride", {
+                    "userAgent": device_profile['user_agent'],
+                    "platform": device_profile['platform']
+                })
+                print(colored("\n[✅] Đã tự động chuyển tab GoLike sang giao diện MOBILE.", "green"))
+                # Refresh để GoLike nhận diện UI mới
+                print("[*] Đang tải lại trang để áp dụng giao diện Mobile...")
+                driver.refresh()
+                time.sleep(3)
+            else:
+                print(colored("\n[!] Chế độ THỦ CÔNG: Hãy ấn F12 -> Network -> Network conditions để đổi User-Agent.", "yellow"))
+                input(colored("👉 Sau khi đã chuyển sang Mobile UI, hãy ấn [ENTER] tại đây để tiếp tục...", "white"))
+            # ========================================================
+            
+            # Đóng popup "Đã hiểu" nếu có
+            close_da_hieu_popup(driver)
+
+            # Vào trang Facebook Job
+            print(colored("[*] Đang vào mục Nhiệm vụ kiếm tiền...", "yellow"))
+            nhiemvu = WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+            human_click(driver, nhiemvu)
+            
+            print(colored("[*] Chọn nền tảng Facebook...", "yellow"))
+            fb_btn = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+            human_click(driver, fb_btn)
+            sleep(3)
+            
+        except Exception as login_err:
+            print(colored(f"❌ Lỗi quy trình login: {login_err}", "red"))
+            # Thử load thẳng trang nhiệm vụ nếu login có vẻ đã xong
+            print(colored("[!] Thử load thẳng trang Facebook Job...", "yellow"))
+            driver.get("https://app.golike.net/jobs/facebook")
+            sleep(5)
+
+        # 5. Vòng lặp chính qua từng Account
+        current_idx = 0
+        while current_idx < len(cookie_list):
+            if STOP_FLAG: break
+            
+            cookie_fb = cookie_list[current_idx]
+            # Decrypt if needed
+            if cookie_fb and "c_user=" not in cookie_fb and hasattr(cred_manager, '_decrypt'):
+                try: cookie_fb = cred_manager._decrypt(cookie_fb)
+                except: pass
+
+            print(f"\n🔄 --- ĐANG LÀM VIỆC VỚI ACC #{current_idx+1} ---")
+            
+            # Giao diện GoLike ở tab chính
+            gl_tab = driver.current_window_handle
+            
+            # BƠM COOKIE FACEBOOK TRƯỚC (để login sẵn)
+            print(colored(f"[*] Đang chuẩn bị môi trường Facebook cho tài khoản #{current_idx+1}...", "yellow"))
+            driver.execute_script("window.open('https://mbasic.facebook.com/', '_blank');")
+            time.sleep(2)
+            fb_setup_tab = driver.window_handles[-1]
+            driver.switch_to.window(fb_setup_tab)
+
+            # Hiển thị log kiểm tra cookie (ẩn bớt thông tin nhạy cảm)
+            cookie_display = (cookie_fb[:15] + "...") if len(cookie_fb) > 15 else "Rỗng"
+            print(f"[*] Bơm cookie: {cookie_display} (Dài: {len(cookie_fb)})")
+
+            # Khởi tạo bot xử lý (dùng chung driver)
+            fb_bot = FacebookSeleniumBot(
+                cookie_str=cookie_fb,
+                profile_name=f"fb_worker_{current_idx}",
+                proxy=proxy_arg,
+                proxy_auth_ext=proxy_auth_ext,
+            )
+            fb_bot.driver = driver
+            fb_bot._inject_cookies()
+
+            print("[*] Đang xác thực trạng thái đăng nhập Facebook...")
+            if not fb_bot._verify_login():
+                print(colored(f"❌ Cookie Acc #{current_idx+1} không hợp lệ hoặc bị checkpoint. Đổi acc...", "red"))
+                driver.close()
+                driver.switch_to.window(gl_tab)
+                current_idx += 1
+                continue
+            print(colored("✅ Facebook đã sẵn sàng!", "green"))
+            driver.close() # Đóng tab setup, quay về GoLike
+            driver.switch_to.window(gl_tab)
+            
+            # Chọn đúng nick trên GoLike web
+            name_run, uid_run = _select_golike_account(driver)
+            
+            jobs_done = 0
+            max_jobs = int(CONFIG_DELAY.get("max_jobs_before_switch", 20))
+            
+            # Vòng lặp lấy Job
+            while not STOP_FLAG:
+                fb_tab = None
+                try:
+                    if max_jobs > 0 and jobs_done >= max_jobs:
+                        print(colored(f"✅ Đã xong {max_jobs} jobs cho nick này. Đang đổi...", "green"))
+                        break
+                        
+                    print(f"\n[Acc: {name_run}] Đang quét job mới...")
+                    if job_limit_reached(driver):
+                        print(colored("🚨 Nick đã đạt giới hạn 100 job/ngày!", "red"))
+                        break
+                    
+                    try:
+                        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                    except TimeoutException:
+                        print("... Không thấy job, đang tải lại...")
+                        driver.refresh()
+                        sleep(5)
+                        continue
+                    
+                    jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")
+                    if not jobs: continue
+                    job = jobs[0]
+                    
+                    try:
+                        job_id = job.find_element(By.CSS_SELECTOR, "h6.font-id b").text
+                        job_type_raw = job.find_element(By.CSS_SELECTOR, "span.block-text-2").text
+                        print(colored(f"[*] Phát hiện Job: ID {job_id} | Loại: {job_type_raw}", "cyan"))
+                    except: job_type_raw = ""
+                    
+                    # 1. Ấn vô Job
+                    human_click(driver, job)
+                    sleep(2)
+
+                    # 2. Quét yêu cầu (Yêu cầu thứ 2 - Reaction cụ thể)
+                    j_type = map_job_type(job_type_raw)
+                    req_reaction = detect_reaction_required(driver)
+                    if req_reaction:
+                        j_type = req_reaction
+                    
+                    # 3. Ấn nút "Trình duyệt" để mở tab FB mới
+                    try:
+                        browser_btn = find_browser_button(driver)
+                        fb_url = browser_btn.get_attribute("href")
+                        num_tabs_before = len(driver.window_handles)
+                        human_click(driver, browser_btn)
+                        
+                        WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > num_tabs_before)
+                        fb_tab = driver.window_handles[-1]
+                    except Exception as e:
+                        print(colored(f"❌ Không mở được tab Facebook: {e}", "red"))
+                        driver.refresh(); sleep(3)
+                        continue
+                    
+                    # 4. Sang tab FB làm việc
+                    driver.switch_to.window(fb_tab)
+                    print(colored(f"👉 Đang thực hiện {j_type.upper()} trên Facebook...", "cyan"))
+
+                    # Thực hiện action trên tab hiện tại
+                    res = fb_bot.process_job(j_type, fb_url, current_tab_only=True)
+
+                    if res.get("success"):
+                        print(colored(f"✅ Thực hiện {j_type.upper()} THÀNH CÔNG!", "green", bold=True))
+                    else:
+                        print(colored(f"❌ Thực hiện {j_type.upper()} THẤT BẠI: {res.get('error')}", "red"))
+                        print(colored("\n[!] ĐANG CHỜ 20 GIÂY ĐỂ BẠN LÀM TAY (NẾU MUỐN)...", "yellow", bold=True))
+                        time.sleep(20)
+                        print(colored("[*] Hết thời gian chờ manual. Đang quay lại GoLike...", "yellow"))
+
+                    # 5. Đóng tab FB sau khi xong
+                    print("[*] Đóng tab Facebook, quay về GoLike...")
+                    driver.close()
+                    fb_tab = None # Reset flag
+                    driver.switch_to.window(gl_tab)
+
+
+                        # 6. Ấn "Hoàn thành" (Thử tối đa 2 lần)
+                        success_confirmed = False
+                        for try_idx in range(1, 3):
+                            if STOP_FLAG: break
+                            wait_confirm = 4.5 if try_idx == 1 else 3.0
+                            print(f"[*] Đang ấn Hoàn thành (Lần {try_idx}/2)... Đợi {wait_confirm}s...")
+                            sleep(wait_confirm)
+                            
+                            try:
+                                ht_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), "Hoàn thành")]")))
+                                human_click(driver, ht_btn)
+                                
+                                try:
+                                    pop_title = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
+                                    pop_content = driver.find_element(By.ID, "swal2-content").text
+                                    print(f"GoLike báo: [{pop_title}] {pop_content}")
+                                    
+                                    ok_btn = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                    human_click(driver, ok_btn)
+                                    
+                                    if "thành công" in pop_title.lower() or "thành công" in pop_content.lower():
+                                        success_confirmed = True
+                                        jobs_done += 1
+                                        break
+                                except: pass
+                            except: pass
+                            
+                            if try_idx == 1: sleep(3)
+                            human_click(driver, ht_btn)
+
+                            
+                            try:
+                                pop_title = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
+                                pop_content = driver.find_element(By.ID, "swal2-content").text
+                                print(f"GoLike báo: [{pop_title}] {pop_content}")
+                                
+                                ok_btn = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                human_click(driver, ok_btn)
+                                
+                                if "thành công" in pop_title.lower() or "thành công" in pop_content.lower():
+                                    success_confirmed = True
+                                    jobs_done += 1
+                                    break
+                            except: pass
+                        except: pass
+                        
+                        if try_idx == 1: sleep(3)
+
+
+                    # 7. Nếu thất bại cả 2 lần -> Báo lỗi Job
+                    if not success_confirmed and not STOP_FLAG:
+                        is_not_found = res.get("is_not_found", False) if isinstance(res, dict) else False
+                        reason_text = "Không tìm thấy bài viết" if is_not_found else "Báo cáo hoàn thành thất bại"
+                        print(colored(f"🚨 Thất bại. Lý do: {reason_text}. Đang báo lỗi job...", "magenta"))
+                        try:
+                            bl_btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
+                            human_click(driver, bl_btn)
+                            sleep(2)
+                            lydo_xpath = f"//h6[contains(., '{reason_text}')]"
+                            lydo = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, lydo_xpath)))
+                            human_click(driver, lydo)
+                            driver.find_element(By.XPATH, "//button[contains(., 'Gửi báo cáo')]").click()
+                            sleep(2)
+                            try: driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled").click()
+                            except: pass
+                            print(colored("✅ Đã báo lỗi xong.", "green"))
+                        except Exception as e:
+                            print(colored(f"⚠ Lỗi khi thực hiện báo lỗi: {e}", "yellow"))
+                    
+                    smart_sleep(smart_random_delay(CONFIG_DELAY.get("delay_between_jobs", 10)))
+                    
+                except Exception as e:
+                    print(colored(f"Lỗi chu kỳ Job: {e}", "red"))
+                    # Đảm bảo luôn quay về tab GoLike
+                    if fb_tab and fb_tab in driver.window_handles:
+                        try:
+                            driver.switch_to.window(fb_tab)
+                            driver.close()
+                        except: pass
+                    try: driver.switch_to.window(gl_tab)
+                    except: pass
+                    sleep(5)
+
+            # Kết thúc 1 acc
+            current_idx += 1
+            print(f"--- Hoàn tất chu kỳ Acc #{current_idx} ---")
+
+    except KeyboardInterrupt:
+        print("\n👋 Đã dừng chế độ Full DOM.")
+    except Exception as e:
+        print(f"🚨 Lỗi nghiêm trọng Full DOM: {e}")
+    finally:
+        print("\n[!] Kết thúc phiên làm việc Full DOM.")
+
+
 # ======================================================================
 # ==================== MENU KHỞI CHẠY HỆ THỐNG CHÍNH ==================
 # ======================================================================
@@ -3376,25 +3755,28 @@ def sele_menu():
         print("\n" + "="*65)
         print("🔥        HỆ THỐNG AUTO CÀY COIN GOLIKE & FACEBOOK v" + CURRENT_VERSION + "        🔥")
         print("="*65)
-        print("1. Chạy ĐƠN LẺ 1 tài khoản (API - FB_WEB_API_FIXED)")
-        print("2. Chạy SONG SONG nhiều tài khoản (API - FB_WEB_API_FIXED)")
-        print("3. Setup Delay Config")
+        print("1. Chạy HYBRID ĐƠN LẺ (Nhận job API - Làm trên trình duyệt)")
+        print("2. Chạy HYBRID SONG SONG (Nhận job API - Làm trên trình duyệt)")
+        print("3. Chạy FULL DOM (Sạch 100% - Nhận job & Làm trên trình duyệt)")
+        print("4. Setup Delay Config")
         print("0. Thoát chương trình")
         print("-" * 65)
 
         try:
-            lua_chon = input("👉 Lựa chọn (1/2/3/0): ").strip()
+            lua_chon = input("👉 Lựa chọn (1/2/3/4/0): ").strip()
 
             if lua_chon == "0":
                 print("\n[✅] Tạm biệt!")
                 cleanup()
                 break
-            elif lua_chon == "3":
+            elif lua_chon == "4":
                 setup_delay_config()
                 load_delay_config()
                 continue
             elif lua_chon == "2":
                 run_parallel_mode()
+            elif lua_chon == "3":
+                run_selenium_dom_mode()
             else:
                 run_single_mode()
 

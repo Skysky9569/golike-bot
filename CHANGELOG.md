@@ -1,6 +1,38 @@
 # CHANGELOG
 
-## [v1.12.10] - 2026-05-30
+## [v1.13.0] - 2026-06-02
+
+### Tính Năng Mới & Nâng Cấp (Features & Upgrades)
+- **Chế độ Full DOM (100% Selenium Browser)**:
+  - Tách biệt hoàn toàn chế độ chạy Hybrid (API) và Full DOM (Trình duyệt).
+  - Tự động thực hiện mọi bước từ Nhận Job, Làm nhiệm vụ đến Hoàn thành ngay trên trình duyệt.
+- **Selective Mobile User-Agent (CDP Simulation)**:
+  - Sử dụng Chrome DevTools Protocol để ép riêng tab GoLike sang giao diện Mobile.
+  - Các tab khác (như Facebook) vẫn giữ giao diện Desktop giúp ổn định và tránh bị quét.
+- **Siêu Thả Cảm Xúc (Advanced Reactions)**:
+  - Tích hợp mô phỏng sự kiện đa tầng (Pointer + Mouse + Touch) để thả Love, Haha, Wow... cực kỳ chính xác.
+  - JavaScript Scanner thông minh tìm nút dựa trên nhãn tiếng Việt/Anh và cấu trúc Comet mới.
+- **Tối Ưu Hóa cho macOS**:
+  - Tự động nhận diện hệ điều hành và hiển thị 🍏 macOS trên Menu.
+  - Cơ chế Cleanup mới sử dụng `pkill` và `ps` để dọn dẹp sạch tiến trình Chrome chạy ngầm trên Mac.
+
+### Cải Tiến & Sửa Lỗi (Improvements & Bug fixes)
+- **Kiểm tra bài viết tồn tại**: Tự động phát hiện bài viết bị xóa hoặc bị chặn và báo lỗi "Không tìm thấy bài viết" lên GoLike.
+- **Manual Fallback**: Thêm 20 giây chờ đợi để người dùng can thiệp thủ công nếu bot gặp khó khăn.
+- **Highlight & Scroll**: Tự động cuộn tới nút và highlight viền đỏ/nền đỏ mờ để dễ quan sát.
+- **Fix lỗi xác thực**: Khắc phục lỗi SSL trên macOS và cải tiến hệ thống bơm Cookie tự động.
+- **Sửa lỗi logic**: Fix các lỗi `NameError`, `UnboundLocalError` và lỗi báo cáo quá nhanh.
+
+## [v1.12.11] - 2026-06-01
+
+### Sửa lỗi tương thích hệ điều hành (OS Compatibility Fixed)
+- **Khắc phục lỗi "Exec format error" khi chạy trên macOS**:
+  - Cập nhật logic phát hiện đường dẫn ADB để tự động chọn ADB phù hợp với hệ điều hành hiện tại
+  - Ưu tiên sử dụng ADB hệ thống trên các hệ điều hành không phải Windows
+  - Tự động chuyển sang sử dụng ADB hệ thống khi phát hiện file ADB cục bộ là file .exe trên hệ điều hành không phải Windows
+  - Cập nhật file cấu hình `app_config.json` để sử dụng ADB hệ thống thay vì đường dẫn Windows cố định
+
+## [v1.12.10] - 22-05-30
 
 ### Sửa lỗi kết nối WiFi (WiFi Connection Fixed)
 - **Tự động kích hoạt adb connect cho uiautomator2 WiFi**:

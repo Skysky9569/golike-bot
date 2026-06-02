@@ -1,5 +1,5 @@
 {
-  "adb_path": "D:\\pythonadb\\ADB\\adb.exe",
+  "adb_path": "/opt/homebrew/bin/adb",
   "api_base_url": "https://gateway.golike.net",
   "api_timeout": 10,
   "log_level": "INFO",

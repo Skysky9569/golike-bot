@@ -9,6 +9,7 @@ from typing import Optional
 
 from golike_core.logging import logger
 from golike_core.adb_manager import colored
+from golike_core.termux import get_platform_name
 
 
 def _load_version() -> str:
@@ -106,14 +107,17 @@ def menu() -> None:
     """Menu chinh hien thi danh sach chuc nang"""
     banner()
     print(colored(f"🆔 Địa chỉ IP  : 🚨 {get_public_ip()} 🚨", "white"))
+    print(colored(f"💻 Hệ điều hành : 🍏 {get_platform_name()}", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
     print(colored("⚡ CHỨC NĂNG CHÍNH:", "cyan", bold=True))
     print(colored("   [1] 🥇 Vào Tool TikTok (Auto ADB)", "white"))
-    print(colored("   [2] 📱 Vào Tool Facebook (API)", "cyan"))
-    print(colored("   [3] 🔥 Vào Tool Facebook (Selenium - API + DOM Click)", "yellow"))
+    print(colored("   [2] 📱 Vào Tool Facebook (API Chạy Ngầm - Tốc độ)", "cyan"))
+    print(colored("   [3] 🔥 Vào Tool Facebook (Selenium - An Toàn/DOM)", "yellow"))
+    print(colored("   [7] 🍏 Vào Tool TikTok (iOS - Appium)", "green"))
     print(colored("\n🛠️  HỆ THỐNG & CẤU HÌNH:", "cyan", bold=True))
     print(colored("   [4] 📶 Cài Đặt Kết Nối ADB WiFi/USB", "cyan"))
     print(colored("   [5] 🥈 Quản Lý Authorization Tokens", "green"))
     print(colored("   [6] 🖥️ Tool Facebook Desktop (Cookie + facebook.com)", "magenta"))
+    print(colored("   [8] 🧹 Dọn dẹp Chrome & Driver (Tối ưu hệ thống)", "yellow"))
     print(colored("   [0] 🔙 Thoát Chương Trình", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
