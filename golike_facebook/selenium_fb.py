@@ -428,19 +428,31 @@ SELECTORS = {
         '//span[text()="Follow"]',
     ],
     "like_page_button": [
-        # Ưu tiên các nút Theo dõi (Follow) cho job like_page
+        # Desktop (Comet) - Ưu tiên các nút Theo dõi (Follow) cho job like_page
         '//div[@role="button"]//span[text()="Theo dõi"]',
         '//div[@role="button"]//span[text()="Follow"]',
         '//span[text()="Theo dõi"]/ancestor::div[@role="button"]',
         '//span[text()="Follow"]/ancestor::div[@role="button"]',
+        'div[aria-label="Theo dõi"][role="button"]',
+        'div[aria-label="Follow"][role="button"]',
+        'div[aria-label="Đã theo dõi"][role="button"]',
+        'div[aria-label="Following"][role="button"]',
 
-        # Nút Thích trang truyền thống
+        # Desktop (Comet) - Nút Thích trang (Like)
+        'div[aria-label="Thích"][role="button"]',
+        'div[aria-label="Like"][role="button"]',
+        'div[aria-label="Đã thích"][role="button"]',
+        'div[aria-label="Liked"][role="button"]',
+        '//div[@role="button"]//span[text()="Thích"]',
+        '//div[@role="button"]//span[text()="Like"]',
+
+        # Mobile/mbasic
         'a[href*="/a/like.php"]',
         'a[ajaxify*="like"]',
         'button[name="like"]',
-        # Desktop
-        'div[aria-label="Thích"][role="button"]',
-        'div[aria-label="Like"][role="button"]',
+        'a[href*="/a/subscribe.php"]',
+        'a[href*="/subscribe.php"]',
+        'a[ajaxify*="subscribe"]',
     ],
 
     "reaction_options": [

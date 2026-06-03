@@ -3738,16 +3738,27 @@ def run_selenium_dom_mode():
                         is_not_found = res.get("is_not_found", False) if isinstance(res, dict) else False
                         reason_text = "Không tìm thấy bài viết" if is_not_found else "Báo cáo hoàn thành thất bại"
                         print(colored(f"🚨 Thất bại. Lý do: {reason_text}. Đang báo lỗi job...", "magenta"))
+                        
                         try:
-                            bl_btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
+                            # Đảm bảo tắt mọi popup đang mở trước khi báo lỗi
+                            close_da_hieu_popup(driver)
+                            
+                            bl_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
                             human_click(driver, bl_btn)
                             sleep(2)
+                            
                             lydo_xpath = f"//h6[contains(., '{reason_text}')]"
-                            lydo = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, lydo_xpath)))
+                            lydo = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, lydo_xpath)))
                             human_click(driver, lydo)
-                            driver.find_element(By.XPATH, "//button[contains(., 'Gửi báo cáo')]").click()
+                            sleep(1)
+                            
+                            gui_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Gửi báo cáo')]")))
+                            human_click(driver, gui_btn)
                             sleep(2)
-                            try: driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled").click()
+                            
+                            try:
+                                ok_fin = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
+                                human_click(driver, ok_fin)
                             except: pass
                             print(colored("✅ Đã báo lỗi xong.", "green"))
                         except Exception as e:
