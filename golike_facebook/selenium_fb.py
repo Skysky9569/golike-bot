@@ -706,8 +706,9 @@ class FacebookSeleniumBot:
             time.sleep(1)
             self._inject_cookies()
 
-            time.sleep(2)
-            if not self._verify_login():
+            time.sleep(1)
+            # Không cần force_reload vì _inject_cookies đã refresh() rồi
+            if not self._verify_login(force_reload=False):
                 logger.error("[%s] Cookie không hợp lệ hoặc hết hạn" % self.profile_name)
                 return False
 
@@ -787,14 +788,16 @@ class FacebookSeleniumBot:
         self.driver.refresh()
         time.sleep(2)
 
-    def _verify_login(self) -> bool:
+    def _verify_login(self, force_reload: bool = True) -> bool:
         """Kiểm tra đã đăng nhập Facebook chưa"""
         try:
-            target_url = "https://www.facebook.com/" if self.use_desktop else "https://mbasic.facebook.com/"
-            self.driver.get(target_url)
-            time.sleep(2)
+            if force_reload:
+                target_url = "https://www.facebook.com/" if self.use_desktop else "https://mbasic.facebook.com/"
+                self.driver.get(target_url)
+                time.sleep(2)
+            
             page = self.driver.page_source.lower()
-            if 'name="email"' in page or 'name="pass"' in page:
+            if 'name="email"' in page or 'name="pass"' in page or 'login_form' in page:
                 return False
             return True
         except Exception:
@@ -840,14 +843,14 @@ class FacebookSeleniumBot:
         if current_tab_only:
             print(f"[*] Đang tải trang: {link[:60]}...")
             try:
-                if self.driver.current_url != link:
+                # Chỉ tải nếu URL hiện tại khác hẳn link mục tiêu (bỏ qua query params nếu cần so sánh sâu)
+                if self.driver.current_url.split('?')[0].rstrip('/') != link.split('?')[0].rstrip('/'):
                     self.driver.get(link)
                 # Đợi trang load xong (ready state)
                 WebDriverWait(self.driver, 10).until(lambda d: d.execute_script('return document.readyState') == 'complete')
-                time.sleep(2)
+                time.sleep(1)
             except Exception:
-                self.driver.get(link)
-                time.sleep(3)
+                pass
             return "current"
 
         main_tab = self.driver.current_window_handle
