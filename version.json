@@ -1,6 +1,6 @@
 {
-  "version": "1.13.0",
-  "release_date": "2026-06-02",
-  "changelog": "v1.13.0 - Chế độ Full DOM (100% Selenium), Tự động giả lập Mobile UI (CDP), Tối ưu macOS và thả cảm xúc (Love, Haha...) chuyên nghiệp.",
-  "previous_version": "1.12.10"
+  "version": "1.13.1",
+  "release_date": "2026-06-03",
+  "changelog": "v1.13.1 - Fix lỗi 'Cập nhật phiên bản mới nhất' bằng cách bổ sung Header g-auth, g-device-id và hỗ trợ dán JSON Token.",
+  "previous_version": "1.13.0"
 }

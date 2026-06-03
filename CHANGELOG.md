@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v1.13.1] - 2026-06-03
+
+### Sửa Lỗi (Bug Fixes)
+- **Fix lỗi API 'Vui lòng cập nhật phiên bản mới nhất'**:
+  - Bổ sung Header bảo mật mới `g-auth` và `g-device-id` vào các request API.
+  - Cập nhật User-Agent mặc định theo mẫu trình duyệt thực tế mới nhất.
+  - Cải tiến trình nhập Token: Hỗ trợ dán trực tiếp chuỗi JSON từ trình duyệt để tự động bóc tách các header bảo mật.
+  - Tự động lưu và đồng bộ `g-auth`, `g-device-id` vào file `golike_token.json`.
+
 ## [v1.13.0] - 2026-06-02
 
 ### Tính Năng Mới & Nâng Cấp (Features & Upgrades)

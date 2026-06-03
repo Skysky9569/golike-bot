@@ -39,6 +39,8 @@ HEADERS = {
     'accept': 'application/json, text/plain, */*',
     'accept-language': 'en-US,en;q=0.9,vi;q=0.8,fr-FR;q=0.7,fr;q=0.6',
     'authorization': 'Bearer ',  # Sẽ được cập nhật khi chạy
+    'g-auth': '',               # Header mới
+    'g-device-id': '',          # Header mới
     'content-type': 'application/json;charset=utf-8',
     'origin': 'https://app.golike.net',
     'priority': 'u=1, i',
@@ -501,19 +503,22 @@ def main(auth_token=None):
         if not user_token:
             return
 
-    # Thử parse JSON cho các header g-auth và g-device-id
-    try:
-        data = json.loads(user_token)
-        if isinstance(data, dict):
-            HEADERS['authorization'] = data.get("authorization")
-            if data.get("g-auth"):
-                HEADERS['g-auth'] = data.get("g-auth")
-            if data.get("g-device-id"):
-                HEADERS['g-device-id'] = data.get("g-device-id")
-    except Exception:
-        if not user_token.startswith("Bearer "):
-            user_token = f"Bearer {user_token}"
-        HEADERS['authorization'] = user_token
+    # Gan headers tu token_data
+    token = token_data.get('token') or token_data.get('authorization')
+    if token:
+        if not token.startswith("Bearer "):
+            token = f"Bearer {token}"
+        HEADERS['authorization'] = token
+    
+    if token_data.get('g-auth'):
+        HEADERS['g-auth'] = token_data.get('g-auth')
+    if token_data.get('g-device-id'):
+        HEADERS['g-device-id'] = token_data.get('g-device-id')
+    
+    # In thong tin header de kiem tra
+    print(f"[*] Authorization: {mask_token(HEADERS['authorization'])}")
+    print(f"[*] G-Auth:        {mask_token(HEADERS.get('g-auth'))}")
+    print(f"[*] G-Device-ID:   {HEADERS.get('g-device-id', '(trong)')}")
 
     # Lấy tài khoản trên Golike
     print("\nDang lay danh sach tai khoan Facebook tu Golike...")
