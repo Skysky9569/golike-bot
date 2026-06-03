@@ -323,53 +323,83 @@ def mask_token(token):
     return token
 
 def configure_token():
-    """Menu cấu hình token Golike với lưu/tải."""
-    print("\n--- CAU HINH TOKEN GOLIKE ---")
-    saved_token = load_saved_token()
+    """Menu cấu hình token Golike với lưu/tải đầy đủ headers."""
+    print("\n--- CAU HINH TOKEN & SECURITY HEADERS GOLIKE ---")
+    print("Gợi ý: Bạn có thể copy chuỗi JSON chứa authorization, g-auth, g-device-id và dán vào đây.")
     
-    if saved_token:
-        print(f"[✓] Tim thay token da luu: {mask_token(saved_token)}")
-        print("[1] Su dung token da luu")
-        print("[2] Nhap token moi (thay the token cu)")
-        print("[3] Xoa token da luu va nhap moi")
+    saved_data = load_saved_token()
+    token = ""
+    g_auth = ""
+    g_device_id = ""
+
+    if isinstance(saved_data, dict):
+        saved_token = saved_data.get('token', '')
+        print(f"[✓] Tim thay du lieu da luu:")
+        print(f"    - Authorization: {mask_token(saved_token)}")
+        print(f"    - g-auth:        {mask_token(saved_data.get('g-auth'))}")
+        print(f"    - g-device-id:   {saved_data.get('g-device-id', '(trong)')}")
+        
+        print("\n[1] Su dung du lieu da luu")
+        print("[2] Nhap du lieu moi (thay the du lieu cu)")
+        print("[3] Xoa du lieu da luu va nhap moi")
         choice = input("Chon (mac dinh 1): ").strip()
         
         if choice == "3":
             delete_saved_token()
-            print("Da xoa token cu.")
-            token = input("Nhap Golike Bearer Token moi: ").strip()
-            if not token:
-                print("Token khong duoc de trong!")
-                return None
+            print("Da xoa du lieu cu.")
         elif choice == "2":
-            token = input("Nhap Golike Bearer Token moi: ").strip()
-            if not token:
-                print("Token khong duoc de trong!")
-                return None
+            pass # Tiep tuc xuong phan nhap moi
         else:
-            token = saved_token
-            print("=> Su dung token da luu.")
-    else:
-        print("[!] Chua co token nao duoc luu.")
-        token = input("Nhap Golike Bearer Token: ").strip()
-        if not token:
-            print("Token khong duoc de trong!")
-            return None
+            return saved_data # Su dung du lieu da luu
+    elif saved_data:
+        # Truong hop file cu chi co chuoi token
+        print(f"[✓] Tim thay token cu: {mask_token(saved_data)}")
+        token = saved_data
+
+    # Phan nhap moi
+    print("\n[Mẹo] Nếu bạn có chuỗi JSON, hãy dán trực tiếp. Nếu không, hãy nhập từng giá trị.")
+    user_input = input("Nhap Authorization (Bearer token) hoặc chuỗi JSON: ").strip()
     
-    # Chuẩn hóa token
-    if not token.startswith("Bearer "):
+    if not user_input:
+        if token:
+            user_input = token
+        else:
+            print("Authorization khong duoc de trong!")
+            return None
+
+    # Thu parse JSON
+    try:
+        data = json.loads(user_input)
+        if isinstance(data, dict):
+            token = data.get("authorization") or data.get("token") or user_input
+            g_auth = data.get("g-auth") or ""
+            g_device_id = data.get("g-device-id") or ""
+            print("=> Da tu dong nhan dien du lieu tu JSON.")
+        else:
+            token = user_input
+    except Exception:
+        token = user_input
+        if not g_auth:
+            g_auth = input("Nhap g-auth (Header moi): ").strip()
+        if not g_device_id:
+            g_device_id = input("Nhap g-device-id (Header mới): ").strip()
+
+    if token and not token.startswith("Bearer "):
         token = f"Bearer {token}"
     
-    # Lưu token nếu là token mới
-    if token != saved_token:
-        save_choice = input("Luu token de lan sau khong can nhap lai? (Y/n): ").strip().lower()
-        if save_choice != 'n':
-            if save_token(token):
-                print("=> Da luu token thanh cong!")
-            else:
-                print("=> Luu token that bai, se phai nhap lai lan sau.")
+    final_data = {
+        'token': token,
+        'g-auth': g_auth,
+        'g-device-id': g_device_id
+    }
+
+    # Lưu token
+    save_choice = input("\nLuu thong tin nay de lan sau khong can nhap lai? (Y/n): ").strip().lower()
+    if save_choice != 'n':
+        if save_token(token, g_auth, g_device_id):
+            print("=> Da luu thong tin thanh cong!")
     
-    return token
+    return final_data
 
 def load_local_accounts():
     """Đọc thông tin cookie từ single_mode_accounts.json"""
@@ -495,16 +525,25 @@ def main(auth_token=None):
     print("   BOT GOLIKE FB WEB API AUTOMATION (NO ADB)")
     print("==================================================")
 
-    # Nhập / tải token Golike
+    # Nhập / tải token và headers Golike
+    token_data = None
     if auth_token:
-        user_token = auth_token
+        # Nếu truyền vào từ main.py, có thể là chuỗi hoặc dict
+        if isinstance(auth_token, dict):
+            token_data = auth_token
+        else:
+            # Thử parse JSON nếu là chuỗi, nếu không thì coi là Bearer token
+            try:
+                token_data = json.loads(auth_token)
+            except:
+                token_data = {'token': auth_token, 'g-auth': '', 'g-device-id': ''}
     else:
-        user_token = configure_token()
-        if not user_token:
+        token_data = configure_token()
+        if not token_data:
             return
 
     # Gan headers tu token_data
-    token = token_data.get('token') or token_data.get('authorization')
+    token = token_data.get('token') or token_data.get('authorization') or ""
     if token:
         if not token.startswith("Bearer "):
             token = f"Bearer {token}"

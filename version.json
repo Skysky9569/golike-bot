@@ -1,6 +1,6 @@
 {
-  "version": "1.13.1",
+  "version": "1.13.2",
   "release_date": "2026-06-03",
-  "changelog": "v1.13.1 - Fix lỗi 'Cập nhật phiên bản mới nhất' bằng cách bổ sung Header g-auth, g-device-id và hỗ trợ dán JSON Token.",
-  "previous_version": "1.13.0"
+  "changelog": "v1.13.2 - Fix lỗi NameError regression trong logic xử lý Token và Header mới.",
+  "previous_version": "1.13.1"
 }

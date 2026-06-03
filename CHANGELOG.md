@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [v1.13.2] - 2026-06-03
+
+### Sửa Lỗi (Bug Fixes)
+- **Sửa lỗi crash (NameError)**: Khắc phục lỗi biến `token_data` chưa được định nghĩa khi chạy tool từ Menu chính.
+- **Đồng bộ logic xử lý Header**: Đảm bảo tất cả các phương thức nhập Token đều khởi tạo đầy đủ các Header bảo mật mới.
+
 ## [v1.13.1] - 2026-06-03
 
 ### Sửa Lỗi (Bug Fixes)
