@@ -3629,17 +3629,19 @@ def run_selenium_dom_mode():
                     if req_reaction:
                         j_type = req_reaction
                     
-                    # 3. Ấn nút "Trình duyệt" để mở tab FB mới
+                    # 3. Lấy link và mở tab FB mới để làm việc
                     try:
                         browser_btn = find_browser_button(driver)
                         fb_url = browser_btn.get_attribute("href")
-                        num_tabs_before = len(driver.window_handles)
-                        human_click(driver, browser_btn)
                         
+                        # Chỉ mở tab trống, để fb_bot.process_job tự tải link (tránh double load)
+                        num_tabs_before = len(driver.window_handles)
+                        driver.execute_script("window.open('');")
                         WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > num_tabs_before)
+                        
                         fb_tab = driver.window_handles[-1]
                     except Exception as e:
-                        print(colored(f"❌ Không mở được tab Facebook: {e}", "red"))
+                        print(colored(f"❌ Không chuẩn bị được tab Facebook: {e}", "red"))
                         driver.refresh(); sleep(3)
                         continue
                     
@@ -3647,7 +3649,7 @@ def run_selenium_dom_mode():
                     driver.switch_to.window(fb_tab)
                     print(colored(f"👉 Đang thực hiện {j_type.upper()} trên Facebook...", "cyan"))
 
-                    # Thực hiện action trên tab hiện tại
+                    # Thực hiện action trên tab này (bot sẽ tự load fb_url)
                     res = fb_bot.process_job(j_type, fb_url, current_tab_only=True)
 
                     if res.get("success"):
