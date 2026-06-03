@@ -16,6 +16,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import (
     NoSuchElementException, TimeoutException,
     ElementClickInterceptedException, StaleElementReferenceException
@@ -240,6 +241,7 @@ def build_anti_detect_options(
     user_data_dir: Optional[str] = None,
     proxy: Optional[str] = None,
     proxy_auth_ext: Optional[str] = None,
+    use_desktop: bool = False,
 ) -> Options:
     """Tạo Chrome options chống detect nâng cao"""
     options = Options()
@@ -270,11 +272,17 @@ def build_anti_detect_options(
     ])
     options.add_experimental_option("useAutomationExtension", False)
 
-    # iPhone 14 Pro UA (khớp với platform/vendor trong PRELOAD_JS)
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-    )
+    if use_desktop:
+        # User agent cho Desktop (Windows/Chrome)
+        options.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+    else:
+        # iPhone 14 Pro UA (khớp với platform/vendor trong PRELOAD_JS)
+        options.add_argument(
+            "user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        )
 
     prefs = {
         "credentials_enable_service": False,
@@ -298,7 +306,7 @@ def build_anti_detect_options(
     return options
 
 
-def inject_anti_detection_scripts(driver: selenium_driver.Chrome) -> None:
+def inject_anti_detection_scripts(driver: selenium_driver.Chrome, use_desktop: bool = False) -> None:
     """
     Bơm JavaScript chống detect vào browser (chạy trước mọi trang).
     Thêm CDP emulation để giả lập thiết bị iPhone nhất quán.
@@ -307,6 +315,16 @@ def inject_anti_detection_scripts(driver: selenium_driver.Chrome) -> None:
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": PRELOAD_JS
     })
+
+    if use_desktop:
+        # Emulate Windows platform
+        try:
+            driver.execute_cdp_cmd("Network.setUserAgentOverride", {
+                "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "platform": "Win32"
+            })
+        except: pass
+        return
 
     # Emulate iPhone 14 Pro qua CDP Network
     try:
@@ -366,6 +384,13 @@ def parse_cookie_string(cookie_str: str) -> List[Dict[str, Any]]:
 
 SELECTORS = {
     "like_button": [
+        # User confirmed XPaths
+        "//div[@role='dialog']//div[@role='button'][.//div[@data-ad-rendering-role='like_button']]",
+        "//div[@role='button'][.//div[@data-ad-rendering-role='like_button']]",
+        "//div[@role='dialog']//div[@role='button' and (.//span[text()='Thích'] or .//span[text()='Like'])]",
+        "//div[@role='button' and (.//span[text()='Thích'] or .//span[text()='Like'])]",
+        "//div[@role='button' and (@aria-label='Thích' or @aria-label='Like')]",
+
         # Siêu chính xác: div chứa icon like đặc trưng của FB Desktop (Comet)
         'div[data-ad-rendering-role="like_button"]',
         '//div[@data-ad-rendering-role="like_button"]/ancestor::div[@role="button"]',
@@ -419,6 +444,7 @@ SELECTORS = {
     ],
 
     "reaction_options": [
+        "//div[@aria-label='{reaction_type}']", # User confirmed
         'div[data-store*="reaction"] a',
         'a[href*="reaction_type="]',
         # Desktop (Comet) - Vietnamese labels
@@ -628,11 +654,13 @@ class FacebookSeleniumBot:
         proxy: Optional[str] = None,
         save_profile: bool = False,
         proxy_auth_ext: Optional[str] = None,
+        use_desktop: bool = False,
     ):
         self.cookie_str = cookie_str
         self.profile_name = profile_name
         self.proxy = proxy
         self.proxy_auth_ext = proxy_auth_ext
+        self.use_desktop = use_desktop
 
         if user_data_dir:
             self.user_data_dir = user_data_dir
@@ -658,16 +686,23 @@ class FacebookSeleniumBot:
                 user_data_dir=self.user_data_dir,
                 proxy=self.proxy,
                 proxy_auth_ext=self.proxy_auth_ext,
+                use_desktop=self.use_desktop,
             )
             self.driver = selenium_driver.Chrome(
                 service=Service(ChromeDriverManager().install()),
                 options=options,
             )
-            self.driver.set_window_size(500, 750)
-            inject_anti_detection_scripts(self.driver)
+            
+            if self.use_desktop:
+                self.driver.set_window_size(1366, 768)
+            else:
+                self.driver.set_window_size(500, 750)
+                
+            inject_anti_detection_scripts(self.driver, use_desktop=self.use_desktop)
 
             logger.info("[%s] Đang bơm cookie vào browser..." % self.profile_name)
-            self.driver.get("https://mbasic.facebook.com/")
+            target_url = "https://www.facebook.com/" if self.use_desktop else "https://mbasic.facebook.com/"
+            self.driver.get(target_url)
             time.sleep(1)
             self._inject_cookies()
 
@@ -755,7 +790,8 @@ class FacebookSeleniumBot:
     def _verify_login(self) -> bool:
         """Kiểm tra đã đăng nhập Facebook chưa"""
         try:
-            self.driver.get("https://mbasic.facebook.com/")
+            target_url = "https://www.facebook.com/" if self.use_desktop else "https://mbasic.facebook.com/"
+            self.driver.get(target_url)
             time.sleep(2)
             page = self.driver.page_source.lower()
             if 'name="email"' in page or 'name="pass"' in page:
@@ -787,14 +823,19 @@ class FacebookSeleniumBot:
             except Exception as e:
                 logger.warning("[%s] Lỗi resolve link ID trần: %s" % (self.profile_name, str(e)))
 
-        # Chuyển link sang mbasic
-        match_reel = re.search(r'/reel/(\d+)', link)
-        if match_reel:
-            link = f"https://mbasic.facebook.com/video.php?v={match_reel.group(1)}"
+        # Chuyển link sang mbasic (nếu không dùng desktop mode)
+        if not self.use_desktop:
+            match_reel = re.search(r'/reel/(\d+)', link)
+            if match_reel:
+                link = f"https://mbasic.facebook.com/video.php?v={match_reel.group(1)}"
+            else:
+                link = link.replace("www.facebook.com", "mbasic.facebook.com")
+                link = link.replace("m.facebook.com", "mbasic.facebook.com")
+                link = link.replace("://facebook.com", "://mbasic.facebook.com")
         else:
-            link = link.replace("www.facebook.com", "mbasic.facebook.com")
-            link = link.replace("m.facebook.com", "mbasic.facebook.com")
-            link = link.replace("://facebook.com", "://mbasic.facebook.com")
+            # Nếu dùng desktop mode, đảm bảo link là www.facebook.com
+            link = link.replace("mbasic.facebook.com", "www.facebook.com")
+            link = link.replace("m.facebook.com", "www.facebook.com")
 
         if current_tab_only:
             print(f"[*] Đang tải trang: {link[:60]}...")
@@ -917,120 +958,110 @@ class FacebookSeleniumBot:
             return check
 
         try:
-            if reaction_type.lower() == "like":
-                print("[*] Đang tìm nút LIKE...")
-                btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=6)
-                if btn:
-                    ok = click_js(self.driver, btn, label="nút LIKE")
-                    time.sleep(1)
-                    if not current_tab_only: self._close_job_tab(main_tab)
-                    return {"success": ok}
-                if not current_tab_only: self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút like"}
-
-            # Reaction khác: long-press để mở menu
+            # 1. TÌM NÚT LIKE/THÍCH CHÍNH
             print(f"[*] Đang thực hiện thả cảm xúc: {reaction_type.upper()}...")
-            btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=6)
+            btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=10)
             if not btn:
                 if not current_tab_only: self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút like"}
+                return {"success": False, "error": "Không tìm thấy nút like/thích"}
 
-            # Highlight và cuộn tới nút
-            self.driver.execute_script(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'}); arguments[0].style.border='3px solid red';", 
-                btn
-            )
-            time.sleep(1.0)
+            # Cuộn tới nút
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'center'});", btn)
+            time.sleep(2)
 
-            # 2. GIẢ LẬP NHẤN GIỮ (LONG-PRESS) QUA JAVASCRIPT
-            self.driver.execute_script("""
-                var el = arguments[0];
-                var rect = el.getBoundingClientRect();
-                var x = rect.left + rect.width / 2;
-                var y = rect.top + rect.height / 2;
+            # Nếu chỉ là Like thì click luôn
+            if reaction_type.lower() == "like":
+                print("[+] Đang click: LIKE")
+                ok = click_js(self.driver, btn, label="nút LIKE")
+                time.sleep(1)
+                if not current_tab_only: self._close_job_tab(main_tab)
+                return {"success": ok}
 
-                function fire(type, hold) {
-                    var ev = new MouseEvent(type, {
-                        bubbles: true, cancelable: true, view: window, 
-                        buttons: 1, clientX: x, clientY: y
-                    });
-                    el.dispatchEvent(ev);
-                }
-                
-                fire('mousedown');
-                // Giữ trạng thái nhấn trong 1.5 giây
-                setTimeout(function() {
-                    fire('mouseup');
-                }, 1500);
-            """, btn)
-            
-            print("[*] Đang đợi bảng cảm xúc hiện ra...")
-            time.sleep(2.5) # Đợi menu hiện ra hoàn toàn
+            # 2. MỞ MENU CẢM XÚC (Hover trên Desktop, Long-press trên Mobile)
+            if self.use_desktop:
+                print("[*] Đang di chuột vào nút Thích để mở menu cảm xúc (Desktop Mode)...")
+                actions = ActionChains(self.driver)
+                actions.move_to_element(btn).perform()
+                time.sleep(2)
+            else:
+                print("[*] Đang nhấn giữ nút Thích để mở menu cảm xúc (Mobile Mode)...")
+                self.driver.execute_script("""
+                    var el = arguments[0];
+                    var rect = el.getBoundingClientRect();
+                    var x = rect.left + rect.width / 2;
+                    var y = rect.top + rect.height / 2;
+                    function fire(type) {
+                        el.dispatchEvent(new MouseEvent(type, {
+                            bubbles: true, cancelable: true, view: window, 
+                            buttons: 1, clientX: x, clientY: y
+                        }));
+                    }
+                    fire('mousedown');
+                    setTimeout(function() { fire('mouseup'); }, 1500);
+                """, btn)
+                time.sleep(2.5)
 
-            # 3. TRUY QUÉT VÀ CLICK CẢM XÚC TRONG DIALOG/TOOLBAR
-            vn_label = REACTION_LABELS.get(reaction_type.lower(), "")
+            # 3. CHỌN CẢM XÚC CỤ THỂ
+            vn_label = REACTION_LABELS.get(reaction_type.lower(), reaction_type.capitalize())
             en_label = reaction_type.capitalize()
             
-            print(f"[*] Tìm cảm xúc: {vn_label} ({en_label})...")
+            print(f"[*] Đang tìm cảm xúc: {vn_label} ({en_label})...")
             
+            # Thử click bằng Selenium XPath (theo logic user đã test)
+            reaction_xpaths = [
+                f"//div[@aria-label='{vn_label}']",
+                f"//div[@aria-label='{en_label}']",
+                f"//div[@role='button' and @aria-label='{vn_label}']",
+                f"//div[@role='button' and @aria-label='{en_label}']"
+            ]
+            
+            for rxpath in reaction_xpaths:
+                try:
+                    r_btns = self.driver.find_elements(By.XPATH, rxpath)
+                    for rb in r_btns:
+                        if rb.is_displayed():
+                            print(f"   [✓] Tìm thấy nút {vn_label} qua XPath. Đang click...")
+                            rb.click()
+                            time.sleep(1.5)
+                            if not current_tab_only: self._close_job_tab(main_tab)
+                            return {"success": True}
+                except: continue
+
+            # Fallback dùng JS (logic cũ nhưng cải tiến)
+            print("[!] XPath không click được, thử lại bằng JavaScript...")
             click_result = self.driver.execute_script("""
                 var vn = arguments[0].toLowerCase();
                 var en = arguments[1].toLowerCase();
                 var rid = arguments[2];
-                
-                // Tìm trong mọi dialog, toolbar, và role="tooltip"
-                var containers = document.querySelectorAll('div[role="dialog"], div[role="toolbar"], div[role="tooltip"], .x78zum5');
+                var containers = document.querySelectorAll('div[role="dialog"], div[role="toolbar"], div[role="tooltip"], [role="presentation"]');
                 var foundBtn = null;
-
                 for (var i = 0; i < containers.length; i++) {
-                    var buttons = containers[i].querySelectorAll('div[role="button"], a[role="button"], div[aria-label]');
+                    var buttons = containers[i].querySelectorAll('div[role="button"], a[role="button"], [aria-label]');
                     for (var j = 0; j < buttons.length; j++) {
                         var b = buttons[j];
                         var label = (b.getAttribute('aria-label') || "").toLowerCase();
                         var text = (b.innerText || "").toLowerCase();
-                        var href = (b.getAttribute('href') || "").toLowerCase();
-                        
-                        if ((vn && label.includes(vn)) || (en && label.includes(en)) || 
-                            (vn && text.includes(vn)) || (en && text.includes(en)) ||
-                            href.includes("reaction_type=" + rid)) {
-                            foundBtn = b;
-                            break;
+                        if ((vn && label.includes(vn)) || (en && label.includes(en)) || (vn && text.includes(vn))) {
+                            foundBtn = b; break;
                         }
                     }
                     if (foundBtn) break;
                 }
-
                 if (foundBtn) {
-                    foundBtn.style.border = '5px solid blue';
-                    foundBtn.style.backgroundColor = 'yellow';
-                    
-                    // Click combo: MouseEvent sequence + .click()
                     ['mousedown', 'mouseup', 'click'].forEach(type => {
                         foundBtn.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
                     });
                     if (typeof foundBtn.click === 'function') foundBtn.click();
-                    return true;
                     return true;
                 }
                 return false;
             """, vn_label, en_label, reaction_num)
 
             if click_result:
-                print(colored(f"   [✓] Đã click {reaction_type.upper()} THÀNH CÔNG qua JavaScript", "green"))
+                print(colored(f"   [✓] Đã thả {reaction_type.upper()} thành công!", "green"))
                 time.sleep(1.5)
                 if not current_tab_only: self._close_job_tab(main_tab)
                 return {"success": True}
-            
-            # Fallback nếu JS hụt
-            print("[!] JS không tìm thấy nút, thử lại bằng Selenium selector...")
-            try:
-                rbtn = find_element_safe(self.driver, SELECTORS["reaction_options"], timeout=2)
-                if rbtn:
-                    ok = click_js(self.driver, rbtn, label=f"cảm xúc {reaction_type.upper()} (fallback)")
-                    time.sleep(1)
-                    if not current_tab_only: self._close_job_tab(main_tab)
-                    return {"success": ok}
-            except: pass
             
             if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": False, "error": f"Không thể click cảm xúc {reaction_type.upper()}"}
