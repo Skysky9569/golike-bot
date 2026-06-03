@@ -23,6 +23,7 @@ from selenium.common.exceptions import (
 from webdriver_manager.chrome import ChromeDriverManager
 
 from golike_core.logging import logger
+from golike_core.adb_manager import colored
 
 # ============================================================
 # ANTI-DETECTION JAVASCRIPT
