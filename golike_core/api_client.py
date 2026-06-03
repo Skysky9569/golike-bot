@@ -108,7 +108,7 @@ class GolikeAPIClient:
 
         headers = {
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8,fr-FR;q=0.7,fr;q=0.6',
+            'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
             'Origin': 'https://app.golike.net',
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
@@ -126,15 +126,12 @@ class GolikeAPIClient:
         if self._g_device_id:
             headers['g-device-id'] = self._g_device_id
 
-        # Use stored t token from credentials (version token) if available
-        # Otherwise fallback to triple-base64 encoded timestamp
-        if self._t_token:
-            headers['t'] = self._t_token
-        else:
-            t_val = str(int(time.time()))
-            for _ in range(3):
-                t_val = base64.b64encode(t_val.encode('utf-8')).decode('utf-8')
-            headers['t'] = t_val
+        # Always generate a fresh dynamic t token (seconds) for every request
+        # to ensure it's always recent and avoid 403 "update version" errors.
+        t_val = str(int(time.time()))
+        for _ in range(3):
+            t_val = base64.b64encode(t_val.encode('utf-8')).decode('utf-8')
+        headers['t'] = t_val
 
         return headers
 

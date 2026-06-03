@@ -12,8 +12,19 @@ Sử dụng thư viện uiautomator2 để tương tác với UI.
 
 import time
 import logging
+import subprocess
+import re
+import xml.etree.ElementTree as ET
 from typing import Optional, Tuple, List
 from dataclasses import dataclass
+
+# Try to import uiautomator2 globally
+try:
+    import uiautomator2 as u2
+    HAS_U2 = True
+except ImportError:
+    HAS_U2 = False
+    u2 = None
 
 logger = logging.getLogger("golikebydom")
 
@@ -29,12 +40,173 @@ class ElementInfo:
     is_selected: bool = False
 
 
-class TikTokUIAutomator:
-    """UI Automator cho TikTok app
+class PureADBAutomator:
+    """UI Automator sử dụng thuần ADB (không cần thư viện uiautomator2)
+    Dùng xml dump để tìm tọa độ và input tap để click.
+    """
 
-    Cung cấp các method để tìm và tương tác với các element trên TikTok:
-    - Nút Follow/Followed
-    - Nút Like (trái tim)
+    def __init__(self, device_id: Optional[str] = None):
+        self.device_id = device_id
+        from golike_core.adb_manager import ADBManager
+        self.adb_mgr = ADBManager()
+        self.adb_path = self.adb_mgr.adb_path
+        self._connected = False
+
+    def connect(self) -> bool:
+        """Kiểm tra kết nối ADB"""
+        try:
+            cmd = [self.adb_path]
+            if self.device_id:
+                cmd.extend(["-s", self.device_id])
+            cmd.extend(["shell", "getprop", "ro.product.model"])
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                self._connected = True
+                logger.info(f"Pure ADB connected to: {result.stdout.strip()}")
+                return True
+        except Exception as e:
+            logger.error(f"Pure ADB connection error: {e}")
+        return False
+
+    def disconnect(self) -> None:
+        self._connected = False
+
+    def _run_adb(self, args: List[str]) -> subprocess.CompletedProcess:
+        cmd = [self.adb_path]
+        if self.device_id:
+            cmd.extend(["-s", self.device_id])
+        cmd.extend(args)
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+
+    def _dump_ui(self) -> Optional[str]:
+        """Dump UI XML từ thiết bị"""
+        try:
+            # Dump ra file trên thiết bị
+            self._run_adb(["shell", "uiautomator", "dump", "/sdcard/view.xml"])
+            # Đọc nội dung file
+            result = self._run_adb(["shell", "cat", "/sdcard/view.xml"])
+            if result.returncode == 0 and "<?xml" in result.stdout:
+                return result.stdout
+        except Exception as e:
+            logger.error(f"Error dumping UI: {e}")
+        return None
+
+    def _parse_bounds(self, bounds_str: str) -> Optional[Tuple[int, int, int, int]]:
+        """Parse bounds string '[left,top][right,bottom]' thành tuple"""
+        try:
+            # Format: [76,542][308,630]
+            match = re.findall(r"(\d+)", bounds_str)
+            if len(match) == 4:
+                return tuple(map(int, match))
+        except Exception:
+            pass
+        return None
+
+    def find_element(self, text_pattern: str = None, resource_id: str = None, content_desc: str = None) -> Optional[ElementInfo]:
+        xml_data = self._dump_ui()
+        if not xml_data:
+            return None
+
+        try:
+            # Fix potential encoding issues in output
+            xml_data = re.sub(r'[^\x09\x0A\x0D\x20-\x7E\x80-\xFF]', '', xml_data)
+            root = ET.fromstring(xml_data)
+            
+            for node in root.iter('node'):
+                match = True
+                if text_pattern and not re.search(text_pattern, node.get('text', ''), re.I):
+                    match = False
+                if resource_id and resource_id not in node.get('resource-id', ''):
+                    match = False
+                if content_desc and content_desc not in node.get('content-desc', ''):
+                    match = False
+                
+                if match:
+                    bounds = self._parse_bounds(node.get('bounds', ''))
+                    if bounds:
+                        return ElementInfo(
+                            exists=True,
+                            text=node.get('text'),
+                            resource_id=node.get('resource-id'),
+                            content_desc=node.get('content-desc'),
+                            bounds=bounds,
+                            is_selected=node.get('selected') == 'true'
+                        )
+        except Exception as e:
+            logger.error(f"Error parsing UI XML: {e}")
+        return None
+
+    def click_at(self, bounds: Tuple[int, int, int, int]):
+        left, top, right, bottom = bounds
+        import random
+        x = random.randint(left + 5, right - 5)
+        y = random.randint(top + 5, bottom - 5)
+        self._run_adb(["shell", "input", "tap", str(x), str(y)])
+
+    def process_job(self, job_type: str) -> Tuple[bool, str, bool]:
+        if not self._connected:
+            if not self.connect():
+                return False, "Không thể kết nối đến thiết bị qua ADB", False
+
+        if job_type == "follow":
+            # Tìm nút Follow hoặc Theo dõi
+            el = self.find_element(text_pattern="^(Follow|Theo dõi)$")
+            if not el:
+                # Try resource ID as backup
+                el = self.find_element(resource_id="follow_button")
+            
+            if el:
+                # Check if already followed
+                text = (el.text or "").lower()
+                if "followed" in text or "đã theo dõi" in text or "following" in text:
+                    return False, "Đã follow rồi", False
+                
+                self.click_at(el.bounds)
+                return True, "Đã click nút Follow (Pure ADB)", False
+            return False, "Không tìm thấy nút Follow", True
+
+        elif job_type == "like":
+            # Like button is tricky, usually an ImageView with content-desc or resource-id
+            el = self.find_element(resource_id="like_icon")
+            if not el:
+                el = self.find_element(content_desc="Like")
+            if not el:
+                el = self.find_element(content_desc="Thích")
+            
+            if el:
+                if el.is_selected or "unlike" in (el.content_desc or "").lower():
+                    return False, "Đã like rồi", False
+                
+                self.click_at(el.bounds)
+                return True, "Đã click nút Like (Pure ADB)", False
+            
+            # Double tap fallback for like
+            try:
+                # Need screen size for double tap center
+                self._run_adb(["shell", "input", "tap", "360", "700"])
+                time.sleep(0.15)
+                self._run_adb(["shell", "input", "tap", "360", "700"])
+                return True, "Đã thả tim bằng Double Tap (Pure ADB)", False
+            except:
+                pass
+            
+            return False, "Không tìm thấy nút Like", True
+            
+        return False, f"Loại job không hỗ trợ: {job_type}", False
+
+    def scroll_down_only(self) -> None:
+        self._run_adb(["shell", "input", "swipe", "360", "1000", "360", "300", "300"])
+
+    def clear_search_text(self) -> bool:
+        # Simple back press for pure adb search clearing
+        for _ in range(2):
+            self._run_adb(["shell", "input", "keyevent", "4"]) # BACK
+            time.sleep(1)
+        return True
+
+
+class TikTokUIAutomator:
+    """UI Automator cho TikTok app (Sử dụng uiautomator2)
     """
 
     # Selectors for search icon (more comprehensive)
@@ -125,9 +297,7 @@ class TikTokUIAutomator:
         Returns:
             bool: True nếu kết nối thành công, False nếu không
         """
-        try:
-            import uiautomator2 as u2
-        except ImportError:
+        if not HAS_U2:
             logger.error("uiautomator2 chưa được cài đặt. Hãy chạy: pip install uiautomator2")
             return False
 

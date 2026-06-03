@@ -94,7 +94,7 @@ try:
 except ImportError:
     HAS_IOS_FLOW = False
     ios_tiktok_menu = None
-import test_golike_fb_web
+from ui.facebook_flow import facebook_menu
 
 try:
     from golikefb_sele_desktop import sele_desktop_menu as fb_desktop_menu
@@ -168,8 +168,14 @@ def prompt_and_save_token(cred_manager: CredentialManager, validator: InputValid
     choice = input(colored("Lựa chọn của bạn (1/2/3, mặc định 1): ", "green")).strip()
 
     if choice == "2":
-        t_token = "VFZSak5FMUVRVFZQUkVrMVRYYzlQUT09"
-        print(colored("✅ Đã chọn sử dụng token tĩnh mặc định.", "green"))
+        # Generate a fresh dynamic token instead of using a stale static one
+        import time
+        import base64
+        t_val = str(int(time.time()))
+        for _ in range(3):
+            t_val = base64.b64encode(t_val.encode('utf-8')).decode('utf-8')
+        t_token = t_val
+        print(colored("✅ Đã tạo token 't' động mới cho bạn.", "green"))
     elif choice == "3":
         print(colored("💡 Hướng dẫn: Mở app.golike.net -> F12 -> Network -> bắt request đến gateway.golike.net -> copy giá trị header 't'", "cyan"))
         t_token = input(colored("Nhập token 't' thủ công: ", "green")).strip()
@@ -394,7 +400,7 @@ def main() -> None:
                         print(f"  [{i}] {label} ({masked})")
                     choice_idx = input_int("Nhập lựa chọn: ", minval=1, maxval=len(labels))
                     auth_token = cred_manager.get_auth_by_label(labels[choice_idx-1])
-            test_golike_fb_web.main(auth_token)
+            facebook_menu(auth_token)
         else:
             logger.warning("Lựa chọn không hợp lệ!")
 

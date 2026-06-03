@@ -249,11 +249,45 @@ class ADBManager:
                 [self.adb_path, 'connect', f'{ip}:{port}'],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=15
             )
             return result.returncode == 0 and 'connected' in result.stdout.lower()
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             logger.error(f"Loi ket noi WiFi: {e}")
+            return False
+
+    def pair_wifi(self, ip: str, port: int, pairing_code: str) -> bool:
+        """Ghep noi thiet bi qua WiFi (Android 11+)
+
+        Args:
+            ip: Dia chi IP
+            port: Cong ghep noi (Pairing port)
+            pairing_code: Ma ghep noi (6 chu so)
+
+        Returns:
+            bool: True neu ghep noi thanh cong
+        """
+        try:
+            logger.info(f"Dang ghep noi ADB voi {ip}:{port} bang ma {pairing_code}...")
+            # ADB pair requires input of pairing code, but we can try to pass it if adb version supports it
+            # Or use a process with stdin
+            process = subprocess.Popen(
+                [self.adb_path, 'pair', f'{ip}:{port}'],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            stdout, stderr = process.communicate(input=f"{pairing_code}\n", timeout=15)
+            
+            if "Successfully paired" in stdout:
+                logger.info(f"Ghep noi thanh cong voi {ip}:{port}")
+                return True
+            else:
+                logger.error(f"Ghep noi that bai: {stdout} {stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Loi khi ghep noi ADB: {e}")
             return False
 
     def disconnect_wifi(self, ip: str, port: int = 5555) -> bool:

@@ -300,6 +300,7 @@ def tiktok_menu(auth_token: str) -> None:
     Args:
         auth_token: Authorization token
     """
+    global UI_AUTOMATION_AVAILABLE
     validator = InputValidator()
     cred_manager = CredentialManager()
 
@@ -411,9 +412,38 @@ def tiktok_menu(auth_token: str) -> None:
                 break
             elif open_method == "u2":
                 print(colored("\n📡 KẾT NỐI UIAUTOMATOR2 QUA WIFI:", "cyan"))
+                print(colored("   [1] Kết nối trực tiếp (Đã pair hoặc Android cũ)", "white"))
+                print(colored("   [2] Ghép nối bằng mã (Android 11+ Pairing Code)", "yellow"))
+                
+                u2_sub_choice = input(colored("👉 Chọn phương thức (1-2, Mặc định 1): ", "green")).strip()
+                
+                if u2_sub_choice == "2":
+                    # Android 11+ Pairing Mode
+                    print(colored("\n🔑 CHẾ ĐỘ GHÉP NỐI (PAIRING MODE):", "yellow"))
+                    print(colored("   Mở Cài đặt -> Tùy chọn nhà phát triển -> Gỡ lỗi không dây", "white"))
+                    print(colored("   Chọn 'Ghép nối thiết bị bằng mã ghép nối'", "white"))
+                    
+                    p_ip_port = input(colored("👉 Nhập IP:Port ghép nối (ví dụ: 192.168.1.3:34259): ", "green")).strip()
+                    p_code = input(colored("👉 Nhập mã ghép nối (6 chữ số): ", "green")).strip()
+                    
+                    if p_ip_port and p_code:
+                        if ":" in p_ip_port:
+                            p_ip = p_ip_port.split(":")[0]
+                        else:
+                            p_ip = p_ip_port
+                            
+                        temp_adb = ADBManager()
+                        if temp_adb.pair_wifi(p_ip_port.split(":")[0] if ":" in p_ip_port else p_ip_port, 
+                                            int(p_ip_port.split(":")[1]) if ":" in p_ip_port else 5555, 
+                                            p_code):
+                            print(colored("✅ Ghép nối thành công!", "green"))
+                            print(colored("   Bây giờ hãy nhập IP:Port KẾT NỐI (thường khác port ghép nối).", "cyan"))
+                        else:
+                            print(colored("❌ Ghép nối thất bại! Hãy thử lại.", "red"))
+                    
                 u2_connected = False
                 while True:
-                    ip_port = input(colored("👉 Nhập IP:Port điện thoại (ví dụ: 192.168.1.10:5555 hoặc 192.168.1.10) hoặc nhập 'quay lai' để chọn lại phương thức: ", "green")).strip()
+                    ip_port = input(colored("👉 Nhập IP:Port KẾT NỐI (ví dụ: 192.168.1.10:5555) hoặc 'quay lai': ", "green")).strip()
                     if ip_port.lower() in ["quay lai", "quay lại", "back", "q"]:
                         break
                     
@@ -641,22 +671,39 @@ def tiktok_menu(auth_token: str) -> None:
     ui_automator = None
     if UI_AUTOMATION_AVAILABLE:
         try:
-            ui_automator = TikTokUIAutomator(device_id=current_device)
-            is_connected = True
-            if open_method == "u2":
-                is_connected = ui_automator.connect()
-            
-            if is_connected:
-                logger.info("UI Automation đã sẵn sàng")
-                print(colored("🤖 [Hệ thống] Đã kích hoạt thành công Module Auto Click!", "green", bold=True))
+            from tiktok_automation import HAS_U2, PureADBAutomator
+            if not HAS_U2:
+                if open_method == "adb":
+                    logger.info("Sử dụng Pure ADB Automator (không cần uiautomator2)")
+                    print(colored("🤖 [Hệ thống] Đang sử dụng module Auto Click thuần ADB...", "green"))
+                    ui_automator = PureADBAutomator(device_id=current_device)
+                    if ui_automator.connect():
+                        logger.info("Pure ADB Automator đã sẵn sàng")
+                    else:
+                        logger.error("Không thể kết nối Pure ADB")
+                        ui_automator = None
+                else:
+                    logger.warning("Thư viện uiautomator2 chưa được cài đặt. Tính năng Auto Click sẽ bị tắt.")
+                    print(colored("⚠️  Lưu ý: Bạn chưa cài uiautomator2 (pip install uiautomator2).", "yellow"))
+                    print(colored("   Tool sẽ chỉ Mở Link bằng ADB, bạn cần tự bấm Follow/Like.", "yellow"))
+                    UI_AUTOMATION_AVAILABLE = False
             else:
-                logger.error("Không thể kết nối đến uiautomator2")
-                print(colored("❌ Không thể kết nối đến uiautomator2! Thiết bị không online.", "red", bold=True))
-                ui_automator = None
+                ui_automator = TikTokUIAutomator(device_id=current_device)
+                is_connected = True
                 if open_method == "u2":
-                    print(colored("🚨 Chế độ uiautomator2 yêu cầu kết nối hoạt động. Dừng chạy bot.", "red", bold=True))
-                    input(colored("Nhấn Enter để quay lại...", "white"))
-                    return
+                    is_connected = ui_automator.connect()
+                
+                if is_connected:
+                    logger.info("UI Automation đã sẵn sàng")
+                    print(colored("🤖 [Hệ thống] Đã kích hoạt thành công Module Auto Click!", "green", bold=True))
+                else:
+                    logger.error("Không thể kết nối đến uiautomator2")
+                    print(colored("❌ Không thể kết nối đến uiautomator2! Thiết bị không online.", "red", bold=True))
+                    ui_automator = None
+                    if open_method == "u2":
+                        print(colored("🚨 Chế độ uiautomator2 yêu cầu kết nối hoạt động. Dừng chạy bot.", "red", bold=True))
+                        input(colored("Nhấn Enter để quay lại...", "white"))
+                        return
         except Exception as e:
             logger.warning(f"Không thể tạo UI automator: {e}")
             print(colored(f"⚠️ Không thể khởi động UI automator: {e}", "yellow"))
