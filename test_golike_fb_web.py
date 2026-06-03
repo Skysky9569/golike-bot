@@ -291,16 +291,21 @@ def load_saved_token():
         try:
             with open(TOKEN_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get('token', '')
+                return data
         except Exception:
             pass
-    return ''
+    return ""
 
-def save_token(token):
+def save_token(token, g_auth="", g_device_id=""):
     """Lưu token vào file để dùng lại."""
     try:
+        data = {
+            "token": token,
+            "g-auth": g_auth,
+            "g-device-id": g_device_id
+        }
         with open(TOKEN_FILE, 'w', encoding='utf-8') as f:
-            json.dump({'token': token}, f, indent=2, ensure_ascii=False)
+            json.dump(data, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
         print(f"Loi khi luu token: {e}")
