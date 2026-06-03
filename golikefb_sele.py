@@ -3608,11 +3608,34 @@ def run_selenium_dom_mode():
                 try:
                     if max_jobs > 0 and jobs_done >= max_jobs:
                         print(colored(f"✅ Đã xong {max_jobs} jobs cho nick này. Đang đổi...", "green"))
+                        
+                        # Gửi thông báo Telegram khi đạt giới hạn Batch
+                        now_str = datetime.now().strftime('%H:%M:%S')
+                        tg_msg = (
+                            f"✅ <b>Hoàn thành Batch!</b>\n"
+                            f"👤 Acc: <b>{name_run}</b>\n"
+                            f"💰 Đã xong: {jobs_done} jobs\n"
+                            f"🔄 Đang chuyển sang nick tiếp theo...\n"
+                            f"⏰ Lúc: {now_str}"
+                        )
+                        send_tg_notify(tg_msg)
+                        
                         break
                         
                     print(f"\n[Acc: {name_run}] Đang quét job mới...")
                     if job_limit_reached(driver):
                         print(colored("🚨 Nick đã đạt giới hạn 100 job/ngày!", "red"))
+                        
+                        # Gửi thông báo Telegram khi đạt giới hạn 100 job
+                        now_str = datetime.now().strftime('%H:%M:%S')
+                        tg_msg = (
+                            f"🚨 <b>GoLike MAX JOB (100/100)</b>\n"
+                            f"👤 Acc: <b>{name_run}</b>\n"
+                            f"⏰ Lúc: {now_str}\n"
+                            f"✅ Đã đủ giới hạn ngày. Đang đổi acc..."
+                        )
+                        send_tg_notify(tg_msg)
+                        
                         break
                     
                     try:
@@ -3706,18 +3729,6 @@ def run_selenium_dom_mode():
                                 if "thành công" in pop_title.lower() or "thành công" in pop_content.lower():
                                     success_confirmed = True
                                     jobs_done += 1
-                                    
-                                    # Gửi thông báo Telegram (nếu bật)
-                                    now_str = datetime.now().strftime('%H:%M:%S')
-                                    tg_msg = (
-                                        f"✅ <b>Job Thành Công!</b>\n"
-                                        f"👤 Acc: <b>{name_run}</b>\n"
-                                        f"🎯 Loại: {j_type.upper()}\n"
-                                        f"💰 Đã xong: {jobs_done} jobs\n"
-                                        f"⏰ Lúc: {now_str}"
-                                    )
-                                    send_tg_notify(tg_msg)
-                                    
                                     break
                             except: pass
                         except: pass
