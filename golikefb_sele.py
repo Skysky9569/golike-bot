@@ -3524,39 +3524,63 @@ def run_selenium_dom_mode():
             print(f"\n🔄 --- ĐANG LÀM VIỆC VỚI ACC #{current_idx+1} ---")
             
             # Giao diện GoLike ở tab chính
-            gl_tab = driver.current_window_handle
+            try:
+                gl_tab = driver.current_window_handle
+            except:
+                if driver.window_handles:
+                    gl_tab = driver.window_handles[0]
+                    driver.switch_to.window(gl_tab)
+                else:
+                    raise Exception("Trình duyệt đã bị đóng bất ngờ.")
             
             # BƠM COOKIE FACEBOOK TRƯỚC (để login sẵn)
             print(colored(f"[*] Đang chuẩn bị môi trường Facebook cho tài khoản #{current_idx+1}...", "yellow"))
+            
+            num_handles_before = len(driver.window_handles)
             driver.execute_script("window.open('https://mbasic.facebook.com/', '_blank');")
             time.sleep(2)
-            fb_setup_tab = driver.window_handles[-1]
-            driver.switch_to.window(fb_setup_tab)
+            
+            if len(driver.window_handles) > num_handles_before:
+                fb_setup_tab = driver.window_handles[-1]
+                driver.switch_to.window(fb_setup_tab)
+                
+                # Hiển thị log kiểm tra cookie (ẩn bớt thông tin nhạy cảm)
+                cookie_display = (cookie_fb[:15] + "...") if len(cookie_fb) > 15 else "Rỗng"
+                print(f"[*] Bơm cookie: {cookie_display} (Dài: {len(cookie_fb)})")
 
-            # Hiển thị log kiểm tra cookie (ẩn bớt thông tin nhạy cảm)
-            cookie_display = (cookie_fb[:15] + "...") if len(cookie_fb) > 15 else "Rỗng"
-            print(f"[*] Bơm cookie: {cookie_display} (Dài: {len(cookie_fb)})")
+                # Khởi tạo bot xử lý (dùng chung driver)
+                fb_bot = FacebookSeleniumBot(
+                    cookie_str=cookie_fb,
+                    profile_name=f"fb_worker_{current_idx}",
+                    proxy=proxy_arg,
+                    proxy_auth_ext=proxy_auth_ext,
+                )
+                fb_bot.driver = driver
+                fb_bot._inject_cookies()
 
-            # Khởi tạo bot xử lý (dùng chung driver)
-            fb_bot = FacebookSeleniumBot(
-                cookie_str=cookie_fb,
-                profile_name=f"fb_worker_{current_idx}",
-                proxy=proxy_arg,
-                proxy_auth_ext=proxy_auth_ext,
-            )
-            fb_bot.driver = driver
-            fb_bot._inject_cookies()
-
-            print("[*] Đang xác thực trạng thái đăng nhập Facebook...")
-            if not fb_bot._verify_login():
-                print(colored(f"❌ Cookie Acc #{current_idx+1} không hợp lệ hoặc bị checkpoint. Đổi acc...", "red"))
-                driver.close()
+                print("[*] Đang xác thực trạng thái đăng nhập Facebook...")
+                is_valid = fb_bot._verify_login()
+                
+                if not is_valid:
+                    print(colored(f"❌ Cookie Acc #{current_idx+1} không hợp lệ hoặc bị checkpoint. Đổi acc...", "red"))
+                    # Đóng tab FB setup và quay lại GoLike
+                    if len(driver.window_handles) > 1:
+                        driver.close()
+                    driver.switch_to.window(gl_tab)
+                    current_idx += 1
+                    continue
+                
+                print(colored("✅ Facebook đã sẵn sàng!", "green"))
+                # Đóng tab setup, quay về GoLike
+                if len(driver.window_handles) > 1:
+                    driver.close()
                 driver.switch_to.window(gl_tab)
+            else:
+                print(colored("⚠️ Không thể mở tab mới cho Facebook. Thử dùng tab hiện tại (GoLike tab)...", "yellow"))
+                # Fallback: dùng tab hiện tại nhưng sẽ bị mất trang GoLike (không khuyên dùng)
+                # ... (giữ nguyên logic cũ hoặc skip)
                 current_idx += 1
                 continue
-            print(colored("✅ Facebook đã sẵn sàng!", "green"))
-            driver.close() # Đóng tab setup, quay về GoLike
-            driver.switch_to.window(gl_tab)
             
             # Chọn đúng nick trên GoLike web
             name_run, uid_run = _select_golike_account(driver)
@@ -3640,55 +3664,32 @@ def run_selenium_dom_mode():
                     fb_tab = None # Reset flag
                     driver.switch_to.window(gl_tab)
 
-
-                        # 6. Ấn "Hoàn thành" (Thử tối đa 2 lần)
-                        success_confirmed = False
-                        for try_idx in range(1, 3):
-                            if STOP_FLAG: break
-                            wait_confirm = 4.5 if try_idx == 1 else 3.0
-                            print(f"[*] Đang ấn Hoàn thành (Lần {try_idx}/2)... Đợi {wait_confirm}s...")
-                            sleep(wait_confirm)
-                            
-                            try:
-                                ht_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), "Hoàn thành")]")))
-                                human_click(driver, ht_btn)
-                                
-                                try:
-                                    pop_title = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
-                                    pop_content = driver.find_element(By.ID, "swal2-content").text
-                                    print(f"GoLike báo: [{pop_title}] {pop_content}")
-                                    
-                                    ok_btn = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
-                                    human_click(driver, ok_btn)
-                                    
-                                    if "thành công" in pop_title.lower() or "thành công" in pop_content.lower():
-                                        success_confirmed = True
-                                        jobs_done += 1
-                                        break
-                                except: pass
-                            except: pass
-                            
-                            if try_idx == 1: sleep(3)
+                    # 6. Ấn "Hoàn thành" (Thử tối đa 2 lần)
+                    success_confirmed = False
+                    for try_idx in range(1, 3):
+                        if STOP_FLAG: break
+                        wait_confirm = 4.5 if try_idx == 1 else 3.0
+                        print(f"[*] Đang ấn Hoàn thành (Lần {try_idx}/2)... Đợi {wait_confirm}s...")
+                        sleep(wait_confirm)
+                        
+                        try:
+                            ht_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
                             human_click(driver, ht_btn)
-
                             
                             try:
                                 pop_title = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
                                 pop_content = driver.find_element(By.ID, "swal2-content").text
                                 print(f"GoLike báo: [{pop_title}] {pop_content}")
-                                
+                                    
                                 ok_btn = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
                                 human_click(driver, ok_btn)
-                                
+                                    
                                 if "thành công" in pop_title.lower() or "thành công" in pop_content.lower():
                                     success_confirmed = True
                                     jobs_done += 1
                                     break
                             except: pass
                         except: pass
-                        
-                        if try_idx == 1: sleep(3)
-
 
                     # 7. Nếu thất bại cả 2 lần -> Báo lỗi Job
                     if not success_confirmed and not STOP_FLAG:
