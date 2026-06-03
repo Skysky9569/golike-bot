@@ -4,6 +4,27 @@ import time
 from typing import Dict, Any
 from golike_facebook.selenium_fb import FacebookSeleniumBot
 from golike_core.adb_manager import colored
+import requests
+
+def send_tg_notify(message: str):
+    """Gửi thông báo Telegram (dùng cho test tool)"""
+    # Lấy từ env hoặc hardcode tạm để test
+    token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
+    chat_id = os.getenv('TELEGRAM_CHAT_ID', '').strip()
+
+    if not token or not chat_id:
+        print(colored("⚠️ Telegram: Chưa cấu hình TELEGRAM_BOT_TOKEN/CHAT_ID trong .env. Skip thông báo.", "yellow"))
+        return
+
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        r = requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"}, timeout=10)
+        if r.status_code == 200:
+            print(colored("🔔 Đã gửi thông báo tới Telegram.", "green"))
+        else:
+            print(colored(f"❌ Lỗi gửi Telegram: {r.text}", "red"))
+    except Exception as e:
+        print(colored(f"❌ Lỗi kết nối Telegram: {e}", "red"))
 
 def perform_fb_reaction(bot: FacebookSeleniumBot, link: str, reaction: str) -> Dict[str, Any]:
     """
@@ -71,6 +92,8 @@ def main():
 
         if result.get("success"):
             print(colored(f"\n✅ THÀNH CÔNG: Đã thả cảm xúc '{reaction}'!", "green", attrs=["bold"]))
+            # Gửi Telegram test
+            send_tg_notify(f"✅ <b>Test Thành Công!</b>\n🎯 Link: {link[:50]}...\n🔥 Cảm xúc: {reaction.upper()}")
         else:
             error = result.get("error", "Unknown error")
             print(colored(f"\n❌ THẤT BẠI: {error}", "red", attrs=["bold"]))

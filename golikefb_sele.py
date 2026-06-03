@@ -1197,9 +1197,12 @@ def load_delay_config(filepath: str = "config_golike_sele.json"):
 def send_tg_notify(message: str):
     """Gửi thông báo Telegram nếu đã cấu hình trong .env hoặc config."""
     # Ưu tiên enviroment variables, fallback vào config
-    if not os.getenv('TELEGRAM_ENABLED', '').lower() in ('true', '1', 'yes'):
-        if not CONFIG_DELAY.get("telegram_enabled", False):
-            return
+    enabled = os.getenv('TELEGRAM_ENABLED', '').lower() in ('true', '1', 'yes')
+    if not enabled:
+        enabled = CONFIG_DELAY.get("telegram_enabled", False)
+
+    if not enabled:
+        return
 
     # Ưu tiên lấy token từ config trước
     token = CONFIG_DELAY.get("telegram_bot_token", "").strip()
@@ -1208,26 +1211,28 @@ def send_tg_notify(message: str):
         
     if not token or token == "your_bot_token_here":
         token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
-        if token == "your_bot_token_here":
-            token = ""
 
     if not token:
+        print(colored("⚠️ Telegram: Thiếu BOT_TOKEN. Không thể gửi thông báo.", "yellow"))
         return
 
     chat_id = CONFIG_DELAY.get("telegram_chat_id", "").strip()
     if not chat_id or chat_id == "your_chat_id_here":
         chat_id = os.getenv('TELEGRAM_CHAT_ID', '').strip()
-        if chat_id == "your_chat_id_here":
-            chat_id = ""
 
     if not chat_id:
+        print(colored("⚠️ Telegram: Thiếu CHAT_ID. Không thể gửi thông báo.", "yellow"))
         return
 
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"}, timeout=10)
-    except Exception:
-        pass
+        r = requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"}, timeout=10)
+        if r.status_code == 200:
+            print(colored("🔔 Đã gửi thông báo tới Telegram.", "green"))
+        else:
+            print(colored(f"❌ Lỗi gửi Telegram (HTTP {r.status_code}): {r.text}", "red"))
+    except Exception as e:
+        print(colored(f"❌ Lỗi kết nối Telegram: {e}", "red"))
 
 
 def setup_telegram_notify():
@@ -3347,6 +3352,7 @@ def _switch_to_next_account(driver, bot, cookie_list, current_idx, proxy_arg, sa
         proxy=proxy_arg,
         save_profile=save_prof,
         proxy_auth_ext=proxy_auth_ext,
+        use_desktop=True
     )
 
     print("[*] Khoi dong Chrome voi cookie moi...")
@@ -3700,6 +3706,18 @@ def run_selenium_dom_mode():
                                 if "thành công" in pop_title.lower() or "thành công" in pop_content.lower():
                                     success_confirmed = True
                                     jobs_done += 1
+                                    
+                                    # Gửi thông báo Telegram (nếu bật)
+                                    now_str = datetime.now().strftime('%H:%M:%S')
+                                    tg_msg = (
+                                        f"✅ <b>Job Thành Công!</b>\n"
+                                        f"👤 Acc: <b>{name_run}</b>\n"
+                                        f"🎯 Loại: {j_type.upper()}\n"
+                                        f"💰 Đã xong: {jobs_done} jobs\n"
+                                        f"⏰ Lúc: {now_str}"
+                                    )
+                                    send_tg_notify(tg_msg)
+                                    
                                     break
                             except: pass
                         except: pass
