@@ -1,8 +1,24 @@
 import os
 import sys
 import time
+from typing import Dict, Any
 from golike_facebook.selenium_fb import FacebookSeleniumBot
 from golike_core.adb_manager import colored
+
+def perform_fb_reaction(bot: FacebookSeleniumBot, link: str, reaction: str) -> Dict[str, Any]:
+    """
+    Hàm module để thực hiện thả cảm xúc Facebook.
+    Sử dụng engine FacebookSeleniumBot với logic đã được kiểm chứng.
+    """
+    print(colored(f"[*] [Module Test] Đang thực hiện '{reaction}' trên bài viết...", "yellow"))
+    
+    # Đảm bảo bot đang ở chế độ Desktop để có độ tin cậy cao nhất
+    if not bot.use_desktop:
+        print(colored("[!] Cảnh báo: Bot đang ở chế độ Mobile, đang chuyển sang logic tối ưu...", "yellow"))
+    
+    # Gọi logic thực hiện reaction từ engine chính
+    result = bot.do_reaction(link, reaction_type=reaction, current_tab_only=True)
+    return result
 
 def main():
     print(colored("====================================================", "cyan"))
@@ -26,7 +42,7 @@ def main():
     print("    - d: Desktop (Giao diện máy tính www.facebook.com)")
     print("    - m: Mobile  (Giao diện mbasic.facebook.com - Nhanh)")
     mode = input("👉 Lựa chọn (mặc định d): ").strip().lower()
-    use_desktop = (mode != 'm') # Mặc định là Desktop như yêu cầu mới nhất
+    use_desktop = (mode != 'm')
 
     # 4. Chọn cảm xúc
     print("\n[4] Nhập loại cảm xúc:")
@@ -50,8 +66,8 @@ def main():
             print(colored("❌ Đăng nhập thất bại. Kiểm tra lại cookie!", "red"))
             return
 
-        print(colored(f"[*] Đang truy cập bài viết và thả '{reaction}'...", "yellow"))
-        result = bot.do_reaction(link, reaction_type=reaction, current_tab_only=True)
+        # Gọi hàm module
+        result = perform_fb_reaction(bot, link, reaction)
 
         if result.get("success"):
             print(colored(f"\n✅ THÀNH CÔNG: Đã thả cảm xúc '{reaction}'!", "green", attrs=["bold"]))

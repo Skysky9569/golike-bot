@@ -31,6 +31,13 @@ from golike_core.security import CredentialManager, InputValidator
 from golike_facebook.fb_web_api import FacebookSession
 from golike_facebook.selenium_fb import FacebookSeleniumBot
 
+# Import reaction helper from test module
+try:
+    from test_fb_reactions import perform_fb_reaction
+    HAS_REACTION_MODULE = True
+except ImportError:
+    HAS_REACTION_MODULE = False
+
 # Impersonation
 from curl_cffi import requests as cffi_requests
 
@@ -3537,7 +3544,7 @@ def run_selenium_dom_mode():
             print(colored(f"[*] Đang chuẩn bị môi trường Facebook cho tài khoản #{current_idx+1}...", "yellow"))
             
             num_handles_before = len(driver.window_handles)
-            driver.execute_script("window.open('https://mbasic.facebook.com/', '_blank');")
+            driver.execute_script("window.open('https://www.facebook.com/', '_blank');")
             time.sleep(2)
             
             if len(driver.window_handles) > num_handles_before:
@@ -3548,12 +3555,13 @@ def run_selenium_dom_mode():
                 cookie_display = (cookie_fb[:15] + "...") if len(cookie_fb) > 15 else "Rỗng"
                 print(f"[*] Bơm cookie: {cookie_display} (Dài: {len(cookie_fb)})")
 
-                # Khởi tạo bot xử lý (dùng chung driver)
+                # Khởi tạo bot xử lý (dùng chung driver) - Bật Desktop Mode
                 fb_bot = FacebookSeleniumBot(
                     cookie_str=cookie_fb,
                     profile_name=f"fb_worker_{current_idx}",
                     proxy=proxy_arg,
                     proxy_auth_ext=proxy_auth_ext,
+                    use_desktop=True
                 )
                 fb_bot.driver = driver
                 fb_bot._inject_cookies()
@@ -3629,19 +3637,19 @@ def run_selenium_dom_mode():
                     if req_reaction:
                         j_type = req_reaction
                     
-                    # 3. Lấy link và mở tab FB mới để làm việc
+                    # 3. Ấn nút "Trình duyệt" (Để GoLike ghi nhận) và lấy link
                     try:
                         browser_btn = find_browser_button(driver)
                         fb_url = browser_btn.get_attribute("href")
                         
-                        # Chỉ mở tab trống, để fb_bot.process_job tự tải link (tránh double load)
                         num_tabs_before = len(driver.window_handles)
-                        driver.execute_script("window.open('');")
-                        WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > num_tabs_before)
+                        # Click thật để GoLike ghi nhận đã ấn nút làm việc
+                        human_click(driver, browser_btn)
                         
+                        WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > num_tabs_before)
                         fb_tab = driver.window_handles[-1]
                     except Exception as e:
-                        print(colored(f"❌ Không chuẩn bị được tab Facebook: {e}", "red"))
+                        print(colored(f"❌ Không mở được tab Facebook: {e}", "red"))
                         driver.refresh(); sleep(3)
                         continue
                     
@@ -3649,8 +3657,11 @@ def run_selenium_dom_mode():
                     driver.switch_to.window(fb_tab)
                     print(colored(f"👉 Đang thực hiện {j_type.upper()} trên Facebook...", "cyan"))
 
-                    # Thực hiện action trên tab này (bot sẽ tự load fb_url)
-                    res = fb_bot.process_job(j_type, fb_url, current_tab_only=True)
+                    # Thực hiện action trên tab này
+                    if j_type.lower() in ["like", "love", "haha", "wow", "sad", "angry", "care"] and HAS_REACTION_MODULE:
+                        res = perform_fb_reaction(fb_bot, fb_url, j_type)
+                    else:
+                        res = fb_bot.process_job(j_type, fb_url, current_tab_only=True)
 
                     if res.get("success"):
                         print(colored(f"✅ Thực hiện {j_type.upper()} THÀNH CÔNG!", "green", bold=True))
