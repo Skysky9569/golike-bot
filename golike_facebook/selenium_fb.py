@@ -843,9 +843,18 @@ class FacebookSeleniumBot:
         if current_tab_only:
             print(f"[*] Đang tải trang: {link[:60]}...")
             try:
-                # Chỉ tải nếu URL hiện tại khác hẳn link mục tiêu (bỏ qua query params nếu cần so sánh sâu)
-                if self.driver.current_url.split('?')[0].rstrip('/') != link.split('?')[0].rstrip('/'):
+                current_url = self.driver.current_url.lower()
+                target_url = link.lower()
+                
+                # Hàm trích xuất path chính (bỏ domain và query) để so sánh nội dung
+                def get_clean_path(u):
+                    if "facebook.com" not in u: return u
+                    return u.split('facebook.com')[-1].split('?')[0].strip('/')
+
+                # Chỉ tải nếu URL hiện tại không khớp với ID bài viết mục tiêu
+                if get_clean_path(current_url) != get_clean_path(target_url) or "facebook.com" not in current_url:
                     self.driver.get(link)
+                
                 # Đợi trang load xong (ready state)
                 WebDriverWait(self.driver, 10).until(lambda d: d.execute_script('return document.readyState') == 'complete')
                 time.sleep(1)
