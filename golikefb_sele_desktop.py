@@ -597,30 +597,86 @@ class FacebookDesktopBot:
             "earned": 0,
         }
 
-    def start_browser(self) -> bool:
-        """Start desktop Chrome and inject FB cookie"""
-        print(colored("\n🚀 Khởi động Chrome Desktop...", "cyan"))
-        try:
-            self.driver = create_desktop_driver()
-            inject_anti_detection(self.driver)
+    def start_browser(self, max_retries: int = 3) -> bool:
+        """Start desktop Chrome and inject FB cookie with retry support
 
-            print(colored("🍪 Đang bơm cookie Facebook...", "yellow"))
-            self.driver.get("https://www.facebook.com/")
-            time.sleep(2)
-            inject_cookies_to_driver(self.driver, self.cookie)
+        Args:
+            max_retries: Maximum number of cookie retry attempts (default: 3)
 
-            if verify_fb_login(self.driver):
-                print(colored("✅ Đăng nhập Facebook thành công!", "green"))
-                # Open Facebook home to show login state
+        Returns:
+            bool: True if login successful, False if user chose to exit
+        """
+        retry_count = 0
+        current_cookie = self.cookie
+
+        while retry_count < max_retries:
+            print(colored("\n🚀 Khởi động Chrome Desktop...", "cyan"))
+            try:
+                self.driver = create_desktop_driver()
+                inject_anti_detection(self.driver)
+
+                print(colored("🍪 Đang bơm cookie Facebook...", "yellow"))
                 self.driver.get("https://www.facebook.com/")
                 time.sleep(2)
-                return True
-            else:
-                print(colored("❌ Cookie Facebook không hợp lệ hoặc đã hết hạn!", "red"))
-                return False
-        except Exception as e:
-            logger.error(f"Browser start failed: {e}")
-            return False
+                inject_cookies_to_driver(self.driver, current_cookie)
+
+                if verify_fb_login(self.driver):
+                    print(colored("✅ Đăng nhập Facebook thành công!", "green"))
+                    # Open Facebook home to show login state
+                    self.driver.get("https://www.facebook.com/")
+                    time.sleep(2)
+                    return True
+                else:
+                    retry_count += 1
+                    print(colored(f"❌ Cookie Facebook không hợp lệ hoặc đã hết hạn! (Lần thất bại #{retry_count}/{max_retries})", "red"))
+
+                    # Close browser before asking
+                    self.close_browser()
+
+                    if retry_count >= max_retries:
+                        print(colored("\n⚠ Đã đạt giới hạn 3 lần thử. Về menu chính.", "yellow"))
+                        return False
+
+                    # Ask user if they want to retry
+                    print(colored("\n════════════════════════════════════════════════", "cyan"))
+                    print(colored("🍪 COOKIE KHÔNG HỢP LỆ - TÌM KIẾM COOKIE MỚI", "yellow"))
+                    print(colored("════════════════════════════════════════════════", "cyan"))
+                    masked = current_cookie[:10] + "..." + current_cookie[-5:] if len(current_cookie) > 35 else "***"
+                    print(colored(f"  Cookie hiện tại: {masked} (Dài: {len(current_cookie)})", "white"))
+                    print()
+                    print(colored("Bạn có muốn nhập lại cookie mới?", "white"))
+                    print(colored("  [Y] Nhập cookie mới và thử lại", "green"))
+                    print(colored("  [N] Đóng Chrome và quay về menu", "red"))
+                    print(colored("════════════════════════════════════════════════", "cyan"))
+
+                    choice = input(colored("\n👉 Lựa chọn (Y/N): ", "white")).strip().lower()
+
+                    if choice in ('y', 'yes', ''):
+                        # Get new cookie interactively
+                        print(colored("\n--- Nhập Cookie Mới ---", "cyan"))
+                        new_cookie = get_cookie_interactive()
+                        current_cookie = new_cookie
+                        self.cookie = new_cookie  # Update bot's cookie for future use
+                        print(colored(f"✅ Cookie mới đã được xác thực thành công!", "green"))
+                        # Continue loop to try with new cookie
+                        continue
+                    else:
+                        print(colored("\n👋 Đã hủy. Quay về menu chính...", "yellow"))
+                        return False
+
+            except Exception as e:
+                retry_count += 1
+                logger.error(f"Browser start failed: {e}")
+                print(colored(f"⚠ Lỗi kỹ thuật: {e}", "red"))
+
+                if retry_count >= max_retries:
+                    print(colored("\n⚠ Đã đạt giới hạn 3 lần thử. Về menu chính.", "yellow"))
+                    return False
+
+                print(colored(f"Lần thất bại #{retry_count}/{max_retries}. Thử lại?", "yellow"))
+                choice = input(colored("👉 Nhập 'y' để thử lại, 'n' để thoát: ", "white")).strip().lower()
+                if choice not in ('y', 'yes'):
+                    return False
 
     def close_browser(self) -> None:
         """Close browser"""

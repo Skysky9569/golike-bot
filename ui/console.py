@@ -114,6 +114,7 @@ def menu() -> None:
     print(colored("   [2] 📱 Vào Tool Facebook (API Chạy Ngầm - Tốc độ)", "cyan"))
     print(colored("   [3] 🔥 Vào Tool Facebook (Selenium - An Toàn/DOM)", "yellow"))
     print(colored("   [7] 🍏 Vào Tool TikTok (iOS - Appium)", "green"))
+    print(colored("   [9] 🛠️  Quick FB Interaction (DOM Tool)", "magenta"))
     print(colored("\n🛠️  HỆ THỐNG & CẤU HÌNH:", "cyan", bold=True))
     print(colored("   [4] 📶 Cài Đặt Kết Nối ADB WiFi/USB", "cyan"))
     print(colored("   [5] 🥈 Quản Lý Authorization Tokens", "green"))

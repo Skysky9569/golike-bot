@@ -125,6 +125,16 @@ def run_facebook_selenium_bot() -> None:
         print(colored(f"❌ Đã xảy ra lỗi: {e}", "red"))
         input(colored("Nhấn Enter để quay lại...", "white"))
 
+def run_quick_dom_tool() -> None:
+    """Chạy module DOM Handler chính thức dưới dạng công cụ tương tác nhanh."""
+    try:
+        from golike_facebook.dom_handler import standalone_cli
+        standalone_cli()
+        input(colored("\nNhấn Enter để quay lại...", "white"))
+    except Exception as e:
+        print(colored(f"❌ Lỗi: {e}", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
+
 
 def prompt_and_save_token(cred_manager: CredentialManager, validator: InputValidator, label: Optional[str] = None) -> Optional[str]:
     """Hỏi thông tin token, g-auth, g-device-id và lưu lại. Trả về giá trị đã lưu dưới dạng JSON (nếu có g-auth) hoặc raw string."""
@@ -289,6 +299,9 @@ def main() -> None:
             except Exception as e:
                 print(colored(f"❌ Lỗi khi dọn dẹp: {e}", "red"))
                 input(colored("Nhấn Enter để quay lại...", "white"))
+            continue
+        elif choose == "9":
+            run_quick_dom_tool()
             continue
         elif choose == "7":
             if HAS_IOS_FLOW and ios_tiktok_menu:

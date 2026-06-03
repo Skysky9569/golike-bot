@@ -490,13 +490,14 @@ SELECTORS = {
         'a[href*="/unlike/"]',
     ],
     "not_found": [
-        '//h2[contains(text(), "không xem được nội dung")]',
-        '//h2[contains(text(), "not found")]',
-        '//span[contains(text(), "không hiển thị")]',
-        '//span[contains(text(), "không tìm thấy trang")]',
-        '//span[contains(text(), "đã xóa nội dung")]',
-        '//div[contains(text(), "không xem được nội dung")]',
-        '//h2[contains(text(), "không khả dụng")]',
+        '//h2[contains(., "không xem được nội dung")]',
+        '//h2[contains(., "not found")]',
+        '//span[contains(., "không hiển thị")]',
+        '//span[contains(., "không tìm thấy trang")]',
+        '//span[contains(., "đã xóa nội dung")]',
+        '//div[contains(., "không xem được nội dung")]',
+        '//h2[contains(., "không khả dụng")]',
+        '//span[contains(., "Lỗi này thường do chủ sở hữu")]',
     ]
 }
 
@@ -928,7 +929,12 @@ class FacebookSeleniumBot:
                 "không tìm thấy trang",
                 "đã xóa nội dung",
                 "content not found",
-                "page not found"
+                "page not found",
+                "lỗi này thường do chủ sở hữu chỉ chia sẻ nội dung với một nhóm nhỏ",
+                "thay đổi người được xem hoặc đã xóa nội dung",
+                "this content isn't available at the moment",
+                "the link you followed may be broken",
+                "may have been removed"
             ]
             for kw in err_keywords:
                 if kw in page_text:

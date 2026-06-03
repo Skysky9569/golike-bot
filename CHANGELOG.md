@@ -1,10 +1,21 @@
 # CHANGELOG
 
-## [v1.13.2] - 2026-06-03
+## [v1.13.3] - 2026-06-03
+
+### Tính Năng Mới & Nâng Cấp (Features & Upgrades)
+- **Chính thức hóa module DOM Handler**:
+  - Chuyển đổi `test_fb_reactions.py` thành `golike_facebook/dom_handler.py`.
+  - Tích hợp sâu module này vào cả 3 chế độ chạy (Hybrid Single, Hybrid Parallel, và Full DOM).
+  - Thêm công cụ **Quick FB Interaction (DOM Tool)** vào menu chính (Lựa chọn 9) để test nhanh các hành động Like, Follow, Reaction.
+- **Tối ưu hóa phát hiện nội dung lỗi Facebook**:
+  - Bổ sung các selector và từ khóa tiếng Việt/Anh để nhận diện chính xác các bài viết bị xóa, bị ẩn hoặc bị hạn chế ("Bạn hiện không xem được nội dung này", "Lỗi này thường do chủ sở hữu...").
+  - Tự động bỏ qua (skip) các job lỗi này một cách nhanh chóng, chuyển thẳng sang báo lỗi lên hệ thống GoLike mà không cần chờ manual.
 
 ### Sửa Lỗi (Bug Fixes)
-- **Sửa lỗi crash (NameError)**: Khắc phục lỗi biến `token_data` chưa được định nghĩa khi chạy tool từ Menu chính.
-- **Đồng bộ logic xử lý Header**: Đảm bảo tất cả các phương thức nhập Token đều khởi tạo đầy đủ các Header bảo mật mới.
+- **Sửa lỗi logic trong Full DOM**: Khắc phục lỗi thụt lề (IndentationError) và lỗi cú pháp lồng nhau trong quy trình ấn nút "Hoàn thành".
+- **Cải tiến bảo mật**: Tự động giải mã cookie (nếu được mã hóa) trước khi khởi tạo bot trình duyệt.
+
+## [v1.13.2] - 2026-06-03
 
 ## [v1.13.1] - 2026-06-03
 

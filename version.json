@@ -1,6 +1,6 @@
 {
-  "version": "1.13.2",
+  "version": "1.13.3",
   "release_date": "2026-06-03",
-  "changelog": "v1.13.2 - Fix lỗi NameError regression trong logic xử lý Token và Header mới.",
-  "previous_version": "1.13.1"
+  "changelog": "v1.13.3 - Chính thức hóa module DOM Handler, tích hợp sâu vào tất cả các chế độ và tối ưu phát hiện nội dung lỗi Facebook.",
+  "previous_version": "1.13.2"
 }
