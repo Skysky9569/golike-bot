@@ -88,17 +88,12 @@ def ios_tiktok_menu():
         input(colored("Nhấn Enter để quay lại...", "white"))
         return
 
-    # 2. Khởi tạo Appium
+    # 2. Khởi tạo WDA
     ios_mgr = IOSManager()
     
-    # Kiểm tra Appium Server
-    print(colored("⏳ Đang kiểm tra Appium Server (mặc định http://127.0.0.1:4723)...", "yellow"))
-    if not ios_mgr.check_appium_server_status():
-        print(colored("❌ Appium Server chưa chạy hoặc không phản hồi!", "red"))
-        print(colored("💡 Hướng dẫn: Mở một Terminal khác và gõ lệnh 'appium' để khởi động server.", "cyan"))
-        input(colored("Nhấn Enter để quay lại...", "white"))
-        return
-    print(colored("✅ Appium Server đã sẵn sàng.", "green"))
+    # Kiểm tra WDA Server
+    print(colored("⏳ Đang kết nối WebDriverAgent Server (mặc định http://127.0.0.1:8100)...", "yellow"))
+    # Bỏ qua check appium server, thay bằng check cổng 8100 hoặc bỏ qua
 
     selected_device = ios_mgr.select_device()
     
@@ -115,19 +110,22 @@ def ios_tiktok_menu():
     
     # Chọn Bundle ID
     print(colored("\n📦 CHỌN BẢN TIKTOK ĐANG DÙNG:", "cyan"))
-    print(colored("  [1] TikTok Global/Quốc tế (com.zhiliaoapp.musically)", "white"))
-    print(colored("  [2] TikTok Việt Nam (com.ss.iphone.ugc.Tiktok)", "white"))
-    print(colored("  [3] Tự nhập Bundle ID khác", "white"))
+    print(colored("  [1] TikTok Global (com.zhiliaoapp.musically)", "white"))
+    print(colored("  [2] TikTok VN (com.ss.iphone.ugc.Tiktok)", "white"))
+    print(colored("  [3] TikTok VN (com.ss.iphone.ugc.Ame) - Khuyên dùng cho máy bạn", "yellow"))
+    print(colored("  [4] Tự nhập Bundle ID khác", "white"))
     
-    b_choice = input(colored("Lựa chọn (1/2, mặc định 1): ", "green")).strip()
-    if b_choice == "2":
+    b_choice = input(colored("Lựa chọn (1-3, mặc định 3): ", "green")).strip()
+    if b_choice == "1":
+        bundle_id = "com.zhiliaoapp.musically"
+    elif b_choice == "2":
         bundle_id = "com.ss.iphone.ugc.Tiktok"
-    elif b_choice == "3":
+    elif b_choice == "4":
         bundle_id = input(colored("Nhập Bundle ID: ", "green")).strip()
         while not bundle_id:
             bundle_id = input(colored("Bundle ID không được để trống: ", "green")).strip()
     else:
-        bundle_id = "com.zhiliaoapp.musically"
+        bundle_id = "com.ss.iphone.ugc.Ame"
     
     print(colored(f"✅ Đã chọn Bundle ID: {bundle_id}", "green"))
 
@@ -149,19 +147,38 @@ def ios_tiktok_menu():
         # Vòng lặp lấy job
         while True:
             try:
-                jobs_resp = api_client.get_jobs('tiktok', account_id)
-                if not jobs_resp or jobs_resp.get('status') != 200:
+                # Dùng chung API format với bản ADB/Android để đảm bảo ổn định
+                jobs_url = f'/api/advertising/publishers/tiktok/jobs?account_id={account_id}&data=null'
+                jobs_resp = api_client.get(jobs_url)
+                
+                if not isinstance(jobs_resp, dict):
+                    logger.warning(f"API trả về định dạng lạ (không phải dict): {type(jobs_resp)}")
+                    time.sleep(15)
+                    continue
+
+                if jobs_resp.get('status') != 200:
                     print(colored("Hết Job hoặc lỗi mạng. Đợi 15s...", "yellow"))
                     time.sleep(15)
                     continue
                 
-                jobs = jobs_resp.get('data', [])
-                if not jobs:
+                raw_data = jobs_resp.get('data')
+                if not raw_data:
                     print(colored("Hết Job. Đợi 15s...", "yellow"))
                     time.sleep(15)
                     continue
 
+                # Xử lý: GoLike có thể trả về 1 Object hoặc 1 List
+                if isinstance(raw_data, dict):
+                    jobs = [raw_data]
+                elif isinstance(raw_data, list):
+                    jobs = raw_data
+                else:
+                    print(colored("Dữ liệu job không hợp lệ. Đợi 15s...", "yellow"))
+                    time.sleep(15)
+                    continue
+
                 for job in jobs:
+                    if not isinstance(job, dict): continue
                     job_id = job.get('id')
                     link = job.get('link', '')
                     job_type = job.get('type', 'follow')
@@ -170,9 +187,9 @@ def ios_tiktok_menu():
                     print(colored(f"\n[+] Nhận Job: {job_type.upper()} - {job_id}", "cyan"))
                     print(colored(f"    Link: {link}", "white"))
                     
-                    # TODO: Mở link trên iOS
-                    print(colored("    (iOS) Đang đợi bạn mở link hoặc dùng deep link...", "yellow"))
-                    time.sleep(5) # Tạm thời delay để user tự mở hoặc Appium handle sau
+                    # Tự động mở link trên iOS
+                    print(colored(f"    (iOS) Đang mở link: {link}", "yellow"))
+                    ios_automator.open_url(link)
                     
                     if job_type == 'follow' or 'follow' in job_type:
                         success = ios_automator.click_follow()

@@ -171,7 +171,14 @@ class GolikeAPIClient:
                 raise RateLimitError("Rate limit exceeded", status_code=429)
             if response.status_code in (401, 403):
                 raise SessionExpiredError(f"Session expired or forbidden (HTTP {response.status_code}) - Response: {response.text}", status_code=response.status_code)
-            return response.json()
+            
+            try:
+                res_data = response.json()
+                if not isinstance(res_data, dict):
+                    return {"status": response.status_code, "data": res_data, "message": "Non-object JSON response"}
+                return res_data
+            except Exception:
+                return {"status": response.status_code, "message": f"Invalid JSON response: {response.text[:100]}"}
         except (RateLimitError, SessionExpiredError):
             raise  # Không retry các lỗi này
         except requests.RequestException as e:
@@ -213,7 +220,14 @@ class GolikeAPIClient:
                 raise RateLimitError("Rate limit exceeded", status_code=429)
             if response.status_code in (401, 403):
                 raise SessionExpiredError(f"Session expired or forbidden (HTTP {response.status_code}) - Response: {response.text}", status_code=response.status_code)
-            return response.json()
+            
+            try:
+                res_data = response.json()
+                if not isinstance(res_data, dict):
+                    return {"status": response.status_code, "data": res_data, "message": "Non-object JSON response"}
+                return res_data
+            except Exception:
+                return {"status": response.status_code, "message": f"Invalid JSON response: {response.text[:100]}"}
         except (RateLimitError, SessionExpiredError):
             raise  # Không retry các lỗi này
         except requests.RequestException as e:

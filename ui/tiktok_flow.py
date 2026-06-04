@@ -149,7 +149,10 @@ def _process_single_job(
         Tuple[bool, int, bool]: (ok, reward, not_found_skip)
     """
     # Mo link hoac search user
-    if search_mode and job_type == "follow":
+    if open_method == "ios" and ui_automator:
+        logger.info(f"Mở link nhiệm vụ {job_type}: {link[:50]}... (iOS)")
+        ui_automator.open_url(link)
+    elif search_mode and job_type == "follow":
         username = extract_username_from_link(link)
         if not username:
             logger.warning(f"Không lấy được username từ link: {link[:60]}")
@@ -501,6 +504,64 @@ def tiktok_menu(auth_token: str) -> None:
                     break
                 else:
                     continue
+            elif open_method == "ios":
+                try:
+                    from golike_ios.ios_manager import IOSManager
+                    from golike_ios.ios_automator import TikTokIOSAutomator
+                    
+                    ios_mgr = IOSManager()
+                    print(colored("⏳ Đang kiểm tra Appium Server (mặc định http://127.0.0.1:4723)...", "yellow"))
+                    if not ios_mgr.check_appium_server_status():
+                        print(colored("❌ Appium Server chưa chạy hoặc không phản hồi!", "red"))
+                        print(colored("💡 Hướng dẫn: Mở Terminal khác gõ 'appium' để khởi động server.", "cyan"))
+                        continue
+                        
+                    selected_device = ios_mgr.select_device()
+                    if selected_device:
+                        platform_version = selected_device['version']
+                        device_name = selected_device['name']
+                        udid = selected_device['udid']
+                        print(colored(f"✅ Đã chọn: {device_name} (iOS {platform_version})", "green"))
+                    else:
+                        print(colored("\nCấu hình Appium thủ công:", "cyan"))
+                        platform_version = input(colored("iOS Version (ví dụ 16.4): ", "green")).strip() or "16.4"
+                        device_name = input(colored("Device Name (ví dụ iPhone 14): ", "green")).strip() or "iPhone 14"
+                        udid = input(colored("UDID: ", "green")).strip() or None
+                    
+                    # Chọn Bundle ID
+                    print(colored("\n📦 CHỌN BẢN TIKTOK ĐANG DÙNG:", "cyan"))
+                    print(colored("  [1] TikTok Global (com.zhiliaoapp.musically)", "white"))
+                    print(colored("  [2] TikTok VN (com.ss.iphone.ugc.Tiktok)", "white"))
+                    print(colored("  [3] TikTok VN (com.ss.iphone.ugc.Ame) - Khuyên dùng cho máy bạn", "yellow"))
+                    print(colored("  [4] Tự nhập Bundle ID khác", "white"))
+                    
+                    b_choice = input(colored("Lựa chọn (1-3, mặc định 3): ", "green")).strip()
+                    if b_choice == "1": bundle_id = "com.zhiliaoapp.musically"
+                    elif b_choice == "2": bundle_id = "com.ss.iphone.ugc.Tiktok"
+                    elif b_choice == "4": bundle_id = input("Nhập Bundle ID: ").strip()
+                    else: bundle_id = "com.ss.iphone.ugc.Ame"
+                    
+                    ui_automator = TikTokIOSAutomator(
+                        platform_version=platform_version, 
+                        device_name=device_name, 
+                        udid=udid,
+                        bundle_id=bundle_id
+                    )
+                    
+                    if ui_automator.connect():
+                        print(colored("✅ Kết nối iOS Appium thành công!", "green", bold=True))
+                        adb_config["open_method"] = "ios"
+                        adb_config["current_device"] = "ios_device" # Dummy marker
+                        save_adb_config(adb_config)
+                        UI_AUTOMATION_AVAILABLE = True # Mark as available to use logic
+                        break
+                    else:
+                        print(colored("❌ Lỗi kết nối iOS Appium!", "red"))
+                        continue
+                except Exception as e:
+                    logger.error(f"Lỗi khởi tạo iOS: {e}")
+                    print(colored(f"❌ Lỗi khởi tạo iOS: {e}", "red"))
+                    continue
             elif open_method == "search":
                 adb_manager = ADBManager()
                 current_device = adb_manager.select_device()
@@ -656,17 +717,20 @@ def tiktok_menu(auth_token: str) -> None:
 
     if adb_manager is None:
         adb_manager = ADBManager()
-    try:
-        job_processor = JobProcessorFactory.create(
-            open_method,
-            adb_manager=adb_manager,
-            device_id=current_device
-        )
-    except ValueError as e:
-        logger.error(f"Lỗi tạo job processor: {e}")
-        print(colored(f"❌ Lỗi tạo job processor: {e}", "red"))
-        input(colored("Nhấn Enter để quay lại...", "white"))
-        return
+    if open_method == "ios":
+        job_processor = None
+    else:
+        try:
+            job_processor = JobProcessorFactory.create(
+                open_method,
+                adb_manager=adb_manager,
+                device_id=current_device
+            )
+        except ValueError as e:
+            logger.error(f"Lỗi tạo job processor: {e}")
+            print(colored(f"❌ Lỗi tạo job processor: {e}", "red"))
+            input(colored("Nhấn Enter để quay lại...", "white"))
+            return
 
     ui_automator = None
     if UI_AUTOMATION_AVAILABLE:

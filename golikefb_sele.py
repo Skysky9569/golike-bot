@@ -3761,14 +3761,22 @@ def run_selenium_dom_mode():
                     if not res.get("is_not_found"):
                         for try_idx in range(1, 3):
                             if STOP_FLAG: break
-                            wait_confirm = 4.5 if try_idx == 1 else 3.0
+                            # GoLike anti-spam yêu cầu ít nhất 9s nếu báo nhanh
+                            # Tăng delay cơ bản để tránh bị chặn
+                            wait_confirm = 6.0 if try_idx == 1 else 10.5
                             print(f"[*] Đang ấn Hoàn thành (Lần {try_idx}/2)... Đợi {wait_confirm}s...")
                             sleep(wait_confirm)
                             
                             try:
+                                # Switch back to main tab before any action if needed
+                                try:
+                                    if gl_tab and driver.current_window_handle != gl_tab:
+                                        driver.switch_to.window(gl_tab)
+                                except: pass
+
                                 # XPath mở rộng để bắt cả chữ hoa/thường và các biến thể
                                 ht_xpath = "//h6[contains(., 'Hoàn thành') or contains(., 'HOÀN THÀNH') or contains(., 'Hoàn Thành') or contains(., 'hoàn thành')]"
-                                ht_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, ht_xpath)))
+                                ht_btn = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, ht_xpath)))
                                 human_click(driver, ht_btn)
                                 
                                 try:
@@ -3776,7 +3784,14 @@ def run_selenium_dom_mode():
                                     pop_title = pop_title_el.text
                                     pop_content = driver.find_element(By.ID, "swal2-content").text
                                     print(f"GoLike báo: [{pop_title}] {pop_content}")
-                                        
+                                    
+                                    # Kiểm tra lỗi "báo cáo quá nhanh" để chủ động đợi thêm
+                                    if "quá nhanh" in pop_content.lower():
+                                        print(colored("[!] Phát hiện báo cáo quá nhanh, sẽ đợi lâu hơn ở lần thử tiếp theo...", "yellow"))
+                                        ok_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
+                                        human_click(driver, ok_btn)
+                                        continue
+
                                     ok_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
                                     human_click(driver, ok_btn)
                                         
@@ -3796,8 +3811,14 @@ def run_selenium_dom_mode():
                         print(colored(f"🚨 Thất bại. Lý do: {reason_text}. Đang báo lỗi job...", "magenta"))
                         
                         try:
+                            # Safety check: Đảm bảo driver vẫn sống và đúng tab
+                            try:
+                                if gl_tab: driver.switch_to.window(gl_tab)
+                            except: pass
+
                             # Đảm bảo tắt mọi popup đang mở trước khi báo lỗi
                             close_da_hieu_popup(driver)
+                            sleep(1)
                             
                             # XPath dự phòng nhiều cấp cho nút Báo lỗi
                             bl_xpath = (
@@ -3808,26 +3829,30 @@ def run_selenium_dom_mode():
                             )
                             bl_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, bl_xpath)))
                             print(colored("[*] Đang ấn nút Báo lỗi...", "yellow"))
-                            human_click(driver, bl_btn)
+                            
+                            # Dùng click_js trực tiếp cho nút hệ thống để tránh crash ActionChains
+                            driver.execute_script("arguments[0].click();", bl_btn)
                             sleep(2)
                             
                             # Chọn lý do (Bắt cả contains để an toàn)
                             lydo_xpath = f"//h6[normalize-space(text())='{reason_text}'] | //h6[contains(., '{reason_text}')]"
                             lydo = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, lydo_xpath)))
                             
-                            human_click(driver, lydo)
-                            sleep(1)
+                            driver.execute_script("arguments[0].click();", lydo)
+                            sleep(1.5)
                             
                             gui_xpath = "//button[contains(., 'Gửi báo cáo')] | //button[contains(., 'GỬI BÁO CÁO')] | //button[contains(., 'Gửi Báo Cáo')]"
                             gui_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, gui_xpath)))
-                            human_click(driver, gui_btn)
+                            driver.execute_script("arguments[0].click();", gui_btn)
                             sleep(2)
                             
                             try:
                                 ok_fin = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")))
-                                human_click(driver, ok_fin)
+                                driver.execute_script("arguments[0].click();", ok_fin)
                             except: pass
                             print(colored("✅ Đã báo lỗi xong.", "green"))
+                        except Exception as e:
+                            print(colored(f"⚠ Lỗi khi thực hiện báo lỗi: {e}", "yellow"))
                         except Exception as e:
                             print(colored(f"⚠ Lỗi khi thực hiện báo lỗi: {e}", "yellow"))
                     

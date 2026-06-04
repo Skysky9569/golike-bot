@@ -1,92 +1,149 @@
 """
-iOS Automation module using Appium.
+iOS Automation module using facebook-wda.
+This provides a lighter, faster, Python-only alternative to Appium.
 """
 from golike_core.logging import logger
-
-try:
-    from appium import webdriver
-    from appium.options.ios import XCUITestOptions
-    from appium.webdriver.common.appiumby import AppiumBy
-    APPIUM_AVAILABLE = True
-except ImportError:
-    APPIUM_AVAILABLE = False
-    logger.warning("Appium-Python-Client not installed. iOS automation will not work.")
-
 import time
 
+try:
+    import wda
+    WDA_AVAILABLE = True
+except ImportError:
+    WDA_AVAILABLE = False
+    logger.warning("facebook-wda not installed. iOS automation will not work.")
+
 class TikTokIOSAutomator:
-    def __init__(self, platform_version="16.4", device_name="iPhone 14", udid=None, bundle_id="com.zhiliaoapp.musically"):
-        """Khởi tạo kết nối với Appium Server"""
+    def __init__(self, platform_version="16.4", device_name="iPhone", udid=None, bundle_id="com.zhiliaoapp.musically"):
+        """Khởi tạo kết nối với WebDriverAgent"""
         self.platform_version = platform_version
         self.device_name = device_name
         self.udid = udid
         self.bundle_id = bundle_id
-        self.driver = None
+        self.client = None
 
     def connect(self) -> bool:
-        """Kết nối tới thiết bị iOS thông qua Appium Server."""
-        if not APPIUM_AVAILABLE:
-            logger.error("Vui lòng cài đặt: pip install Appium-Python-Client")
+        """Kết nối tới thiết bị iOS thông qua facebook-wda."""
+        if not WDA_AVAILABLE:
+            logger.error("Vui lòng cài đặt: pip install facebook-wda tidevice")
             return False
-
-        options = XCUITestOptions()
-        options.platform_name = "iOS"
-        options.platform_version = self.platform_version
-        options.device_name = self.device_name
-        options.automation_name = "XCUITest"
-        
-        # com.zhiliaoapp.musically là bundle ID của TikTok Global.
-        # com.ss.iphone.ugc.Tiktok là bundle ID của TikTok VN.
-        options.bundle_id = self.bundle_id 
-        
-        if self.udid:
-            options.udid = self.udid
 
         try:
-            # Giả định Appium chạy ở localhost:4723
-            self.driver = webdriver.Remote(
-                command_executor="http://127.0.0.1:4723",
-                options=options
-            )
-            logger.info("✅ Kết nối Appium thành công.")
+            logger.info("Đang kết nối với WebDriverAgent (http://localhost:8100)...")
+            self.client = wda.Client('http://localhost:8100')
+            
+            logger.info(f"Đang mở App: {self.bundle_id}...")
+            # Sử dụng app_start thay vì session để không reset app
+            self.client.app_start(self.bundle_id)
+            
+            logger.info(f"✅ Kết nối WDA thành công với {self.bundle_id}.")
             return True
         except Exception as e:
-            logger.error(f"Lỗi kết nối Appium: {e}")
+            logger.error(f"Lỗi kết nối WDA: {e}")
+            logger.warning("Vui lòng đảm bảo WebDriverAgent đang chạy ở cổng 8100.")
             return False
 
+    def open_url(self, url: str):
+        """Mở link TikTok trực tiếp (Deep Link) qua Safari"""
+        if not self.client: return
+        try:
+            logger.info(f"Đang mở link qua Safari: {url}")
+            self.client.app_start("com.apple.mobilesafari")
+            time.sleep(1.5)
+            
+            try:
+                # Tìm thanh địa chỉ (có thể là 'URL', 'Address', hoặc 'Địa chỉ')
+                url_bar = self.client(nameContains="URL")
+                if not url_bar.exists:
+                    url_bar = self.client(nameContains="Address")
+                if not url_bar.exists:
+                    url_bar = self.client(nameContains="Địa chỉ")
+                    
+                url_bar.click()
+                time.sleep(0.5)
+                
+                # Nhập link mới
+                self.client.send_keys(url + "\n")
+            except Exception as inner_e:
+                logger.error(f"Không thể gõ URL vào Safari: {inner_e}")
+                
+            time.sleep(5) # Chờ app load
+        except Exception as e:
+            logger.error(f"Lỗi mở link iOS: {e}")
+
     def close(self):
-        if self.driver:
-            self.driver.quit()
-            logger.info("Đã ngắt kết nối Appium.")
+        if self.client:
+            logger.info("Đã ngắt kết nối WDA.")
+            self.client = None
 
     def click_follow(self) -> bool:
         """Thực hiện click Follow trên TikTok iOS."""
-        if not self.driver:
+        if not self.client:
             return False
             
-        try:
-            # PLACEHOLDER: Sửa lại Locator này bằng Appium Inspector sau
-            logger.info("Đang tìm nút Follow (iOS)...")
-            follow_btn = self.driver.find_element(AppiumBy.ACCESSIBILITY_ID, "Follow")
-            follow_btn.click()
-            logger.info("✅ Đã click Follow (iOS).")
-            return True
-        except Exception as e:
-            logger.error(f"Không tìm thấy hoặc click lỗi nút Follow: {e}")
-            return False
+        selectors = ["Follow", "Theo dõi"]
+        
+        for name in selectors:
+            try:
+                el = self.client(name=name, visible=True)
+                if el.exists:
+                    el.click()
+                    logger.info("✅ Đã click Follow (iOS).")
+                    time.sleep(2)
+                    return True
+            except:
+                continue
+                
+        # Dùng XPath nếu Name không được
+        xpaths = [
+            "//XCUIElementTypeButton[@name='Follow']",
+            "//XCUIElementTypeButton[@label='Theo dõi']"
+        ]
+        for xp in xpaths:
+            try:
+                el = self.client(xpath=xp)
+                if el.exists:
+                    el.click()
+                    logger.info("✅ Đã click Follow (iOS XPath).")
+                    time.sleep(2)
+                    return True
+            except:
+                continue
+                
+        logger.error("Không tìm thấy nút Follow trên iOS.")
+        return False
             
     def click_like(self) -> bool:
         """Thực hiện click Like trên TikTok iOS."""
-        if not self.driver:
+        if not self.client:
             return False
             
+        selectors = ["Like", "Thích"]
+        
+        for name in selectors:
+            try:
+                el = self.client(name=name, visible=True)
+                if el.exists:
+                    # wda trả về selected qua value hoặc thuộc tính
+                    if el.value == "1": 
+                         logger.info("Đã like từ trước.")
+                         return True
+                    el.click()
+                    logger.info("✅ Đã click Like (iOS).")
+                    time.sleep(1)
+                    return True
+            except:
+                continue
+                
         try:
-            # PLACEHOLDER: Sửa lại Locator này bằng Appium Inspector sau
-            logger.info("Đang tìm nút Like (iOS)...")
-            like_btn = self.driver.find_element(AppiumBy.ACCESSIBILITY_ID, "Like")
-            like_btn.click()
-            logger.info("✅ Đã click Like (iOS).")
+            logger.warning("Không tìm thấy nút Like, thử Double Tap vào giữa màn hình...")
+            w, h = self.client.window_size()
+            x = w // 2
+            y = h // 2
+            self.client.double_tap(x, y)
+            time.sleep(1)
             return True
-        except Exception as e:
-            logger.error(f"Không tìm thấy hoặc click lỗi nút Like: {e}")
-            return False
+        except:
+            pass
+            
+        return False
+

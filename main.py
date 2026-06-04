@@ -314,7 +314,7 @@ def main() -> None:
                 ios_tiktok_menu()
             else:
                 print(colored("\n❌ Chế độ iOS Automation chưa khả dụng trên thiết bị này.", "red"))
-                print(colored("💡 Tính năng này yêu cầu Appium-Python-Client và thư mục golike_ios.", "yellow"))
+                print(colored("💡 Yêu cầu cài đặt: pip install facebook-wda tidevice", "yellow"))
                 input(colored("\nNhấn Enter để quay lại...", "white"))
             continue
         elif choose == "3":

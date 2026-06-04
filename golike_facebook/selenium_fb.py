@@ -966,7 +966,7 @@ class FacebookSeleniumBot:
                 return {"success": False, "error": "Không tìm thấy nút like"}
 
             ok = click_js(self.driver, btn, label="nút LIKE")
-            time.sleep(1)
+            time.sleep(3) # Tăng delay chờ FB sync
             if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": ok}
 
@@ -1132,7 +1132,7 @@ class FacebookSeleniumBot:
                 return {"success": False, "error": "Không tìm thấy nút follow"}
 
             ok = click_js(self.driver, btn, label="nút FOLLOW")
-            time.sleep(1.5)
+            time.sleep(3) # Chờ FB sync
             page = self.driver.page_source.lower()
             verified = "đang theo dõi" in page or "following" in page or "hủy theo dõi" in page
             if not current_tab_only: self._close_job_tab(main_tab)
@@ -1173,7 +1173,7 @@ class FacebookSeleniumBot:
                 return {"success": False, "error": "Không tìm thấy nút like/follow page"}
 
             ok = click_js(self.driver, btn, label="nút LIKE/FOLLOW PAGE")
-            time.sleep(1.5)
+            time.sleep(3) # Chờ FB sync
             if not current_tab_only: self._close_job_tab(main_tab)
             return {"success": ok}
 
