@@ -1,6 +1,6 @@
 {
-  "version": "1.13.3",
-  "release_date": "2026-06-03",
-  "changelog": "v1.13.3 - Chính thức hóa module DOM Handler, tích hợp sâu vào tất cả các chế độ và tối ưu phát hiện nội dung lỗi Facebook.",
-  "previous_version": "1.13.2"
+  "version": "1.14.0",
+  "release_date": "2026-06-06",
+  "changelog": "v1.14.0 - Tích hợp hệ thống Log cấu trúc, Báo cáo hiệu suất (Success Rate Tracker), Tự động chọn tài khoản GoLike thông minh và tối ưu hóa diện tích hiển thị trình duyệt.",
+  "previous_version": "1.13.3"
 }

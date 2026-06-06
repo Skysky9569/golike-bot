@@ -510,12 +510,7 @@ def tiktok_menu(auth_token: str) -> None:
                     from golike_ios.ios_automator import TikTokIOSAutomator
                     
                     ios_mgr = IOSManager()
-                    print(colored("⏳ Đang kiểm tra Appium Server (mặc định http://127.0.0.1:4723)...", "yellow"))
-                    if not ios_mgr.check_appium_server_status():
-                        print(colored("❌ Appium Server chưa chạy hoặc không phản hồi!", "red"))
-                        print(colored("💡 Hướng dẫn: Mở Terminal khác gõ 'appium' để khởi động server.", "cyan"))
-                        continue
-                        
+                    
                     selected_device = ios_mgr.select_device()
                     if selected_device:
                         platform_version = selected_device['version']
@@ -523,7 +518,7 @@ def tiktok_menu(auth_token: str) -> None:
                         udid = selected_device['udid']
                         print(colored(f"✅ Đã chọn: {device_name} (iOS {platform_version})", "green"))
                     else:
-                        print(colored("\nCấu hình Appium thủ công:", "cyan"))
+                        print(colored("\nCấu hình iOS thủ công:", "cyan"))
                         platform_version = input(colored("iOS Version (ví dụ 16.4): ", "green")).strip() or "16.4"
                         device_name = input(colored("Device Name (ví dụ iPhone 14): ", "green")).strip() or "iPhone 14"
                         udid = input(colored("UDID: ", "green")).strip() or None
@@ -548,16 +543,43 @@ def tiktok_menu(auth_token: str) -> None:
                         bundle_id=bundle_id
                     )
                     
-                    if ui_automator.connect():
-                        print(colored("✅ Kết nối iOS Appium thành công!", "green", bold=True))
-                        adb_config["open_method"] = "ios"
-                        adb_config["current_device"] = "ios_device" # Dummy marker
-                        save_adb_config(adb_config)
-                        UI_AUTOMATION_AVAILABLE = True # Mark as available to use logic
-                        break
-                    else:
-                        print(colored("❌ Lỗi kết nối iOS Appium!", "red"))
-                        continue
+                    if not ui_automator.connect():
+                        print(colored("\n🛠️ TRỢ GIÚP KẾT NỐI iOS:", "cyan"))
+                        print(colored("Bạn có muốn Tool thử tự động khởi động WDA qua tidevice không?", "yellow"))
+                        try_start = input(colored("👉 Tự động khởi động? (y/n, mặc định n): ", "green")).strip().lower()
+                        if try_start == 'y':
+                            import subprocess
+                            print(colored("⏳ Đang tìm kiếm WDA Runner...", "yellow"))
+                            try:
+                                result = subprocess.run(['tidevice', 'applist'], capture_output=True, text=True, timeout=5)
+                                wda_bundles = [line.split()[0] for line in result.stdout.split('\n') if 'WebDriverAgentRunner' in line]
+                                if wda_bundles:
+                                    b_id = wda_bundles[0]
+                                    print(colored(f"🚀 Đang khởi chạy WDA: {b_id}...", "green"))
+                                    subprocess.Popen(['tidevice', 'wdaproxy', '-B', b_id, '-p', '8100'], 
+                                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                    time.sleep(5)
+                                    if ui_automator.connect():
+                                        print(colored("✅ Kết nối thành công!", "green"))
+                                    else:
+                                        print(colored("❌ Vẫn không kết nối được. Vui lòng tự chạy lệnh tidevice.", "red"))
+                                        continue
+                                else:
+                                    print(colored("❌ Không tìm thấy WDA trên máy.", "red"))
+                                    continue
+                            except Exception as e:
+                                print(colored(f"❌ Lỗi khi dùng tidevice: {e}", "red"))
+                                continue
+                        else:
+                            print(colored("❌ Lỗi kết nối iOS Appium/WDA!", "red"))
+                            continue
+
+                    print(colored("✅ Kết nối iOS thành công!", "green", bold=True))
+                    adb_config["open_method"] = "ios"
+                    adb_config["current_device"] = "ios_device"
+                    save_adb_config(adb_config)
+                    UI_AUTOMATION_AVAILABLE = True
+                    break
                 except Exception as e:
                     logger.error(f"Lỗi khởi tạo iOS: {e}")
                     print(colored(f"❌ Lỗi khởi tạo iOS: {e}", "red"))

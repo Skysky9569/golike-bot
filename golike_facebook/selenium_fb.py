@@ -242,9 +242,15 @@ def build_anti_detect_options(
     proxy: Optional[str] = None,
     proxy_auth_ext: Optional[str] = None,
     use_desktop: bool = False,
+    headless: bool = False,
 ) -> Options:
     """Tạo Chrome options chống detect nâng cao"""
     options = Options()
+
+    if headless:
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
 
     # --- Ẩn automation flags ---
     options.add_argument("--disable-blink-features=AutomationControlled")
@@ -668,12 +674,14 @@ class FacebookSeleniumBot:
         save_profile: bool = False,
         proxy_auth_ext: Optional[str] = None,
         use_desktop: bool = False,
+        headless: bool = False,
     ):
         self.cookie_str = cookie_str
         self.profile_name = profile_name
         self.proxy = proxy
         self.proxy_auth_ext = proxy_auth_ext
         self.use_desktop = use_desktop
+        self.headless = headless
 
         if user_data_dir:
             self.user_data_dir = user_data_dir
@@ -963,7 +971,23 @@ class FacebookSeleniumBot:
             btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=6)
             if not btn:
                 if not current_tab_only: self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút like"}
+                return {"success": False, "error": "Không tìm thấy nút like", "is_not_found": True}
+
+            # KIỂM TRA ĐÃ LIKE CHƯA
+            try:
+                aria_label = (btn.get_attribute("aria-label") or "").lower()
+                btn_text = (btn.text or "").lower().strip()
+                if not btn_text:
+                    btn_text = self.driver.execute_script("return arguments[0].innerText;", btn).lower().strip()
+                
+                if any(x in aria_label for x in ["gỡ thích", "unlike", "bỏ thích"]) or \
+                   any(x in btn_text for x in ["gỡ thích", "unlike", "bỏ thích", "đã thích"]) or \
+                   btn.get_attribute("aria-pressed") == "true":
+                    print(colored("   [!] Đã LIKE từ trước.", "yellow"))
+                    if not current_tab_only: self._close_job_tab(main_tab)
+                    return {"success": True}
+            except Exception:
+                pass
 
             ok = click_js(self.driver, btn, label="nút LIKE")
             time.sleep(3) # Tăng delay chờ FB sync
@@ -993,7 +1017,7 @@ class FacebookSeleniumBot:
             btn = find_element_safe(self.driver, SELECTORS["like_button"], timeout=10)
             if not btn:
                 if not current_tab_only: self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút like/thích"}
+                return {"success": False, "error": "Không tìm thấy nút like/thích", "is_not_found": True}
 
             # Cuộn tới nút
             self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'center'});", btn)
@@ -1001,6 +1025,22 @@ class FacebookSeleniumBot:
 
             # Nếu chỉ là Like thì click luôn
             if reaction_type.lower() == "like":
+                # KIỂM TRA ĐÃ LIKE CHƯA
+                try:
+                    aria_label = (btn.get_attribute("aria-label") or "").lower()
+                    btn_text = (btn.text or "").lower().strip()
+                    if not btn_text:
+                        btn_text = self.driver.execute_script("return arguments[0].innerText;", btn).lower().strip()
+                    
+                    if any(x in aria_label for x in ["gỡ thích", "unlike", "bỏ thích"]) or \
+                       any(x in btn_text for x in ["gỡ thích", "unlike", "bỏ thích", "đã thích"]) or \
+                       btn.get_attribute("aria-pressed") == "true":
+                        print(colored("   [!] Đã LIKE từ trước.", "yellow"))
+                        if not current_tab_only: self._close_job_tab(main_tab)
+                        return {"success": True}
+                except Exception:
+                    pass
+
                 print("[+] Đang click: LIKE")
                 ok = click_js(self.driver, btn, label="nút LIKE")
                 time.sleep(1)
@@ -1129,7 +1169,20 @@ class FacebookSeleniumBot:
 
             if not btn:
                 if not current_tab_only: self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút follow"}
+                return {"success": False, "error": "Không tìm thấy nút follow", "is_not_found": True}
+
+            # KIỂM TRA ĐÃ THEO DÕI CHƯA
+            try:
+                btn_text = (btn.text or "").lower().strip()
+                if not btn_text:
+                    btn_text = self.driver.execute_script("return arguments[0].innerText;", btn).lower().strip()
+                
+                if any(x in btn_text for x in ["đang theo dõi", "following", "hủy theo dõi", "unfollow"]):
+                    print(colored("   [!] Đã theo dõi từ trước.", "yellow"))
+                    if not current_tab_only: self._close_job_tab(main_tab)
+                    return {"success": True}
+            except Exception:
+                pass
 
             ok = click_js(self.driver, btn, label="nút FOLLOW")
             time.sleep(3) # Chờ FB sync
@@ -1170,7 +1223,20 @@ class FacebookSeleniumBot:
 
             if not btn:
                 if not current_tab_only: self._close_job_tab(main_tab)
-                return {"success": False, "error": "Không tìm thấy nút like/follow page"}
+                return {"success": False, "error": "Không tìm thấy nút like/follow page", "is_not_found": True}
+
+            # KIỂM TRA ĐÃ LIKE/FOLLOW TRANG CHƯA
+            try:
+                btn_text = (btn.text or "").lower().strip()
+                if not btn_text:
+                    btn_text = self.driver.execute_script("return arguments[0].innerText;", btn).lower().strip()
+                
+                if any(x in btn_text for x in ["đang theo dõi", "following", "đã thích", "liked"]):
+                    print(colored("   [!] Đã LIKE/FOLLOW trang từ trước.", "yellow"))
+                    if not current_tab_only: self._close_job_tab(main_tab)
+                    return {"success": True}
+            except Exception:
+                pass
 
             ok = click_js(self.driver, btn, label="nút LIKE/FOLLOW PAGE")
             time.sleep(3) # Chờ FB sync

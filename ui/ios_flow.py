@@ -135,10 +135,48 @@ def ios_tiktok_menu():
         udid=udid,
         bundle_id=bundle_id
     )
+    
     if not ios_automator.connect():
-        print(colored("❌ Không thể kết nối Appium. Kiểm tra lại Appium Server!", "red"))
-        input(colored("Nhấn Enter để quay lại...", "white"))
-        return
+        print(colored("\n🛠️ TRỢ GIÚP KẾT NỐI:", "cyan"))
+        print(colored("1. Đảm bảo điện thoại đã được mở khóa màn hình.", "white"))
+        print(colored("2. Đảm bảo bạn đã cài WebDriverAgent (WDA) lên điện thoại.", "white"))
+        print(colored("3. Bạn có muốn Tool thử tự động khởi động WDA qua tidevice không?", "yellow"))
+        
+        try_start = input(colored("👉 Tự động khởi động? (y/n, mặc định n): ", "green")).strip().lower()
+        if try_start == 'y':
+            import subprocess
+            print(colored("⏳ Đang tìm kiếm WDA Runner trên thiết bị...", "yellow"))
+            try:
+                result = subprocess.run(['tidevice', 'applist'], capture_output=True, text=True, timeout=5)
+                wda_bundles = [line.split()[0] for line in result.stdout.split('\n') if 'WebDriverAgentRunner' in line]
+                
+                if wda_bundles:
+                    b_id = wda_bundles[0]
+                    print(colored(f"🚀 Đang khởi chạy WDA: {b_id}...", "green"))
+                    # Chạy wdaproxy trong background
+                    proc = subprocess.Popen(['tidevice', 'wdaproxy', '-B', b_id, '-p', '8100'], 
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    time.sleep(5) # Chờ WDA lên
+                    if ios_automator.connect():
+                        print(colored("✅ Đã khởi động và kết nối WDA thành công!", "green"))
+                    else:
+                        print(colored("❌ Vẫn không thể kết nối. Vui lòng tự chạy lệnh:", "red"))
+                        print(colored(f"   tidevice wdaproxy -B {b_id} -p 8100", "cyan"))
+                        input(colored("Nhấn Enter để quay lại...", "white"))
+                        return
+                else:
+                    print(colored("❌ Không tìm thấy WebDriverAgentRunner. Vui lòng cài đặt theo HUONG_DAN_IOS_AUTO.md", "red"))
+                    input(colored("Nhấn Enter để quay lại...", "white"))
+                    return
+            except Exception as e:
+                print(colored(f"❌ Lỗi khi thực thi tidevice: {e}", "red"))
+                print(colored("Hãy đảm bảo bạn đã cài đặt tidevice: pip install tidevice", "yellow"))
+                input(colored("Nhấn Enter để quay lại...", "white"))
+                return
+        else:
+            print(colored("❌ Không thể kết nối WDA. Vui lòng kiểm tra lại Appium/WDA Server!", "red"))
+            input(colored("Nhấn Enter để quay lại...", "white"))
+            return
 
     print(colored("\n▶️ BẮT ĐẦU CHẠY AUTO iOS...", "yellow"))
     print(colored("⚠️ CHÚ Ý: Locator Follow/Like đang là Placeholder. Hãy cập nhật trong golike_ios/ios_automator.py nếu cần.", "yellow"))

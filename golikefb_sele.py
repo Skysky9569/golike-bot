@@ -7,6 +7,7 @@ import requests
 import json
 import threading
 import signal
+import queue
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -75,7 +76,46 @@ try {
 } catch(e) {}
 """
 
-# ================= RANDOMIZATION UTILS =================
+# ================= STATISTICS TRACKER =================
+class SuccessRateTracker:
+    def __init__(self, account_name="Unknown"):
+        self.account_name = account_name
+        self.total_jobs = 0
+        self.success_jobs = 0
+        self.failed_jobs = 0
+        self.total_reward = 0
+        self.start_time = datetime.now()
+
+    def add_success(self, reward):
+        self.total_jobs += 1
+        self.success_jobs += 1
+        self.total_reward += reward
+
+    def add_failure(self):
+        self.total_jobs += 1
+        self.failed_jobs += 1
+
+    def get_rate(self):
+        if self.total_jobs == 0: return 0
+        return (self.success_jobs / self.total_jobs) * 100
+
+    def show_summary(self):
+        duration = datetime.now() - self.start_time
+        rate = self.get_rate()
+        color = "green" if rate >= 90 else ("yellow" if rate >= 70 else "red")
+        
+        print("\n" + "╔" + "═" * 50 + "╗")
+        print(f"║ {colored('BÁO CÁO TỔNG KẾT PHIÊN', 'cyan', attrs=['bold']):^58s} ║")
+        print("╠" + "═" * 50 + "╣")
+        print(f"║ 👤 Tài khoản: {self.account_name:<34s} ║")
+        print(f"║ ⏱ Thời gian chạy: {str(duration).split('.')[0]:<31s} ║")
+        print(f"║ ✅ Thành công: {colored(str(self.success_jobs), 'green'):<41s} ║")
+        print(f"║ ❌ Thất bại:   {colored(str(self.failed_jobs), 'red'):<41s} ║")
+        print(f"║ 📊 Tỷ lệ:      {colored(f'{rate:.1f}%', color, attrs=['bold']):<41s} ║")
+        print(f"║ 💰 Tổng xu:    {colored(f'+{self.total_reward}đ', 'yellow', attrs=['bold']):<41s} ║")
+        print("╚" + "═" * 50 + "╝\n")
+
+
 def smart_random_delay(base_delay: float, variance: float = 0.3) -> float:
     """
     Tạo delay với randomization Gaussian để mô phỏng timing con người.
@@ -1492,6 +1532,164 @@ def setup_delay_config():
     input("\nNhấn Enter để tiếp tục...")
     load_delay_config(config_path)  # Reload config
 
+# ================= CẤU HÌNH PARALLEL FULL DOM =================
+
+def setup_parallel_config():
+    """Menu cấu hình tài khoản cho chế độ Parallel Full DOM ngay trong tool."""
+    config_path = os.path.join(SCRIPT_DIR, "config_parallel.json")
+
+    # Load existing or create new
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+        except:
+            raw = {"parallel_accounts": [], "delay_between_jobs": 10.0}
+    else:
+        raw = {"parallel_accounts": [], "delay_between_jobs": 10.0}
+
+    if isinstance(raw, list):
+        profiles = raw
+        wrapper = {"parallel_accounts": profiles}
+    elif isinstance(raw, dict):
+        profiles = raw.get("parallel_accounts", [])
+        wrapper = raw
+    else:
+        profiles = []
+        wrapper = {"parallel_accounts": []}
+
+    FIELDS = [
+        ("profile_name", "Tên hiển thị"),
+        ("golike_username", "Tài khoản GoLike"),
+        ("golike_password", "Mật khẩu GoLike"),
+        ("facebook_cookie", "Facebook Cookie"),
+        ("golike_uid", "GoLike UID (nếu có)"),
+        ("target_fb_uid", "Target FB UID"),
+        ("target_fb_name", "Target FB Name"),
+        ("proxy", "Proxy (IP:PORT:USER:PASS)"),
+    ]
+
+    while True:
+        print("\n" + "=" * 60)
+        print("⚙️  CẤU HÌNH TÀI KHOẢN PARALLEL FULL DOM")
+        print("=" * 60)
+        print(f"[File: {os.path.abspath(config_path)}]")
+        print(f"[Số tài khoản: {len(profiles)}]\n")
+
+        if not profiles:
+            print("  (chưa có tài khoản nào)")
+        else:
+            for i, acc in enumerate(profiles, 1):
+                name = acc.get("profile_name", f"Acc-{i}")
+                user = acc.get("golike_username", "?")
+                fb_uid = acc.get("target_fb_uid", "") or acc.get("golike_uid", "") or "?"
+                print(f"  {i}. {name} | GL: {user} | FB: {fb_uid}")
+
+        print(f"\n  1. Thêm tài khoản mới")
+        print(f"  2. Sửa tài khoản")
+        print(f"  3. Xóa tài khoản")
+        print(f"  4. Cấu hình Delay cho Parallel Mode")
+        print(f"  0. Lưu & Thoát")
+
+        choice = input("\n👉 Chọn (0-4): ").strip()
+
+        if choice == "0":
+            break
+        elif choice == "1":
+            # Add new account
+            print("\n--- THÊM TÀI KHOẢN MỚI ---")
+            new_acc = {}
+            for key, label in FIELDS:
+                val = input(f"  {label} [{key}]: ").strip()
+                new_acc[key] = val
+            if new_acc.get("profile_name") or new_acc.get("golike_username"):
+                profiles.append(new_acc)
+                print(f"\n[✅] Đã thêm tài khoản: {new_acc.get('profile_name', new_acc.get('golike_username'))}")
+            else:
+                print("[!] Cần ít nhất tên hiển thị hoặc tài khoản GoLike!")
+                input("Nhấn Enter để tiếp tục...")
+        elif choice == "2":
+            # Edit account
+            if not profiles:
+                print("[!] Không có tài khoản nào để sửa!")
+                input("Nhấn Enter để tiếp tục...")
+                continue
+            try:
+                idx = int(input(f"Chọn số tài khoản (1-{len(profiles)}): ")) - 1
+                if 0 <= idx < len(profiles):
+                    acc = profiles[idx]
+                    print(f"\n--- SỬA: {acc.get('profile_name', f'Acc-{idx+1}')} ---")
+                    print("  (Enter để giữ nguyên giá trị cũ)")
+                    for key, label in FIELDS:
+                        old = acc.get(key, "")
+                        val = input(f"  {label} [{key}] [{old}]: ").strip()
+                        if val:
+                            acc[key] = val
+                    print(f"[✅] Đã cập nhật!")
+                else:
+                    print("[!] Số không hợp lệ!")
+            except ValueError:
+                print("[!] Vui lòng nhập số!")
+            input("Nhấn Enter để tiếp tục...")
+        elif choice == "3":
+            # Delete account
+            if not profiles:
+                print("[!] Không có tài khoản nào để xóa!")
+                input("Nhấn Enter để tiếp tục...")
+                continue
+            try:
+                idx = int(input(f"Chọn số tài khoản (1-{len(profiles)}): ")) - 1
+                if 0 <= idx < len(profiles):
+                    name = profiles[idx].get("profile_name", f"Acc-{idx+1}")
+                    confirm = input(f"⚠️  Xác nhận xóa '{name}'? (y/n): ").strip().lower()
+                    if confirm == "y":
+                        del profiles[idx]
+                        print(f"[✅] Đã xóa '{name}'!")
+                else:
+                    print("[!] Số không hợp lệ!")
+            except ValueError:
+                print("[!] Vui lòng nhập số!")
+            input("Nhấn Enter để tiếp tục...")
+        elif choice == "4":
+            # Configure delays for parallel mode
+            print("\n--- CẤU HÌNH DELAY PARALLEL MODE ---")
+            delay_cfg = [
+                ("delay_between_jobs", "Delay giữa các job (giây)", "10.0"),
+                ("delay_after_complete", "Delay sau Hoàn thành (giây)", "3.0"),
+                ("delay_after_report_error", "Delay sau báo lỗi (giây)", "3.0"),
+                ("delay_between_accounts", "Delay khi đổi acc (giây)", "30.0"),
+                ("sleep_on_reset", "Sleep khi reset (giây)", "60.0"),
+                ("max_jobs_before_switch", "Số job tối đa trước khi đổi acc (0 = không giới hạn)", "20"),
+            ]
+            for key, label, default in delay_cfg:
+                old = wrapper.get(key, default)
+                val = input(f"  {label} [{old}]: ").strip()
+                if val:
+                    try:
+                        wrapper[key] = float(val) if "." in val else int(val)
+                    except ValueError:
+                        wrapper[key] = val
+            print("[✅] Đã cập nhật delay!")
+            input("Nhấn Enter để tiếp tục...")
+        else:
+            print("[!] Lựa chọn không hợp lệ!")
+
+    # Save
+    try:
+        if isinstance(raw, list):
+            save_data = profiles
+        else:
+            wrapper["parallel_accounts"] = profiles
+            save_data = wrapper
+
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        print(f"\n[✅] Đã lưu {len(profiles)} tài khoản vào {os.path.basename(config_path)}")
+    except Exception as e:
+        print(f"[!] Lỗi lưu config: {e}")
+
+    input("Nhấn Enter để tiếp tục...")
+
 # ================= CHIA SẺ HÀM LOGIC CHUNG =================
 # Danh sách loại job hợp lệ để user tham khảo
 ALL_JOB_TYPES = ["like", "lik_page", "follow", "love", "haha", "wow", "sad", "angry", "care", "unknown"]
@@ -2175,42 +2373,11 @@ def run_single_mode():
                 pass
 
             try:
-                doiacc = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account")))
-                human_click(driver, doiacc)
-                sleep(2)
-            
-                accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
-                valid_accounts = []
-                for acc in accounts:
-                    try:
-                        name = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
-                        acc_id = acc.get_attribute("id") or ""
-                        valid_accounts.append((acc, name, acc_id))
-                    except: pass
-            
-                print("\n--- CHỌN TÀI KHOẢN CÀY ---")
-                for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
-                    print(f"{i}. {name} | UID: {acc_id}")
-            
-                if current_golike_uid:
-                    chon_acc = None
-                    for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
-                        if str(current_golike_uid).strip() == str(acc_id).strip():
-                            chon_acc = i
-                            break
-                    if not chon_acc:
-                        print(f"❌ Không tìm thấy nick GoLike với UID: {current_golike_uid}. Bỏ qua!")
-                        continue
-                else:
-                    chon_acc = int(input("👉 Nhập số để chọn nick chạy: "))
-            
-                selected_node, name_run, uid_run = valid_accounts[chon_acc-1]
-                try:
-                    driver.execute_script("arguments[0].click();", selected_node)
-                except Exception:
-                    human_click(driver, selected_node)
-                print(f"🚀 ✅ ĐANG CHẠY ACC: {name_run} | UID: {uid_run}")
-                sleep(3)
+                # --- CHỌN TÀI KHOẢN ---
+                name_run, uid_run = _select_golike_account(driver, target_uid=current_golike_uid)
+                if not name_run:
+                    continue
+                
                 if prev_max_job:
                     print("⏳ Chờ 60s để thông báo cũ biến mất...")
                     smart_sleep(60)
@@ -3234,44 +3401,111 @@ def load_multi_cookies():
     return cookies
 
 
-def _select_golike_account(driver):
+def _select_golike_account(driver, target_uid=None):
     """Chon tai khoan trong giao dien Golike bang Selenium.
+    
+    Args:
+        driver: Selenium WebDriver
+        target_uid: UID Facebook cần tìm để tự động chọn (c_user)
 
     Returns:
         tuple: (selected_name, selected_uid) hoac (None, None) neu that bai
     """
     try:
-        doiacc = WebDriverWait(driver, 5).until(
+        doiacc = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account"))
         )
         human_click(driver, doiacc)
         sleep(2)
 
-        accounts = driver.find_elements(By.CSS_SELECTOR, "div.card.shadow-200.mt-1")
-        valid_accounts = []
-        for acc in accounts:
-            try:
-                name = acc.find_element(By.CSS_SELECTOR, "div.col-8 span").text
-                acc_id = acc.get_attribute("id") or ""
-                valid_accounts.append((acc, name, acc_id))
-            except Exception:
-                pass
-
-        if not valid_accounts:
+        ACC_CARD_SELECTORS = [
+            "div.card.shadow-200.mt-1", "div.card.mt-1", "div.card.shadow",
+            "div.account-item", "div.select-account div.card", "div.list-account div.card",
+        ]
+        accounts = []
+        for sel in ACC_CARD_SELECTORS:
+            accounts = driver.find_elements(By.CSS_SELECTOR, sel)
+            if accounts: break
+            
+        if not accounts:
             print("[LOI] Khong tim thay tai khoan nao!")
             return None, None
 
-        print("\n--- CHON TAI KHOAN CAY ---")
-        for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
-            print(f"{i}. {name} | UID: {acc_id}")
+        NAME_SELECTORS = ["div.col-8 span", "span.name", "div.name", "p.name", "span", "div.info span"]
+        UID_ATTRS = ["id", "data-id", "data-uid", "data-user-id"]
 
-        chon_acc = int(input("👉 Nhap so de chon nick chay: "))
-        selected_node, name_run, uid_run = valid_accounts[chon_acc - 1]
+        def extract_acc_info(card):
+            name, uid_str = "", ""
+            card_text = card.text.replace("\n", " ").strip()
+            
+            # 1. Thử lấy tên từ các selector phổ biến
+            for ns in NAME_SELECTORS:
+                try:
+                    name = card.find_element(By.CSS_SELECTOR, ns).text.strip()
+                    if name: break
+                except Exception: pass
+            
+            # 2. Thử lấy UID từ các attribute
+            for ua in UID_ATTRS:
+                try:
+                    uid_str = (card.get_attribute(ua) or "").strip()
+                    if uid_str: break
+                except Exception: pass
+                
+            # 3. Fallback: Nếu attribute không có UID, thử quét từ text của card bằng Regex
+            if not uid_str:
+                # Regex tìm các dãy số dài (UID thường >= 10 chữ số)
+                uid_matches = re.findall(r'(\d{10,16})', card_text)
+                if uid_matches:
+                    uid_str = uid_matches[-1] # Thường UID Facebook nằm ở cuối card text
+            
+            return name, uid_str
+
+        valid_accounts = []
+        auto_selected_idx = -1
+        
+        for i, acc in enumerate(accounts):
+            name, acc_id = extract_acc_info(acc)
+            if name or acc_id:
+                valid_accounts.append((acc, name, acc_id))
+                # Nếu có target_uid, kiểm tra xem có khớp không
+                if target_uid and str(target_uid) == str(acc_id):
+                    auto_selected_idx = len(valid_accounts) - 1
+
+        if not valid_accounts:
+            print("[LOI] Khong tim thay tai khoan hop le!")
+            return None, None
+
+        name_run = ""
+        uid_run = ""
+        selected_node = None
+
+        if auto_selected_idx != -1:
+            selected_node, name_run, uid_run = valid_accounts[auto_selected_idx]
+            print(colored(f"🎯 [AUTO] Đã tìm thấy nick khớp UID: {name_run} ({uid_run})", "green"))
+        else:
+            if target_uid:
+                print(colored(f"⚠️ [!] Không tìm thấy nick GoLike nào khớp với UID Facebook {target_uid}!", "yellow"))
+            
+            print("\n--- DANH SÁCH TÀI KHOẢN GOLIKE ---")
+            for i, (acc, name, acc_id) in enumerate(valid_accounts, start=1):
+                print(f"{i}. {name} | UID: {acc_id}")
+
+            try:
+                chon_acc = input("👉 Nhập số để chọn nick (hoặc ấn ENTER để chọn nick đầu): ").strip()
+                if not chon_acc:
+                    selected_node, name_run, uid_run = valid_accounts[0]
+                else:
+                    selected_node, name_run, uid_run = valid_accounts[int(chon_acc) - 1]
+            except:
+                selected_node, name_run, uid_run = valid_accounts[0]
+
         try:
             driver.execute_script("arguments[0].click();", selected_node)
         except Exception:
             human_click(driver, selected_node)
-        print(f"🚀 ✅ DANG CHAY ACC: {name_run} | UID: {uid_run}")
+        
+        print(colored(f"🚀 ✅ ĐANG CHẠY ACC: {name_run} | UID: {uid_run}", "green", attrs=['bold']))
         sleep(3)
         return name_run, uid_run
     except Exception as e:
@@ -3431,6 +3665,10 @@ def run_selenium_dom_mode():
 
     print("[*] Đang mở trình duyệt...")
     driver = selenium_driver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    # Ép kích thước cửa sổ nhỏ gọn (Mobile style) để không bị quá to
+    driver.set_window_size(450, 850)
+    
     with drivers_lock:
         active_drivers.append(driver)
 
@@ -3645,18 +3883,23 @@ def run_selenium_dom_mode():
                 current_idx += 1
                 continue
             
-            # Chọn đúng nick trên GoLike web
-            name_run, uid_run = _select_golike_account(driver)
+            # Lấy UID từ cookie để tự động chọn nick trên GoLike
+            uid_fb = parse_facebook_uid_from_cookie(cookie_fb)
             
+            # Chọn đúng nick trên GoLike web
+            name_run, uid_run = _select_golike_account(driver, target_uid=uid_fb)
+            
+            tracker = SuccessRateTracker(account_name=name_run)
             jobs_done = 0
             max_jobs = int(CONFIG_DELAY.get("max_jobs_before_switch", 20))
+            no_job_count = 0
             
             # Vòng lặp lấy Job
             while not STOP_FLAG:
                 fb_tab = None
                 try:
                     if max_jobs > 0 and jobs_done >= max_jobs:
-                        print(colored(f"✅ Đã xong {max_jobs} jobs cho nick này. Đang đổi...", "green"))
+                        tracker.show_summary()
                         
                         # Gửi thông báo Telegram khi đạt giới hạn Batch
                         now_str = datetime.now().strftime('%H:%M:%S')
@@ -3664,16 +3907,15 @@ def run_selenium_dom_mode():
                             f"✅ <b>Hoàn thành Batch!</b>\n"
                             f"👤 Acc: <b>{name_run}</b>\n"
                             f"💰 Đã xong: {jobs_done} jobs\n"
-                            f"🔄 Đang chuyển sang nick tiếp theo...\n"
+                            f"📊 Tỷ lệ: {tracker.get_rate():.1f}%\n"
                             f"⏰ Lúc: {now_str}"
                         )
                         send_tg_notify(tg_msg)
-                        
                         break
                         
-                    print(f"\n[Acc: {name_run}] Đang quét job mới...")
                     if job_limit_reached(driver):
                         print(colored("🚨 Nick đã đạt giới hạn 100 job/ngày!", "red"))
+                        tracker.show_summary()
                         
                         # Gửi thông báo Telegram khi đạt giới hạn 100 job
                         now_str = datetime.now().strftime('%H:%M:%S')
@@ -3684,15 +3926,22 @@ def run_selenium_dom_mode():
                             f"✅ Đã đủ giới hạn ngày. Đang đổi acc..."
                         )
                         send_tg_notify(tg_msg)
-                        
                         break
                     
                     try:
-                        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                        # Tăng timeout chờ job xuất hiện
+                        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                        no_job_count = 0 
                     except TimeoutException:
-                        print("... Không thấy job, đang tải lại...")
+                        no_job_count += 1
+                        # Giảm spam: Chỉ in thông báo sau mỗi 5 lần không thấy job
+                        if no_job_count % 5 == 1:
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] [Acc: {name_run}] Đang quét job... (Chưa có job mới)")
+                        
+                        # Tăng thời gian chờ nếu liên tục không có job
+                        wait_time = 15 if no_job_count > 3 else 7
                         driver.refresh()
-                        sleep(5)
+                        sleep(wait_time)
                         continue
                     
                     jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")
@@ -3702,8 +3951,16 @@ def run_selenium_dom_mode():
                     try:
                         job_id = job.find_element(By.CSS_SELECTOR, "h6.font-id b").text
                         job_type_raw = job.find_element(By.CSS_SELECTOR, "span.block-text-2").text
-                        print(colored(f"[*] Phát hiện Job: ID {job_id} | Loại: {job_type_raw}", "cyan"))
-                    except: job_type_raw = ""
+                        
+                        # Trích xuất giá tiền (reward) từ text của card
+                        job_text = job.text
+                        reward_match = re.search(r'\+(\d+)', job_text)
+                        current_reward = int(reward_match.group(1)) if reward_match else 40
+                        
+                        print(colored(f"\n[*] Phát hiện Job: ID {job_id} | Loại: {job_type_raw} | Thưởng: +{current_reward}đ", "cyan"))
+                    except: 
+                        job_type_raw = ""
+                        current_reward = 40
                     
                     # 1. Ấn vô Job
                     human_click(driver, job)
@@ -3728,6 +3985,7 @@ def run_selenium_dom_mode():
                         fb_tab = driver.window_handles[-1]
                     except Exception as e:
                         print(colored(f"❌ Không mở được tab Facebook: {e}", "red"))
+                        tracker.add_failure()
                         driver.refresh(); sleep(3)
                         continue
                     
@@ -3799,10 +4057,18 @@ def run_selenium_dom_mode():
                                     if any(kw in pop_title.lower() for kw in success_keywords) or any(kw in pop_content.lower() for kw in success_keywords):
                                         success_confirmed = True
                                         jobs_done += 1
+                                        tracker.add_success(current_reward)
+                                        now_time = datetime.now().strftime('%H:%M:%S')
+                                        print(colored(f"| {jobs_done} | {now_time} | thành công | {j_type} | +{current_reward} | {tracker.total_reward} |", "green", bold=True))
                                         break
                                 except: pass
                             except Exception as e:
                                 print(f"   [!] Lần {try_idx} không ấn được Hoàn thành: {e}")
+                        
+                        if not success_confirmed:
+                            tracker.add_failure()
+                    else:
+                        tracker.add_failure()
 
                     # 7. Nếu thất bại cả 2 lần -> Báo lỗi Job
                     if not success_confirmed and not STOP_FLAG:
@@ -3883,6 +4149,643 @@ def run_selenium_dom_mode():
 
 
 # ======================================================================
+# ==================== WEBDRIVER POOL FOR RESOURCE MANAGEMENT ==========
+# ======================================================================
+
+class WebDriverPool:
+    """Manage a pool of WebDriver instances for reuse."""
+
+    def __init__(self, max_size=3):
+        self.max_size = max_size
+        self.pool = []
+        self.lock = threading.Lock()
+        self.created_count = 0
+
+    def _create_driver(self, profile_name=None):
+        """Create a new WebDriver instance with standard configuration."""
+        try:
+            options = Options()
+            device_profile = get_random_device_profile()
+            options.add_argument("--lang=en-US")
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_argument("--disable-infobars")
+            options.add_argument("--no-sandbox")
+            options.add_argument(f"--window-size={device_profile['viewport_width']},{device_profile['viewport_height']}")
+            options.add_experimental_option("prefs", {
+                "webrtc.ip_handling_policy": "disable_non_proxied_udp",
+                "webrtc.multiple_routes_enabled": False,
+                "webrtc.nonproxied_udp_enabled": False
+            })
+            driver = selenium_driver.Chrome(
+                service=Service(ChromeDriverManager().install()),
+                options=options
+            )
+            driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                "source": STEALTH_INJECTION_SCRIPT
+            })
+            with drivers_lock:
+                active_drivers.append(driver)
+            self.created_count += 1
+            print(f"[WebDriverPool] Created driver #{self.created_count}" +
+                  (f" for {profile_name}" if profile_name else ""))
+            return driver
+        except Exception as e:
+            print(f"[WebDriverPool] Error creating driver: {e}")
+            return None
+
+    def acquire(self, worker_id=None, profile_name=None):
+        """Acquire a driver from the pool, creating one if needed."""
+        with self.lock:
+            if self.pool:
+                driver = self.pool.pop()
+                print(f"[WebDriverPool] Acquired driver from pool" +
+                      (f" for Worker-{worker_id}" if worker_id is not None else "") +
+                      (f" ({profile_name})" if profile_name else ""))
+                return driver
+            if self.created_count < self.max_size:
+                return self._create_driver(profile_name)
+            print(f"[WebDriverPool] Pool empty, waiting for available driver...")
+            return None
+
+    def release(self, driver, worker_id=None, profile_name=None):
+        """Release a driver back to the pool after cleaning."""
+        if driver is None:
+            return
+        try:
+            print(f"[WebDriverPool] Cleaning driver before release" +
+                  (f" for Worker-{worker_id}" if worker_id is not None else "") +
+                  (f" ({profile_name})" if profile_name else ""))
+            driver.delete_all_cookies()
+            driver.execute_script("window.localStorage.clear();")
+            driver.execute_script("window.sessionStorage.clear();")
+            try:
+                driver.execute_cdp_cmd("Network.clearBrowserCache", {})
+                driver.execute_cdp_cmd("Network.clearBrowserCookies", {})
+            except:
+                pass
+            with self.lock:
+                if len(self.pool) < self.max_size:
+                    self.pool.append(driver)
+                    print(f"[WebDriverPool] Released driver back to pool" +
+                          (f" for Worker-{worker_id}" if worker_id is not None else "") +
+                          (f" ({profile_name})" if profile_name else ""))
+                else:
+                    driver.quit()
+                    with drivers_lock:
+                        if driver in active_drivers:
+                            active_drivers.remove(driver)
+                    print(f"[WebDriverPool] Pool full, quit driver instead")
+        except Exception as e:
+            print(f"[WebDriverPool] Error cleaning/releasing driver: {e}")
+            try:
+                driver.quit()
+            except:
+                pass
+            with drivers_lock:
+                if driver in active_drivers:
+                    active_drivers.remove(driver)
+
+    def shutdown(self):
+        """Shutdown all drivers in the pool."""
+        print("[WebDriverPool] Shutting down all drivers...")
+        with self.lock:
+            for driver in self.pool:
+                try:
+                    driver.quit()
+                except:
+                    pass
+            self.pool.clear()
+        self.created_count = 0
+
+
+def process_account_full_dom(driver, profile, idx, global_2captcha_api_key):
+    """
+    Process a single account in Full DOM mode - adapted for parallel execution.
+    """
+    p_name = profile.get("profile_name", f"Acc-{idx}")
+    gl_user = profile.get("golike_username", "")
+    gl_pass = profile.get("golike_password", "")
+    fb_cookie = profile.get("facebook_cookie", "")
+    target_fb_name = profile.get("target_fb_name", "")
+    target_fb_uid = profile.get("target_fb_uid", "")
+    profile_proxy = profile.get("proxy", "")
+
+    print(f"[Worker-{idx}][{p_name}] Starting Full DOM processing...")
+
+    try:
+        actual_fb_cookie = fb_cookie
+        if fb_cookie and "c_user=" not in fb_cookie:
+            try:
+                cred_manager = CredentialManager()
+                decrypted = cred_manager._decrypt(fb_cookie)
+                if decrypted and "c_user=" in decrypted:
+                    actual_fb_cookie = decrypted
+            except Exception:
+                pass
+
+        proxy_info = get_proxy_from_config(profile_proxy)
+        fb_proxies = proxy_info["requests_proxies"] if proxy_info else None
+        Fb = FB_API(actual_fb_cookie, proxies=fb_proxies)
+        login_result = Fb.login()
+        if isinstance(login_result, dict) and 'err' in login_result:
+            print(f"[Worker-{idx}][{p_name}] FB Cookie invalid or expired: {login_result['err']}")
+            return False
+        print(f"[Worker-{idx}][{p_name}] FB API connected successfully (UID: {Fb.session.user_id})")
+
+        print(f"[Worker-{idx}][{p_name}] Navigating to GoLike login...")
+        driver.get("https://app.golike.net/login")
+
+        # Apply mobile viewport + UA ONLY for GoLike tab (per-tab via Emulation)
+        device_profile = get_random_device_profile()
+        driver.set_window_size(500, 750)
+        driver.execute_cdp_cmd("Emulation.setUserAgentOverride", {
+            "userAgent": device_profile['user_agent'],
+            "platform": device_profile['platform']
+        })
+        driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
+            "width": device_profile['viewport_width'],
+            "height": device_profile['viewport_height'],
+            "deviceScaleFactor": 0,
+            "mobile": True
+        })
+        print(f"[Worker-{idx}][{p_name}] Mobile viewport set: {device_profile['viewport_width']}x{device_profile['viewport_height']}")
+
+        sleep(2)
+
+        driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input').send_keys(gl_user)
+        driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input').send_keys(gl_pass)
+        driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button').click()
+
+        if not handle_2captcha_captcha(driver, "https://app.golike.net/login", api_key=global_2captcha_api_key, is_parallel=True):
+            print(f"\n[Worker-{idx}][{p_name}] [MANUAL CAPTCHA REQUIRED] Please solve CAPTCHA in the browser.")
+            input(f"[Worker-{idx}][{p_name}] After solving, press [ENTER] here to continue...")
+        else:
+            sleep(2)
+
+        try:
+            da_hieu_btn = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Đã hiểu')]")))
+            human_click(driver, da_hieu_btn)
+            print(f"[Worker-{idx}][{p_name}] Closed [Đã hiểu] popup")
+            sleep(1)
+        except:
+            pass
+
+        nhiemvu = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[2]/div/div/div[2]')))
+        human_click(driver, nhiemvu)
+
+        fb_btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]/div/div[1]/div[2]/div[3]/div[1]/div')))
+        human_click(driver, fb_btn)
+        sleep(3)
+
+        try:
+            tb = WebDriverWait(driver, 4).until(EC.element_to_be_clickable((By.CLASS_NAME, 'swal2-title')))
+            ok_btn = driver.find_element(By.CSS_SELECTOR, '.swal2-confirm.swal2-styled')
+            human_click(driver, ok_btn)
+        except:
+            pass
+
+        doiacc = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div.select-account")))
+        human_click(driver, doiacc)
+        sleep(2.5)
+
+        ACC_CARD_SELECTORS = [
+            "div.card.shadow-200.mt-1", "div.card.mt-1", "div.card.shadow",
+            "div.account-item", "div.select-account div.card", "div.list-account div.card",
+        ]
+        accounts = []
+        for sel in ACC_CARD_SELECTORS:
+            accounts = driver.find_elements(By.CSS_SELECTOR, sel)
+            if accounts:
+                print(f"[Worker-{idx}][{p_name}] Found {len(accounts)} accounts with selector: {sel}")
+                break
+        if not accounts:
+            try:
+                dropdown = driver.find_element(By.CSS_SELECTOR, "div.select-account")
+                accounts = dropdown.find_elements(By.CSS_SELECTOR, "div.card")
+            except Exception:
+                pass
+
+        golike_uid = str(profile.get("golike_uid", profile.get("target_fb_uid", ""))).strip()
+        target_uid = str(profile.get("target_fb_uid", "")).strip()
+        target_name = str(profile.get("target_fb_name", "")).strip().lower()
+
+        NAME_SELECTORS = ["div.col-8 span", "span.name", "div.name", "p.name", "span", "div.info span"]
+        UID_ATTRS = ["id", "data-id", "data-uid", "data-user-id"]
+
+        def extract_acc_info(card):
+            name, uid_str = "", ""
+            card_text = card.text.replace("\n", " ").strip()
+            
+            # 1. Thử lấy tên từ các selector phổ biến
+            for ns in NAME_SELECTORS:
+                try:
+                    name = card.find_element(By.CSS_SELECTOR, ns).text.strip()
+                    if name: break
+                except Exception: pass
+            
+            # 2. Thử lấy UID từ các attribute
+            for ua in UID_ATTRS:
+                try:
+                    uid_str = (card.get_attribute(ua) or "").strip()
+                    if uid_str: break
+                except Exception: pass
+                
+            # 3. Fallback: Nếu attribute không có UID, thử quét từ text của card bằng Regex
+            if not uid_str:
+                # Regex tìm các dãy số dài (UID thường >= 10 chữ số)
+                uid_matches = re.findall(r'(\d{10,16})', card_text)
+                if uid_matches:
+                    uid_str = uid_matches[-1] # Thường UID Facebook nằm ở cuối card text
+            
+            return name, uid_str
+
+        selected = False
+        for acc in accounts:
+            try:
+                nm, uid_acc = extract_acc_info(acc)
+                if (golike_uid and uid_acc and golike_uid == uid_acc) or \
+                   (target_uid and uid_acc and target_uid == uid_acc) or \
+                   (target_name and nm and target_name in nm.lower()):
+                    human_click(driver, acc)
+                    print(f"[Worker-{idx}][{p_name}] Selected account: '{nm}' (uid='{uid_acc}')")
+                    selected = True
+                    break
+            except Exception: pass
+
+        if not selected:
+            print(f"[Worker-{idx}][{p_name}] No matching account found!")
+            if accounts:
+                nm0, uid0 = extract_acc_info(accounts[0])
+                driver.execute_script("arguments[0].click();", accounts[0])
+                print(f"[Worker-{idx}][{p_name}] Selecting first account: '{nm0}' (uid='{uid0}')")
+            else:
+                return False
+
+        sleep(3)
+        print(f"[Worker-{idx}][{p_name}] Account setup complete!")
+
+        jobs_done = 0
+        total_reward = 0
+        max_jobs = int(CONFIG_DELAY.get("max_jobs_before_switch", 20))
+        no_job_count = 0
+
+        while not STOP_FLAG and (max_jobs == 0 or jobs_done < max_jobs):
+            try:
+                handle_rate_limit(driver, f"[Worker-{idx}][{p_name}]")
+                used_percent, available_mb = check_system_memory()
+                if used_percent >= MEMORY_LIMIT_PERCENT or available_mb <= MEMORY_AVAILABLE_MIN:
+                    print(f"[Worker-{idx}][{p_name}] [⚠️] RAM high - waiting...")
+                    wait_for_memory()
+
+                # Vòng lặp quét Job cho Parallel Mode
+                try:
+                    WebDriverWait(driver, 12).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")))
+                    no_job_count = 0
+                except TimeoutException:
+                    no_job_count += 1
+                    if no_job_count % 5 == 1:
+                        print(f"[Worker-{idx}][{p_name}] Đang quét job mới... (Chưa có)")
+                    
+                    if job_limit_reached(driver):
+                        raise Exception("MAX_JOB")
+                        
+                    driver.refresh()
+                    sleep(12 if no_job_count > 3 else 7)
+                    continue
+
+                jobs = driver.find_elements(By.CSS_SELECTOR, "div.card.hand, div.card.card-primary")
+                if not jobs: continue
+                first_job = jobs[0]
+
+                try:
+                    job_id = first_job.find_element(By.CSS_SELECTOR, "h6.font-id b").text
+                    job_type_raw = first_job.find_element(By.CSS_SELECTOR, "span.block-text-2").text
+                    
+                    # Trích xuất giá tiền (reward) từ text của card
+                    job_text = first_job.text
+                    reward_match = re.search(r'\+(\d+)', job_text)
+                    current_reward = int(reward_match.group(1)) if reward_match else 40
+                    
+                    print(f"[Worker-{idx}][{p_name}] [*] Job ID {job_id} | Type: {job_type_raw} | Thưởng: +{current_reward}đ")
+                except:
+                    job_type_raw = ""
+                    current_reward = 40
+
+                human_click(driver, first_job)
+                sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+
+                orig_window = driver.current_window_handle
+                try:
+                    chrome_btn = find_browser_button(driver, timeout=8)
+                    fb_job_url = chrome_btn.get_attribute("href")
+                    human_click(driver, chrome_btn)
+                except TimeoutException:
+                    print(f"[Worker-{idx}][{p_name}] Error: Could not find browser button. Skipping.")
+                    driver.refresh()
+                    sleep(3)
+                    continue
+
+                WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))
+                for handle in driver.window_handles:
+                    if handle != orig_window:
+                        driver.switch_to.window(handle)
+                        break
+
+                j_type = map_job_type(job_type_raw)
+                req_reaction = detect_reaction_required(driver)
+                if req_reaction: j_type = req_reaction
+
+                if is_job_skipped(j_type):
+                    print(f"[Worker-{idx}][{p_name}] 🚫 [SKIP] Job type '{j_type}' in skip list.")
+                    success = False
+                else:
+                    if HAS_REACTION_MODULE:
+                        fb_bot = FacebookSeleniumBot(cookie_str=fb_cookie, profile_name=f"fulldom_parallel_{p_name}", use_desktop=True)
+                        fb_bot.driver = driver
+                        res = process_dom_job(fb_bot, fb_job_url, j_type)
+                        success = res.get("success", False)
+                        if not success:
+                            print(f"[Worker-{idx}][{p_name}] ❌ DOM Action failed: {res.get('error')}")
+                    else:
+                        success = False
+                        print(f"[Worker-{idx}][{p_name}] ❌ Missing DOM Handler module.")
+
+                driver.close()
+                driver.switch_to.window(orig_window)
+                sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
+
+                uid = getidpost(fb_job_url)
+                need_skip = not success
+
+                delay_sync = CONFIG_DELAY.get("delay_after_complete", 3.5)
+                print(f"[Worker-{idx}][{p_name}] Waiting {delay_sync}s for system sync...")
+                sleep(delay_sync)
+
+                if success:
+                    print(f"[Worker-{idx}][{p_name}] Clicking 'Hoàn thành'...")
+                    try:
+                        ht = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(text(), 'Hoàn thành')]")))
+                        human_click(driver, ht)
+                        sleep(smart_random_delay(CONFIG_DELAY.get("delay_after_complete", 4), variance=0.2))
+                        try:
+                            tp = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "swal2-title"))).text
+                            cp = driver.find_element(By.ID, "swal2-content").text
+                            print(f"[Worker-{idx}][{p_name}] GoLike: [{tp}] {cp}")
+                            popup_text = f"{tp} {cp}".lower()
+                            if any(kw in popup_text for kw in RATE_LIMIT_KEYWORDS):
+                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                human_click(driver, ok_c)
+                                sleep(1)
+                                handle_rate_limit(driver, f"[Worker-{idx}][{p_name}]")
+                                need_skip = True
+                            else:
+                                ok_c = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                                human_click(driver, ok_c)
+                                if "lỗi" in tp.lower() or "thất bại" in tp.lower() or "lỗi" in cp.lower() or "thất bại" in cp.lower():
+                                    need_skip = True
+                        except: pass
+                    except Exception as e:
+                        print(f"[Worker-{idx}][{p_name}] Error clicking 'Hoàn thành': {e}")
+                        need_skip = True
+
+                if need_skip:
+                    print(f"[Worker-{idx}][{p_name}] 🚨 Starting error report...")
+                    try:
+                        bl = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//h6[contains(., 'Báo lỗi')]")))
+                        human_click(driver, bl)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+                        lydo = "Tôi không muốn làm Job này"
+                        if not uid or uid == "0": lydo = "Không tìm thấy bài viết"
+                        else: lydo = "Báo cáo hoàn thành thất bại"
+                        c_lydo = driver.find_element(By.XPATH, f"//h6[contains(., '{lydo}')]")
+                        human_click(driver, c_lydo)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1))
+                        gui = driver.find_element(By.XPATH, "//button[contains(., 'Gửi báo cáo')]")
+                        human_click(driver, gui)
+                        sleep(CONFIG_DELAY.get("delay_after_report_error", 1.5))
+                        try:
+                            o_b = driver.find_element(By.CSS_SELECTOR, ".swal2-confirm.swal2-styled")
+                            human_click(driver, o_b)
+                        except: pass
+                        print(f"[Worker-{idx}][{p_name}] Error report submitted successfully.")
+                    except Exception as e:
+                        print(f"[Worker-{idx}][{p_name}] Error during error reporting: {e}")
+                else:
+                    jobs_done += 1
+                    total_reward += current_reward
+                    now_time = datetime.now().strftime('%H:%M:%S')
+                    # Log định dạng bảng cho parallel mode
+                    print(colored(f"| {jobs_done} | {now_time} | thành công | {j_type} | +{current_reward} | {total_reward} |", "green", bold=True))
+                    
+                    if max_jobs > 0 and jobs_done >= max_jobs:
+                        print(f"[Worker-{idx}][{p_name}] [🔄] Completed {max_jobs} jobs. Switching...")
+                        break
+
+                delay_between = CONFIG_DELAY.get("delay_between_jobs", 10)
+                print(f"[Worker-{idx}][{p_name}] Waiting {delay_between}s before next job...")
+                if job_limit_reached(driver):
+                    print(f"[Worker-{idx}][{p_name}] [⚠️] Reached 100 jobs/day limit.")
+                    break
+                smart_sleep(smart_random_delay(delay_between))
+
+            except Exception as e:
+                if str(e) == "MAX_JOB":
+                    print(f"[Worker-{idx}][{p_name}] [⚠️] Reached 100 jobs/day limit.")
+                    break
+                print(f"[Worker-{idx}][{p_name}] Job loop error (waiting 5s): {e}")
+                sleep(5)
+
+        print(f"[Worker-{idx}][{p_name}] Account processing finished. Total jobs: {jobs_done}")
+        return True
+
+    except Exception as e:
+        print(f"[Worker-{idx}][{p_name}] Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def dom_worker(worker_id, queue, webDriverPool, global_2captcha_api_key):
+    """Worker function that processes accounts from the queue."""
+    print(f"[Worker-{worker_id}] Starting...")
+    while not STOP_FLAG:
+        try:
+            try:
+                profile, idx = queue.get(timeout=5)
+            except:
+                if STOP_FLAG: break
+                continue
+
+            driver = webDriverPool.acquire(worker_id=worker_id, profile_name=profile.get("profile_name"))
+            if driver is None:
+                print(f"[Worker-{worker_id}] Could not acquire driver. Retrying...")
+                sleep(1)
+                continue
+
+            try:
+                success = process_account_full_dom(driver, profile, idx, global_2captcha_api_key)
+            except Exception as e:
+                print(f"[Worker-{worker_id}] Error processing {profile.get('profile_name')}: {e}")
+                success = False
+
+            webDriverPool.release(driver, worker_id=worker_id, profile_name=profile.get("profile_name"))
+            queue.task_done()
+
+            if not STOP_FLAG:
+                delay_between_accounts = CONFIG_DELAY.get("delay_between_accounts", 30)
+                print(f"[Worker-{worker_id}] Waiting {delay_between_accounts}s before next account...")
+                smart_sleep(smart_random_delay(delay_between_accounts))
+
+        except Exception as e:
+            print(f"[Worker-{worker_id}] Worker error: {e}")
+            sleep(1)
+
+    print(f"[Worker-{worker_id}] Worker stopped.")
+
+
+def run_selenium_dom_parallel():
+    """Parallel Full DOM Mode with WebDriver Pooling"""
+    global STOP_FLAG
+    STOP_FLAG = False
+
+    print("\n" + "="*60)
+    print("🚀 STARTING PARALLEL FULL DOM MODE (NEW)")
+    print("="*60)
+
+    config_path = "config_parallel.json"
+    if not os.path.exists(config_path):
+        sample = {
+            "delay_between_jobs": 10.0, "delay_after_api_call": 5.0,
+            "delay_after_complete": 3.0, "delay_after_report_error": 3.0,
+            "delay_on_job_hunt_retry": 16.0, "delay_between_accounts": 30.0,
+            "timeout_driver_load": 15.0, "timeout_wait_element": 15.0,
+            "sleep_on_reset": 60.0, "sleep_on_cool_down": 180.0,
+            "delay_after_reset_click": 15.0, "switch_server_minutes": 0.0,
+            "default_proxy": "",
+            "parallel_accounts": [
+                {
+                    "profile_name": "Test Account 1", "golike_username": "test_user_1",
+                    "golike_password": "test_pass_1", "facebook_cookie": "test_cookie_1",
+                    "golike_uid": "", "target_fb_uid": "100000000000001",
+                    "target_fb_name": "Test User 1", "proxy": ""
+                },
+                {
+                    "profile_name": "Test Account 2", "golike_username": "test_user_2",
+                    "golike_password": "test_pass_2", "facebook_cookie": "test_cookie_2",
+                    "golike_uid": "", "target_fb_uid": "100000000000002",
+                    "target_fb_name": "Test User 2", "proxy": ""
+                }
+            ]
+        }
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(sample, f, indent=4, ensure_ascii=False)
+        print("\n" + "="*60)
+        print("💥 PARALLEL CONFIG FILE NOT FOUND: config_parallel.json")
+        print("Sample configuration file created. Please fill in your accounts!")
+        print(f"👉 File: {os.path.abspath(config_path)}")
+        print("="*60)
+        input("\nPress Enter to return to menu...")
+        return
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except Exception as e:
+        print(f"❌ Error loading config: {e}")
+        return
+
+    if isinstance(raw, list):
+        profiles = raw
+    elif isinstance(raw, dict):
+        profiles = raw.get("parallel_accounts", [])
+        delay_keys = [
+            "delay_between_jobs", "delay_after_api_call", "delay_after_complete",
+            "delay_after_report_error", "delay_on_job_hunt_retry", "delay_between_accounts",
+            "timeout_driver_load", "timeout_wait_element", "sleep_on_reset",
+            "sleep_on_cool_down", "delay_after_reset_click", "sleep_on_hunt_retry",
+            "switch_server_minutes", "max_jobs_before_switch", "default_proxy"
+        ]
+        with CONFIG_DELAY_LOCK:
+            for k in delay_keys:
+                if k in raw: CONFIG_DELAY[k] = raw[k]
+    else:
+        print(f"❌ Invalid config format")
+        return
+
+    if not profiles:
+        print("❌ No accounts in config_parallel.json!")
+        return
+
+    print(f"\n🚀 FOUND {len(profiles)} ACCOUNTS FOR PARALLEL PROCESSING!")
+
+    global_2captcha_api_key = CONFIG_DELAY.get("2captcha_api_key", "").strip()
+    if not global_2captcha_api_key:
+        print("\n" + "="*50)
+        print("🔒 CONFIGURING reCAPTCHA v2 FOR PARALLEL MODE")
+        use_2captcha = input("Use 2Captcha API? (y/n): ").strip().lower()
+        if use_2captcha in ['y', 'yes', '']:
+            global_2captcha_api_key = input("Enter 2Captcha API Key: ").strip()
+            if global_2captcha_api_key:
+                with CONFIG_DELAY_LOCK:
+                    CONFIG_DELAY["2captcha_api_key"] = global_2captcha_api_key
+        print("="*50 + "\n")
+
+    account_queue = queue.Queue()
+    for idx, profile in enumerate(profiles):
+        account_queue.put((profile, idx))
+
+    max_workers = min(len(profiles), 3)
+    print(f"\n🔧 Creating WebDriver pool with {max_workers} workers...")
+    webDriverPool = WebDriverPool(max_size=max_workers)
+
+    threads = []
+    print(f"\n🚀 Starting {max_workers} worker threads...")
+    for i in range(max_workers):
+        t = threading.Thread(
+            target=dom_worker,
+            args=(i, account_queue, webDriverPool, global_2captcha_api_key)
+        )
+        t.daemon = True
+        t.start()
+        threads.append(t)
+        print(f"🚀 Worker-{i} started")
+
+    print(f"\n" + "*"*60)
+    print(f"🔥 ALL {max_workers} WORKERS ACTIVE! Monitoring...")
+    print("*"*60 + "\n")
+
+    try:
+        while not STOP_FLAG and not account_queue.empty():
+            if STOP_FLAG: break
+            sleep(1)
+        print(f"\n⏳ Waiting for workers to finish...")
+        while not STOP_FLAG and any(t.is_alive() for t in threads):
+            if STOP_FLAG: break
+            sleep(1)
+    except KeyboardInterrupt:
+        print(f"\n[🛑] Ctrl+C. Stopping gracefully...")
+        STOP_FLAG = True
+
+    print(f"\n🛑 Signaling workers to stop...")
+    STOP_FLAG = True
+
+    for i, t in enumerate(threads):
+        if t.is_alive():
+            t.join(timeout=5)
+            if t.is_alive():
+                print(f"[⚠️] Worker-{i} did not finish gracefully")
+            else:
+                print(f"[✓] Worker-{i} finished")
+
+    print(f"\n🔧 Shutting down WebDriver pool...")
+    webDriverPool.shutdown()
+    print(f"\n🧹 Performing final cleanup...")
+    cleanup()
+    print(f"\n[✅] Parallel Full DOM Mode completed!")
+
+
+# ======================================================================
 # ==================== MENU KHỞI CHẠY HỆ THỐNG CHÍNH ==================
 # ======================================================================
 def sele_menu():
@@ -3901,23 +4804,30 @@ def sele_menu():
         print("\n" + "="*65)
         print("🔥        HỆ THỐNG AUTO CÀY COIN GOLIKE & FACEBOOK v" + CURRENT_VERSION + "        🔥")
         print("="*65)
-        print("1. Chạy HYBRID ĐƠN LẺ (Nhận job API - Làm trên trình duyệt)")
-        print("2. Chạy HYBRID SONG SONG (Nhận job API - Làm trên trình duyệt)")
-        print("3. Chạy FULL DOM (Sạch 100% - Nhận job & Làm trên trình duyệt)")
-        print("4. Setup Delay Config")
+        print("1. Chạy HYBRID ĐƠN LẺ [STABLE] (API + Browser)")
+        print("2. Chạy HYBRID SONG SONG (Experimental)")
+        print(colored("3. Chạy FULL DOM (Single) [STABLE/RECOMMENDED]", "green", attrs=['bold']))
+        print("4. Chạy FULL DOM SONG SONG (BETA)")
+        print("5. Setup Delay Config")
+        print("6. Cấu hình Parallel Full DOM")
         print("0. Thoát chương trình")
         print("-" * 65)
 
         try:
-            lua_chon = input("👉 Lựa chọn (1/2/3/4/0): ").strip()
+            lua_chon = input("👉 Lựa chọn (1/2/3/4/5/6/0): ").strip()
 
             if lua_chon == "0":
                 print("\n[✅] Tạm biệt!")
                 cleanup()
                 break
             elif lua_chon == "4":
+                run_selenium_dom_parallel()
+            elif lua_chon == "5":
                 setup_delay_config()
                 load_delay_config()
+                continue
+            elif lua_chon == "6":
+                setup_parallel_config()
                 continue
             elif lua_chon == "2":
                 run_parallel_mode()
