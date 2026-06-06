@@ -3950,17 +3950,31 @@ def run_selenium_dom_mode():
                     
                     try:
                         job_id = job.find_element(By.CSS_SELECTOR, "h6.font-id b").text
-                        job_type_raw = job.find_element(By.CSS_SELECTOR, "span.block-text-2").text
                         
-                        # Trích xuất giá tiền (reward) từ text của card
-                        job_text = job.text
-                        reward_match = re.search(r'\+(\d+)', job_text)
-                        current_reward = int(reward_match.group(1)) if reward_match else 40
+                        # 1. Trích xuất loại Job (Thử nhiều selector)
+                        job_type_raw = ""
+                        for jsel in ["span.block-text-2", "span.block-text.font-bold", "span.block-text"]:
+                            try:
+                                job_type_raw = job.find_element(By.CSS_SELECTOR, jsel).text.strip()
+                                if job_type_raw and "Nội dung" not in job_type_raw: break
+                            except: pass
+                        
+                        # 2. Trích xuất giá tiền (reward) từ element .hold-prices
+                        current_reward = 40
+                        try:
+                            reward_text = job.find_element(By.CSS_SELECTOR, ".hold-prices").text.strip()
+                            current_reward = int(re.sub(r'\D', '', reward_text))
+                        except:
+                            # Fallback regex nếu selector lỗi
+                            job_text = job.text
+                            reward_match = re.search(r'(\d+)', job_text) # Tìm số đầu tiên thường là tiền
+                            current_reward = int(reward_match.group(1)) if reward_match else 40
                         
                         print(colored(f"\n[*] Phát hiện Job: ID {job_id} | Loại: {job_type_raw} | Thưởng: +{current_reward}đ", "cyan"))
-                    except: 
+                    except Exception as e:
                         job_type_raw = ""
                         current_reward = 40
+                        # print(f"Debug: Lỗi trích xuất card: {e}")
                     
                     # 1. Ấn vô Job
                     human_click(driver, job)
@@ -4460,15 +4474,28 @@ def process_account_full_dom(driver, profile, idx, global_2captcha_api_key):
 
                 try:
                     job_id = first_job.find_element(By.CSS_SELECTOR, "h6.font-id b").text
-                    job_type_raw = first_job.find_element(By.CSS_SELECTOR, "span.block-text-2").text
                     
-                    # Trích xuất giá tiền (reward) từ text của card
-                    job_text = first_job.text
-                    reward_match = re.search(r'\+(\d+)', job_text)
-                    current_reward = int(reward_match.group(1)) if reward_match else 40
+                    # 1. Trích xuất loại Job (Thử nhiều selector)
+                    job_type_raw = ""
+                    for jsel in ["span.block-text-2", "span.block-text.font-bold", "span.block-text"]:
+                        try:
+                            job_type_raw = first_job.find_element(By.CSS_SELECTOR, jsel).text.strip()
+                            if job_type_raw and "Nội dung" not in job_type_raw: break
+                        except: pass
+                    
+                    # 2. Trích xuất giá tiền (reward) từ element .hold-prices
+                    current_reward = 40
+                    try:
+                        reward_text = first_job.find_element(By.CSS_SELECTOR, ".hold-prices").text.strip()
+                        current_reward = int(re.sub(r'\D', '', reward_text))
+                    except:
+                        # Fallback regex nếu selector lỗi
+                        job_text = first_job.text
+                        reward_match = re.search(r'(\d+)', job_text)
+                        current_reward = int(reward_match.group(1)) if reward_match else 40
                     
                     print(f"[Worker-{idx}][{p_name}] [*] Job ID {job_id} | Type: {job_type_raw} | Thưởng: +{current_reward}đ")
-                except:
+                except Exception as e:
                     job_type_raw = ""
                     current_reward = 40
 
