@@ -847,19 +847,24 @@ class FacebookSeleniumBot:
         if not self.driver:
             return None
 
-        # Resolve naked IDs
+        # Resolve naked IDs (chỉ dùng cho link dạng số trần)
         if re.match(r'^https?://(www\.|m\.|mbasic\.)?facebook\.com/\d+/?$', link.split('?')[0]):
             try:
                 ctx = ssl._create_unverified_context()
                 r = urllib.request.Request(link, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                 resp = urllib.request.urlopen(r, timeout=5, context=ctx)
                 final_url = resp.geturl()
-                if 'login' not in final_url and 'facebook.com/' in final_url and re.search(r'/(videos|reel|posts|photos)/', final_url):
-                    link = final_url
-                else:
-                    html = resp.read().decode('utf-8', errors='ignore')
-                    canonical = re.search(r'canonical.*?href=[\x22\x27](.*?)[\x22\x27]', html)
-                    if canonical: link = canonical.group(1)
+                
+                # Chỉ lấy link mới nếu nó không phải trang login
+                if 'login' not in final_url.lower() and 'facebook.com/' in final_url:
+                    if re.search(r'/(videos|reel|posts|photos|story|groups)/', final_url):
+                        link = final_url
+                    else:
+                        # Thử tìm canonical link trong HTML nếu final_url vẫn chưa rõ ràng
+                        html = resp.read().decode('utf-8', errors='ignore')
+                        canonical = re.search(r'canonical.*?href=[\x22\x27](.*?)[\x22\x27]', html)
+                        if canonical and 'login' not in canonical.group(1).lower(): 
+                            link = canonical.group(1)
             except Exception as e:
                 logger.warning("[%s] Lỗi resolve link ID trần: %s" % (self.profile_name, str(e)))
 
