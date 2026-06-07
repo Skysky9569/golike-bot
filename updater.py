@@ -136,11 +136,17 @@ def _get_all_repo_files() -> List[str]:
     Returns relative paths from repo root.
     """
     try:
-        response = requests.get(REPO_TREE_URL, timeout=15)
-        if response.status_code != 200:
-            return []
+        if HAS_REQUESTS:
+            response = requests.get(REPO_TREE_URL, timeout=15)
+            if response.status_code != 200:
+                return []
+            data = response.json()
+        else:
+            with urllib.request.urlopen(REPO_TREE_URL, timeout=15) as response:
+                if response.status != 200:
+                    return []
+                data = json.loads(response.read().decode('utf-8'))
 
-        data = response.json()
         if 'tree' not in data:
             return []
             
@@ -151,7 +157,8 @@ def _get_all_repo_files() -> List[str]:
                 path = item.get('path', '')
                 files.append(path)
         return files
-    except Exception:
+    except Exception as e:
+        print(f"  ⚠️ Warning - Could not fetch repo tree: {e}")
         return []
 
 
@@ -426,7 +433,6 @@ def ensure_system_complete() -> bool:
 
     # Try to get full file tree from GitHub API first
     repo_files = _get_all_repo_files()
-    using_full_api = bool(repo_files)
 
     if not repo_files:
         repo_files = ESSENTIAL_FILES
@@ -436,13 +442,15 @@ def ensure_system_complete() -> bool:
     missing = []
     for rel_path in repo_files:
         full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
-        if not os.path.exists(full_path):
+        # Ensure we check for files, not just directory existence
+        if not os.path.exists(full_path) or (os.path.isdir(full_path) and not os.listdir(full_path)):
             missing.append(rel_path)
 
     if not missing:
+        print(f"  [✓] Verified {len(repo_files)} system files.")
         return True
 
-    print(f"\n  ⚠️ {len(missing)} file(s) missing, downloading...")
+    print(f"\n  ⚠️ {len(missing)} file(s) missing or empty, downloading...")
     restored, failed = _download_missing_files(base_dir, missing)
 
     if failed == 0:
@@ -454,7 +462,7 @@ def ensure_system_complete() -> bool:
     return failed == 0
 
 
-def run_version_check(current_version: str):
+def run_version_check(current_version: str, force_update: bool = False):
     """
     Check for new version by comparing version.json local vs GitHub.
 
@@ -466,6 +474,20 @@ def run_version_check(current_version: str):
     """
     if sys.platform == 'win32':
         os.system('color')
+
+    if force_update:
+        print("\033[1;33m[*] Force update enabled. Preparing clean slate...\033[0m")
+        # Step 1: Download version.json from GitHub to get latest version info
+        version_data = _download_text(VERSION_URL, timeout=10)
+        latest_ver = "Unknown"
+        changelog = "Manual force update"
+        if version_data:
+            try:
+                remote_info = json.loads(version_data)
+                latest_ver = remote_info.get("version", "0.0.0")
+            except Exception: pass
+        _perform_clean_upgrade(latest_ver, changelog)
+        return
 
     print(f"\033[1;36m[*] Checking for updates (Current: v{current_version})...\033[0m")
 
@@ -608,5 +630,14 @@ if __name__ == "__main__":
     print("\033[1;35m\n=============================================\033[0m")
     print("\033[1;35m🔧 GoLike Bot - Clean Slate Updater\033[0m")
     print("\033[1;35m=============================================\033[0m")
-    ensure_system_complete()
-    print("\033[1;32m[✅] All core system files verified!\033[0m\n")
+    
+    force = "--force" in sys.argv or "--repair" in sys.argv
+    
+    if force:
+        run_version_check(_load_local_version(), force_update=True)
+    else:
+        ensure_system_complete()
+        print("\033[1;32m[✅] All core system files verified!\033[0m\n")
+        
+        # Also check for version update if run directly
+        run_version_check(_load_local_version())

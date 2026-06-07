@@ -18,7 +18,7 @@ except ImportError:
     print("\033[1;31m[!] THIẾU FILE HỆ THỐNG QUAN TRỌNG (GOLIKE_CORE / BOOT)!\033[0m")
     print("\033[1;33m[!] Điều này thường xảy ra khi quá trình cập nhật bị gián đoạn hoặc bị lỗi.\033[0m")
     print("\033[1;32m[👉] CÁCH KHẮC PHỤC: Hãy chạy lệnh sau để tự động tải bù các file còn thiếu:\033[0m")
-    print("\n\033[1;36m      python updater.py\033[0m\n")
+    print("\n\033[1;36m      python updater.py --repair\033[0m\n")
     print("\033[1;31m" + "=" * 60 + "\033[0m")
     sys.exit(1)
 
