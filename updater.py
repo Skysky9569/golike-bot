@@ -423,7 +423,7 @@ def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, i
     return restored, failed
 
 
-def ensure_system_complete() -> bool:
+def ensure_system_complete(force: bool = False) -> bool:
     """
     Check all files from GitHub exist locally. Download missing ones.
     Falls back to ESSENTIAL_FILES list if GitHub API is unavailable.
@@ -440,17 +440,21 @@ def ensure_system_complete() -> bool:
 
     # Find missing files
     missing = []
-    for rel_path in repo_files:
-        full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
-        # Ensure we check for files, not just directory existence
-        if not os.path.exists(full_path) or (os.path.isdir(full_path) and not os.listdir(full_path)):
-            missing.append(rel_path)
+    if force:
+        missing = repo_files # Download everything
+        print("  🔄 Force repair enabled - overwriting all system files...")
+    else:
+        for rel_path in repo_files:
+            full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
+            # Ensure we check for files, not just directory existence
+            if not os.path.exists(full_path) or (os.path.isdir(full_path) and not os.listdir(full_path)):
+                missing.append(rel_path)
 
     if not missing:
         print(f"  [✓] Verified {len(repo_files)} system files.")
         return True
 
-    print(f"\n  ⚠️ {len(missing)} file(s) missing or empty, downloading...")
+    print(f"\n  ⚠️ {len(missing)} file(s) to be restored, downloading...")
     restored, failed = _download_missing_files(base_dir, missing)
 
     if failed == 0:
@@ -634,6 +638,9 @@ if __name__ == "__main__":
     force = "--force" in sys.argv or "--repair" in sys.argv
     
     if force:
+        # First ensure system files are complete (forced)
+        ensure_system_complete(force=True)
+        # Then check/perform full version upgrade
         run_version_check(_load_local_version(), force_update=True)
     else:
         ensure_system_complete()
