@@ -176,6 +176,64 @@ def human_click(driver, element):
             driver.execute_script("arguments[0].click();", element)
         except:
             pass
+
+def human_type(element, text, delay_min=0.02, delay_max=0.15):
+    """
+    Giả lập gõ phím như người thật bằng cách gõ từng ký tự
+    với khoảng nghỉ ngẫu nhiên giữa các phím.
+    """
+    try:
+        # Click vào element trước khi gõ để đảm bảo focus
+        element.click()
+        time.sleep(random.uniform(0.2, 0.5))
+        
+        # Xóa nội dung cũ nếu có
+        element.clear()
+        time.sleep(random.uniform(0.1, 0.3))
+        
+        for char in text:
+            element.send_keys(char)
+            # Nghỉ ngẫu nhiên giữa mỗi phím
+            time.sleep(random.uniform(delay_min, delay_max))
+            
+            # Thỉnh thoảng nghỉ lâu hơn một chút (giả lập mỏi tay hoặc suy nghĩ)
+            if random.random() < 0.05:
+                time.sleep(random.uniform(0.2, 0.5))
+    except Exception:
+        # Nếu lỗi (ví dụ element bị stale), thử send_keys trực tiếp một lần cuối
+        try: element.send_keys(text)
+        except: pass
+
+def golike_login_human(driver, username, password):
+    """
+    Thực hiện đăng nhập GoLike với hành vi giả lập người thật để tránh Captcha.
+    """
+    try:
+        # Đợi form login xuất hiện
+        username_xpath = '//*[@id="app"]/div/div[1]/div/form/div[1]/input'
+        password_xpath = '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input'
+        login_btn_xpath = '//*[@id="app"]/div/div[1]/div/form/div[3]/button'
+        
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, username_xpath)))
+        sleep(random.uniform(1.5, 3.0)) # Nghỉ một lát như người thật nhìn màn hình
+
+        # Nhập username
+        tk_el = driver.find_element(By.XPATH, username_xpath)
+        human_type(tk_el, username)
+        sleep(random.uniform(0.8, 1.5)) # Nghỉ giữa 2 field
+        
+        # Nhập password
+        mk_el = driver.find_element(By.XPATH, password_xpath)
+        human_type(mk_el, password)
+        sleep(random.uniform(1.0, 2.0)) # Nghỉ trước khi click login
+        
+        # Click login
+        dn_btn = driver.find_element(By.XPATH, login_btn_xpath)
+        human_click(driver, dn_btn)
+        return True
+    except Exception as e:
+        print(f"🚨 Lỗi khi đăng nhập GoLike (Human Mode): {e}")
+        return False
 # ================= MEMORY CIRCUIT BREAKER =================
 # Progressive thresholds for better memory management
 MEMORY_WARNING_PERCENT = 75  # Cảnh báo khi RAM đạt 75%
@@ -2251,16 +2309,20 @@ def run_single_mode():
     try:
         driver.get("https://app.golike.net/login")
         
-        tk = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input')
-        tk.clear()
-        tk.send_keys(golike_user)
+        # Đợi form login xuất hiện
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input')))
+        sleep(random.uniform(1.5, 3.0)) # Nghỉ một lát như người thật nhìn màn hình
+
+        tk_el = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[1]/input')
+        human_type(tk_el, golike_user)
+        sleep(random.uniform(0.8, 1.5)) # Nghỉ giữa 2 field
         
-        mk = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input')
-        mk.clear()
-        mk.send_keys(golike_pass)
+        mk_el = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input')
+        human_type(mk_el, golike_pass)
+        sleep(random.uniform(1.0, 2.0)) # Nghỉ trước khi click login
         
-        dn = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button')
-        dn.click()
+        dn_btn = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button')
+        human_click(driver, dn_btn)
 
         # Handle reCAPTCHA v2 với 2Captcha API
         if not handle_2captcha_captcha(driver, "https://app.golike.net/login", is_parallel=False):

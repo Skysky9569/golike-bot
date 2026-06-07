@@ -1,6 +1,6 @@
 {
-  "version": "1.14.3",
+  "version": "1.14.4",
   "release_date": "2026-06-07",
-  "changelog": "v1.14.3 - Critical Fix: Redesigned updater to ensure reliable file restoration, fixed IndentationError in TikTok flow, and improved VPS repair mechanism.",
-  "previous_version": "1.14.2"
+  "changelog": "v1.14.4 - Nâng cấp đăng nhập GoLike giả lập người thật (Human-like typing/clicking) giúp giảm thiểu Captcha, tối ưu hóa tốc độ nạp Account và fix các lỗi tồn đọng trên VPS.",
+  "previous_version": "1.14.3"
 }
