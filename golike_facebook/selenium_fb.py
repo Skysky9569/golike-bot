@@ -877,9 +877,16 @@ class FacebookSeleniumBot:
                     if "facebook.com" not in u: return u
                     return u.split('facebook.com')[-1].split('?')[0].strip('/')
 
-                # Chỉ tải nếu URL hiện tại không khớp với ID bài viết mục tiêu
-                if get_clean_path(current_url) != get_clean_path(target_url) or "facebook.com" not in current_url:
-                    self.driver.get(link)
+                # Chỉ tải nếu không phải đang trong quá trình redirect từ GoLike
+                # Nếu đã click từ GoLike rồi thì để trình duyệt tự chuyển hướng, tránh load 2 lần
+                is_redirecting = "golike.net" in current_url and "/go" in current_url
+                already_on_target = get_clean_path(current_url) == get_clean_path(target_url)
+                
+                if not (is_redirecting or already_on_target):
+                    if "facebook.com" not in current_url:
+                        self.driver.get(link)
+                    elif get_clean_path(current_url) != get_clean_path(target_url):
+                        self.driver.get(link)
                 
                 # Đợi trang load xong (ready state)
                 WebDriverWait(self.driver, 10).until(lambda d: d.execute_script('return document.readyState') == 'complete')
