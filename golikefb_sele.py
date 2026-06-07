@@ -2076,10 +2076,24 @@ def get_golike_credentials():
     # Fallback: manual input if no .env
     print("\n" + "="*40)
     print(" CẤU HÌNH TÀI KHOẢN GOLIKE BAN ĐẦU ")
-    print("(Gợi ý: Tạo file .env để không cần nhập lại)")
+    print("(Gợi ý: Tool sẽ tự lưu file .env để không cần nhập lại)")
     print("="*40)
     username = input("[?] Nhập tên đăng nhập GoLike: ").strip()
     password = input("[?] Nhập mật khẩu GoLike: ").strip()
+    
+    # Tự động tạo file .env
+    if username and password:
+        try:
+            with open(".env", "w", encoding="utf-8") as f:
+                f.write(f"GOLIKE_USERNAME={username}\n")
+                f.write(f"GOLIKE_PASSWORD={password}\n")
+            print(colored("\n[✅] Đã tự động tạo file .env lưu thông tin đăng nhập!", "green"))
+            # Cập nhật os.environ để code sau đó có thể dùng os.getenv
+            os.environ['GOLIKE_USERNAME'] = username
+            os.environ['GOLIKE_PASSWORD'] = password
+        except Exception as e:
+            print(colored(f"\n[!] Không thể tạo file .env: {e}", "yellow"))
+            
     return username, password
 
 def parse_golike_uid_from_cookie(cookie_str: str) -> Optional[str]:
