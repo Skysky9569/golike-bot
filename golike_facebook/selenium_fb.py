@@ -783,6 +783,17 @@ class FacebookSeleniumBot:
             except Exception:
                 pass
 
+    def _inject_cookies(self) -> None:
+        """
+        Bơm cookie (backward compatibility).
+        Sử dụng cả CDP và Standard injection, sau đó refresh trang.
+        """
+        self._inject_cookies_cdp()
+        self._inject_cookies_standard()
+        if self.driver:
+            self.driver.refresh()
+            time.sleep(2)
+
     def _inject_cookies_cdp(self) -> None:
         """Bơm cookie qua CDP (Network.setCookie) - không gây reload"""
         cookies = parse_cookie_string(self.cookie_str)
