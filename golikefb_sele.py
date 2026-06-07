@@ -3772,8 +3772,9 @@ def run_selenium_dom_mode():
             print(colored(f"[*] Đang chuẩn bị môi trường Facebook cho tài khoản #{current_idx+1}...", "yellow"))
             
             num_handles_before = len(driver.window_handles)
-            driver.execute_script("window.open('https://www.facebook.com/', '_blank');")
-            time.sleep(2)
+            # Mở tab trắng trước để bơm cookie qua CDP, tránh load FB 2 lần
+            driver.execute_script("window.open('about:blank', '_blank');")
+            time.sleep(1)
             
             if len(driver.window_handles) > num_handles_before:
                 fb_setup_tab = driver.window_handles[-1]
@@ -3792,10 +3793,17 @@ def run_selenium_dom_mode():
                     use_desktop=True
                 )
                 fb_bot.driver = driver
-                fb_bot._inject_cookies()
+                
+                # Bơm cookie tối ưu: CDP -> Get -> Standard
+                fb_bot._inject_cookies_cdp()
+                target_fb = "https://www.facebook.com/"
+                driver.get(target_fb)
+                time.sleep(1)
+                fb_bot._inject_cookies_standard()
 
                 print("[*] Đang xác thực trạng thái đăng nhập Facebook...")
-                is_valid = fb_bot._verify_login()
+                # Tắt force_reload vì đã get() ở trên rồi
+                is_valid = fb_bot._verify_login(force_reload=False)
 
                 if not is_valid:
                     # Cookie thất bại - hỏi user retry hay skip
