@@ -878,7 +878,6 @@ class FacebookSeleniumBot:
             link = link.replace("m.facebook.com", "www.facebook.com")
 
         if current_tab_only:
-            print(f"[*] Đang tải trang: {link[:60]}...")
             try:
                 current_url = self.driver.current_url.lower()
                 target_url = link.lower()
@@ -886,14 +885,25 @@ class FacebookSeleniumBot:
                 # Hàm trích xuất path chính (bỏ domain và query) để so sánh nội dung
                 def get_clean_path(u):
                     if "facebook.com" not in u: return u
-                    return u.split('facebook.com')[-1].split('?')[0].strip('/')
+                    path = u.split('facebook.com')[-1].split('?')[0].strip('/')
+                    if 'reel/' in path: path = path.replace('reel/', '')
+                    return path
 
-                # Chỉ tải nếu không phải đang trong quá trình redirect từ GoLike
-                # Nếu đã click từ GoLike rồi thì để trình duyệt tự chuyển hướng, tránh load 2 lần
+                # Kiểm tra xem có phải đang chuyển hướng từ GoLike không
                 is_redirecting = "golike.net" in current_url and "/go" in current_url
+                
+                # Nếu đang redirect, đợi 1 chút để FB load rồi check lại current_url
+                if is_redirecting:
+                    try:
+                        WebDriverWait(self.driver, 5).until(lambda d: "facebook.com" in d.current_url)
+                        current_url = self.driver.current_url.lower()
+                    except: pass
+
                 already_on_target = get_clean_path(current_url) == get_clean_path(target_url)
                 
-                if not (is_redirecting or already_on_target):
+                if not already_on_target:
+                    # Chỉ tải nếu URL hiện tại không khớp với ID bài viết mục tiêu
+                    print(f"[*] Đang tải trang: {link[:60]}...")
                     if "facebook.com" not in current_url:
                         self.driver.get(link)
                     elif get_clean_path(current_url) != get_clean_path(target_url):
