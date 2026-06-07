@@ -1,7 +1,13 @@
 import time
 import os
-import random
 import sys
+
+# Đảm bảo thư mục gốc luôn có trong PATH để VPS/Server không bị lỗi ModuleNotFoundError
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+import random
 import re
 import requests
 import json
@@ -886,12 +892,6 @@ def handle_rate_limit(driver, context_name="tool"):
         print(f"[{context_name}] ❌ Không thể ấn Facebook: {e}")
 
     return True
-
-# ======== ĐẢM BẢO SCRIPT DIRECTORY TRONG PYTHON PATH ========
-# Lấy đường dẫn tuyệt đối của file đang chạy (golikefb_sele.py)
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
 
 # ======== NHẬP API VÀ LIÊN KẾT CỦA BỘ TOOL ========
 try:
