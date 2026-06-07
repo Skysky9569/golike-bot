@@ -1,6 +1,6 @@
 {
-  "version": "1.14.8",
+  "version": "1.14.9",
   "release_date": "2026-06-07",
-  "changelog": "v1.14.8 - Fix lỗi resolve link ID trần trỏ về trang Login, tự động tạo file .env khi nhập tài khoản thủ công, và tối ưu hóa quy trình làm job.",
-  "previous_version": "1.14.7"
+  "changelog": "v1.14.9 - Cập nhật thông báo nâng cấp: Khuyên dùng --repair để đảm bảo tính toàn vẹn của hệ thống khi có phiên bản mới.",
+  "previous_version": "1.14.8"
 }

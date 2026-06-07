@@ -531,6 +531,13 @@ def run_version_check(current_version: str, force_update: bool = False):
     print(f"\033[1;36m 📅 Release date    : {release_date}\033[0m")
     if changelog:
         print(f"\033[1;36m 📝 Changelog      : {changelog}\033[0m")
+    
+    # Khuyến dùng repair để cập nhật ổn định nhất
+    print(f"\033[1;31m{'━' * 55}\033[0m")
+    print(f"\033[1;33m 👉 KHUYÊN DÙNG: HÃY CHẠY LỆNH SAU ĐỂ CẬP NHẬT ỔN ĐỊNH NHẤT:\033[0m")
+    print(f"\033[1;36;1m       python updater.py --repair\033[0m")
+    print(f"\033[1;31m{'━' * 55}\033[0m")
+    
     print(f"\033[1;33m{'═' * 55}\033[0m\n")
 
     chon = input("\033[1;32m📥 Auto-update now? (y/n, Enter=Yes): \033[0m").strip().lower()
