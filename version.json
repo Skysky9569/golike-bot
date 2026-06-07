@@ -1,6 +1,6 @@
 {
-  "version": "1.14.1",
-  "release_date": "2026-06-06",
-  "changelog": "v1.14.1 - Fix lỗi trích xuất tiền thưởng (Reward) bằng selector .hold-prices và tối ưu hóa nhận diện loại Job từ giao diện GoLike mới.",
-  "previous_version": "1.14.0"
+  "version": "1.14.2",
+  "release_date": "2026-06-07",
+  "changelog": "v1.14.2 - Tối ưu hóa khởi động trình duyệt (CDP Cookie), fix lỗi nạp trang 2 lần khi làm job (tránh bị redirect về Home), và hỗ trợ --repair trên VPS.",
+  "previous_version": "1.14.1"
 }
