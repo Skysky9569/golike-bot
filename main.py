@@ -110,16 +110,39 @@ except ImportError:
     fb_desktop_menu = None
 
 
+def check_file_syntax(file_path: str) -> bool:
+    """Kiểm tra cú pháp của file python trước khi chạy."""
+    if not os.path.exists(file_path): return True
+    import py_compile
+    try:
+        py_compile.compile(file_path, doraise=True)
+        return True
+    except Exception as e:
+        print(colored(f"\n[🚨] LỖI CÚ PHÁP NGHIÊM TRỌNG TRONG FILE {file_path}!", "red", attrs=["bold"]))
+        print(colored(f"Chi tiết: {e}", "red"))
+        print(colored("\n" + "═"*60, "yellow"))
+        print(colored(" 👉 NGUYÊN NHÂN: Có thể file bị dán đè nội dung hoặc lỗi tải về.", "yellow"))
+        print(colored(" 👉 CÁCH SỬA: Hãy chạy lệnh sau để tự động khôi phục bản chuẩn:", "green", attrs=["bold"]))
+        print(colored("\n       python updater.py --repair\n", "cyan", attrs=["bold"]))
+        print(colored("═"*60 + "\n", "yellow"))
+        return False
+
 def run_facebook_selenium_bot() -> None:
     """Chạy tool GoLike Facebook Selenium (hỗ trợ API + DOM Click mode) - Import trực tiếp thay vì subprocess."""
     print(colored("\n════════════════════════════════════════════════", "cyan"))
     print(colored("🚀 KHỞI ĐỘNG TOOL GOLIKE FACEBOOK SELENIUM", "yellow"))
     print(colored("════════════════════════════════════════════════", "cyan"))
 
+    # Kiểm tra cú pháp trước khi import để tránh crash main program
+    if not check_file_syntax("golikefb_sele.py"):
+        input(colored("Nhấn Enter để quay lại...", "white"))
+        return
+
     try:
         # Import golikefb_sele as module directly so sys.exit() works properly
         import importlib
         import golikefb_sele
+        importlib.reload(golikefb_sele) # Đảm bảo nạp code mới nhất
         golikefb_sele.sele_menu()
     except SystemExit:
         # User chose 'exit' - propagate to exit main program
@@ -129,6 +152,17 @@ def run_facebook_selenium_bot() -> None:
     except Exception as e:
         logger.error(f"Lỗi khi chạy golikefb_sele.py: {e}")
         print(colored(f"❌ Đã xảy ra lỗi: {e}", "red"))
+        input(colored("Nhấn Enter để quay lại...", "white"))
+
+def run_system_repair() -> None:
+    """Chạy lệnh repair hệ thống qua updater.py"""
+    print(colored("\n[🔄] Đang khởi động tiến trình sửa lỗi hệ thống...", "yellow"))
+    try:
+        import subprocess
+        subprocess.run([sys.executable, "updater.py", "--repair"])
+        input(colored("\n[✅] Đã xong! Nhấn Enter để quay lại menu chính...", "white"))
+    except Exception as e:
+        print(colored(f"❌ Lỗi khi chạy repair: {e}", "red"))
         input(colored("Nhấn Enter để quay lại...", "white"))
 
 def run_quick_dom_tool() -> None:
@@ -407,6 +441,9 @@ def main() -> None:
                     choice_idx = input_int("Nhập lựa chọn: ", minval=1, maxval=len(labels))
                     auth_token = cred_manager.get_auth_by_label(labels[choice_idx-1])
             facebook_menu(auth_token)
+        elif choose == "10":
+            run_system_repair()
+            continue
         else:
             logger.warning("Lựa chọn không hợp lệ!")
 

@@ -121,5 +121,6 @@ def menu() -> None:
     print(colored("   [5] 🥈 Quản Lý Authorization Tokens", "green"))
     print(colored("   [6] 🖥️ Tool Facebook Desktop (Cookie + facebook.com)", "magenta"))
     print(colored("   [8] 🧹 Dọn dẹp Chrome & Driver (Tối ưu hệ thống)", "yellow"))
+    print(colored("   [10] 🔄 Sửa lỗi hệ thống (Force Repair)", "green"))
     print(colored("   [0] 🔙 Thoát Chương Trình", "white"))
     print(colored("════════════════════════════════════════════════", "white"))
