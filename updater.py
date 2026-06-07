@@ -371,23 +371,15 @@ ESSENTIAL_FILES = [
 
 def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, int]:
     """
-    Download multiple missing text files from GitHub.
-    Skips binary files automatically.
+    Download multiple missing files from GitHub.
     Returns (restored_count, failed_count)
     """
+    import concurrent.futures
     restored = 0
     failed = 0
     count_lock = threading.Lock()
 
-    # Filter files first
-    files_to_download = []
-    for rel_path in file_list:
-        _, ext = os.path.splitext(rel_path)
-        if ext.lower() not in TEXT_EXTENSIONS and ext != '':
-            continue
-        files_to_download.append(rel_path)
-
-    def download_worker(rel_path: str):
+    def download_worker(rel_path: str) -> bool:
         nonlocal restored, failed
         full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
         url = f"{GITHUB_RAW_BASE}{rel_path}"
@@ -396,29 +388,37 @@ def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, i
         if parent and not os.path.exists(parent):
             os.makedirs(parent, exist_ok=True)
 
-        content = _download_text(url, timeout=15)
+        content = _download_text(url, timeout=20)
         if content is not None:
             try:
+                # Always overwrite with fresh content
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
                 with count_lock:
                     restored += 1
                 with print_lock:
                     print(f"  ✅ {rel_path}")
+                return True
             except Exception as e:
                 with count_lock:
                     failed += 1
                 with print_lock:
                     print(f"  ❌ {rel_path}: {e}")
+                return False
         else:
             with count_lock:
                 failed += 1
             with print_lock:
                 print(f"  ❌ {rel_path}: download failed")
+            return False
 
-    # Use ThreadPoolExecutor to download in parallel
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        list(executor.map(download_worker, files_to_download))
+    # Filter to avoid binary files if needed, but for essential files we want all
+    # For now, let's just download everything in the list
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_file = {executor.submit(download_worker, f): f for f in file_list}
+        for future in concurrent.futures.as_completed(future_to_file):
+            future.result() # Wait for all to finish
 
     return restored, failed
 
