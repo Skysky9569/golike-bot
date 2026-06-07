@@ -418,7 +418,7 @@ def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, i
 
     # Use ThreadPoolExecutor to download in parallel
     with ThreadPoolExecutor(max_workers=10) as executor:
-        executor.map(download_worker, files_to_download)
+        list(executor.map(download_worker, files_to_download))
 
     return restored, failed
 

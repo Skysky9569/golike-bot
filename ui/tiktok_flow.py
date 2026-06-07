@@ -931,10 +931,12 @@ def _send_telegram_limit_notify(data: List[Dict], account_id: str) -> None:
         ip = get_public_ip()
         
         # Format message: acc: [tên_acc] đạt max job
-        message = f"🚨 <b>GoLike TikTok Alert</b>\n" \
-                  f"acc: {username} đạt max job\n" \
-                  f"IP: {ip}\n" \
-                  f"Thời gian: {now}"
+        message = (
+            f"🚨 <b>GoLike TikTok Alert</b>\n"
+            f"acc: {username} đạt max job\n"
+            f"IP: {ip}\n"
+            f"Thời gian: {now}"
+        )
                   
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         params = {
