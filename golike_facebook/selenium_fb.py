@@ -708,6 +708,7 @@ class FacebookSeleniumBot:
                 proxy=self.proxy,
                 proxy_auth_ext=self.proxy_auth_ext,
                 use_desktop=self.use_desktop,
+                headless=self.headless,
             )
             self.driver = selenium_driver.Chrome(
                 service=Service(ChromeDriverManager().install()),
