@@ -723,13 +723,19 @@ class FacebookSeleniumBot:
             inject_anti_detection_scripts(self.driver, use_desktop=self.use_desktop)
 
             logger.info("[%s] Đang bơm cookie vào browser..." % self.profile_name)
+            
+            # Bơm cookie qua CDP trước khi load trang (không gây refresh)
+            self._inject_cookies_cdp()
+
             target_url = "https://www.facebook.com/" if self.use_desktop else "https://mbasic.facebook.com/"
-            self.driver.get(target_url)
+            self.driver.get(target_url) # Tải trang 1 lần duy nhất với cookie đã có
             time.sleep(1)
-            self._inject_cookies()
+            
+            # Bơm lại qua Selenium add_cookie để đảm bảo (domain context đã có)
+            self._inject_cookies_standard()
 
             time.sleep(1)
-            # Không cần force_reload vì _inject_cookies đã refresh() rồi
+            # Kiểm tra login (không reload nữa)
             if not self._verify_login(force_reload=False):
                 logger.error("[%s] Cookie không hợp lệ hoặc hết hạn" % self.profile_name)
                 return False
@@ -777,11 +783,24 @@ class FacebookSeleniumBot:
             except Exception:
                 pass
 
-    def _inject_cookies(self) -> None:
-        """Bơm cookie Facebook vào browser"""
+    def _inject_cookies_cdp(self) -> None:
+        """Bơm cookie qua CDP (Network.setCookie) - không gây reload"""
+        cookies = parse_cookie_string(self.cookie_str)
+        try:
+            for c in cookies:
+                self.driver.execute_cdp_cmd("Network.setCookie", {
+                    "name": c["name"],
+                    "value": c["value"],
+                    "domain": ".facebook.com",
+                    "path": "/",
+                })
+        except Exception:
+            pass
+
+    def _inject_cookies_standard(self) -> None:
+        """Bơm cookie qua Selenium add_cookie (cần domain context)"""
         cookies = parse_cookie_string(self.cookie_str)
         domains = [".facebook.com", ".m.facebook.com", ".mbasic.facebook.com"]
-
         for domain in domains:
             for c in cookies:
                 cookie_data = {
@@ -794,21 +813,6 @@ class FacebookSeleniumBot:
                     self.driver.add_cookie(cookie_data)
                 except Exception:
                     pass
-
-        # Them CDP set cookie cho .facebook.com
-        try:
-            for c in cookies:
-                self.driver.execute_cdp_cmd("Network.setCookie", {
-                    "name": c["name"],
-                    "value": c["value"],
-                    "domain": ".facebook.com",
-                    "path": "/",
-                })
-        except Exception:
-            pass
-
-        self.driver.refresh()
-        time.sleep(2)
 
     def _verify_login(self, force_reload: bool = True) -> bool:
         """Kiểm tra đã đăng nhập Facebook chưa"""
