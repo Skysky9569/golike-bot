@@ -1,6 +1,6 @@
 {
-  "version": "1.14.9",
+  "version": "1.15.0",
   "release_date": "2026-06-07",
-  "changelog": "v1.14.9 - Cập nhật thông báo nâng cấp: Khuyên dùng --repair để đảm bảo tính toàn vẹn của hệ thống khi có phiên bản mới.",
-  "previous_version": "1.14.8"
+  "changelog": "v1.15.0 - Nâng cấp toàn diện bộ nạp file (Updater): Hỗ trợ tải file nhị phân (.exe, .dll) trong một lần duy nhất, fix lỗi dán đè code, và thêm Menu Repair tự động.",
+  "previous_version": "1.14.9"
 }

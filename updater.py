@@ -36,19 +36,30 @@ PRESERVED_FOLDERS = ['node_modules', '.git', '__pycache__', '.pytest_cache', '.c
 ALWAYS_KEEP_FILES = ['logs', 'logs/', '.gitignore', 'package.json', 'package-lock.json', 'Authorization.txt']
 
 
-def _download_text(url: str, timeout: int = 20) -> Optional[str]:
-    """Helper method supporting double fetch mechanism (requests or urllib)"""
+def _download_raw(url: str, timeout: int = 25) -> Optional[bytes]:
+    """Helper to download raw bytes (supports requests or urllib)"""
     try:
         if HAS_REQUESTS:
             r = requests.get(url, timeout=timeout)
             if r.status_code == 200:
-                return r.text
+                return r.content
         else:
             with urllib.request.urlopen(url, timeout=timeout) as response:
                 if response.status == 200:
-                    return response.read().decode('utf-8')
+                    return response.read()
     except Exception:
         pass
+    return None
+
+
+def _download_text(url: str, timeout: int = 20) -> Optional[str]:
+    """Download text content from URL"""
+    raw = _download_raw(url, timeout)
+    if raw is not None:
+        try:
+            return raw.decode('utf-8')
+        except Exception:
+            return None
     return None
 
 
@@ -261,20 +272,13 @@ def restore_configs(backup_dir: str, base_dir: str) -> int:
     return restored
 
 
-# Cac extension text co the download duoc
-TEXT_EXTENSIONS = {'.py', '.json', '.md', '.txt', '.yml', '.yaml', '.cfg', '.conf',
-                   '.ini', '.xml', '.html', '.css', '.js', '.sh', '.bat', '.ps1',
-                   '.gitignore', '.dockerignore', '.env.example', '.enc', '.toml'}
-
-
 # Lock for synchronized console prints
 print_lock = threading.Lock()
 
 
 def download_repo_files(base_dir: str) -> Tuple[int, int]:
     """
-    Download all text files from GitHub repository.
-    Skips binary files (exe, dll, png, etc).
+    Download all files from GitHub repository.
     Returns (success_count, fail_count)
     """
     repo_files = _get_all_repo_files()
@@ -287,29 +291,21 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
     fail_count = 0
     count_lock = threading.Lock()
 
-    # Filter files first
-    files_to_download = []
-    for rel_path in repo_files:
-        _, ext = os.path.splitext(rel_path)
-        if ext.lower() not in TEXT_EXTENSIONS and ext != '':
-            continue
-        files_to_download.append(rel_path)
-
     def download_worker(rel_path: str):
         nonlocal ok_count, fail_count
         full_path = os.path.join(base_dir, rel_path.replace('/', os.sep))
         url = f"{GITHUB_RAW_BASE}{rel_path}"
 
         try:
-            content = _download_text(url, timeout=25)
+            content = _download_raw(url, timeout=30)
             if content is not None:
                 # Create parent directory if needed
                 parent = os.path.dirname(full_path)
                 if parent and not os.path.exists(parent):
                     os.makedirs(parent, exist_ok=True)
 
-                # Write file
-                with open(full_path, "w", encoding="utf-8") as f:
+                # Write file in binary mode
+                with open(full_path, "wb") as f:
                     f.write(content)
                 
                 with count_lock:
@@ -328,8 +324,8 @@ def download_repo_files(base_dir: str) -> Tuple[int, int]:
                 print(f"  📥 {rel_path} ... \033[1;31m[ERROR: {e}]\033[0m")
 
     # Use ThreadPoolExecutor to download in parallel
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        executor.map(download_worker, files_to_download)
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        list(executor.map(download_worker, repo_files))
 
     return ok_count, fail_count
 
@@ -388,11 +384,11 @@ def _download_missing_files(base_dir: str, file_list: List[str]) -> Tuple[int, i
         if parent and not os.path.exists(parent):
             os.makedirs(parent, exist_ok=True)
 
-        content = _download_text(url, timeout=20)
+        content = _download_raw(url, timeout=25)
         if content is not None:
             try:
-                # Always overwrite with fresh content
-                with open(full_path, "w", encoding="utf-8") as f:
+                # Always overwrite with fresh content (binary mode)
+                with open(full_path, "wb") as f:
                     f.write(content)
                 with count_lock:
                     restored += 1
