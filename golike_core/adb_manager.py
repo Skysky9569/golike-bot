@@ -1,6 +1,6 @@
 """
-ADB Manager module for Golike application
-Quan ly ket noi va thao tac voi thiet bi ADB.
+Module Quản lý ADB cho ứng dụng GoLike
+Quản lý kết nối và thao tác với thiết bị ADB.
 """
 import os
 import re
@@ -16,46 +16,46 @@ ADB_CONFIG_FILE = "adb_config.json"
 
 
 def load_adb_config() -> Dict[str, Any]:
-    """Doc cau hinh ADB
+    """Đọc cấu hình ADB
 
     Returns:
-        Dict[str, Any]: Cau hinh ADB
+        Dict[str, Any]: Cấu hình ADB
     """
     if os.path.exists(ADB_CONFIG_FILE):
         try:
             with open(ADB_CONFIG_FILE, "r", encoding="utf8") as f:
                 config = json.load(f)
-                # Ensure selected_adb_path exists
+                # Đảm bảo selected_adb_path tồn tại
                 if "selected_adb_path" not in config:
                     config["selected_adb_path"] = None
                 return config
         except (json.JSONDecodeError, IOError) as e:
-            logger.debug(f"Loi doc adb_config.json: {e}")
-    # Default config
+            logger.debug(f"Lỗi đọc adb_config.json: {e}")
+    # Cấu hình mặc định
     return {"devices": [], "current_device": None, "open_method": "termux", "selected_adb_path": None}
 
 
 def save_adb_config(config: Dict[str, Any]) -> None:
-    """Luu cau hinh ADB
+    """Lưu cấu hình ADB
 
     Args:
-        config: Cau hinh ADB
+        config: Cấu hình ADB
     """
     with open(ADB_CONFIG_FILE, "w", encoding="utf8") as f:
         json.dump(config, f, indent=2)
 
 
 def colored(text: str, color: str, bold: bool = False, attrs: Optional[List[str]] = None) -> str:
-    """Helper cho colored output
+    """Hỗ trợ in văn bản có màu
 
     Args:
-        text: Text can mau
-        color: Mau (yellow, pink, cyan, white, green, red)
-        bold: Co to dam khong
-        attrs: Danh sach thuoc tinh bo sung (e.g. ["bold"])
+        text: Nội dung cần in
+        color: Màu sắc (yellow, pink, cyan, white, green, red)
+        bold: Có in đậm không
+        attrs: Danh sách thuộc tính bổ sung (ví dụ: ["bold"])
 
     Returns:
-        str: Text da duoc them mau
+        str: Văn bản đã được gắn mã màu
     """
     colors = {
         "yellow": "\033[33m",
@@ -76,23 +76,23 @@ def colored(text: str, color: str, bold: bool = False, attrs: Optional[List[str]
 
 
 class ADBManager:
-    """Quan ly cac thiet bi ADB
+    """Quản lý các thiết bị ADB
 
-    Cung cap interface de quan ly ket noi va thao tac
-    voi cac thiet bi ADB.
+    Cung cấp giao diện để quản lý kết nối và thao tác
+    với các thiết bị ADB.
     """
 
     def __init__(self, adb_path: Optional[str] = None):
-        """Khoi tao ADBManager
+        """Khởi tạo ADBManager
 
         Args:
-            adb_path: Duong dan den ADB executable (neu None se tu tim)
+            adb_path: Đường dẫn đến file thực thi ADB (nếu None sẽ tự tìm)
         """
         self.adb_path = adb_path if adb_path else self._find_adb_path()
         self.selected_device: Optional[str] = None
 
     def _find_system_adb(self):
-        """Find system ADB executable"""
+        """Tìm đường dẫn ADB của hệ thống"""
         try:
             result = subprocess.run(["which", "adb"], capture_output=True, text=True)
             if result.returncode == 0:
@@ -102,57 +102,57 @@ class ADBManager:
         return "adb"
 
     def _find_adb_path(self) -> str:
-        """Tim duong dan adb.exe, uu tien thu muc ADB noi bo cua du an"""
-        # 1. Uu tien 1: ADB folder canh file main.py hien tai
+        """Tìm đường dẫn adb.exe, ưu tiên thư mục ADB nội bộ của dự án"""
+        # 1. Ưu tiên 1: Thư mục ADB cạnh file main.py hiện tại
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         local_path = os.path.join(base_dir, "ADB", "adb.exe")
         if os.path.exists(local_path):
-            # Check if we're on Windows or if it's a valid executable
+            # Kiểm tra xem đang ở Windows hay là file thực thi hợp lệ
             if os.name == 'nt':  # Windows
-                logger.info(f"Su dung local ADB: {local_path}")
+                logger.info(f"Sử dụng local ADB: {local_path}")
                 return local_path
             else:
-                # On non-Windows systems, try to use system ADB instead
+                # Trên các hệ thống không phải Windows, thử dùng system ADB
                 system_adb = self._find_system_adb()
                 if system_adb != "adb":
-                    logger.info(f"Su dung local ADB: {local_path} -> {system_adb}")
+                    logger.info(f"Sử dụng local ADB: {local_path} -> {system_adb}")
                 return system_adb
 
-        # 2. Uu tien 2: Kiem tra PATH moi truong
+        # 2. Ưu tiên 2: Kiểm tra PATH môi trường
         try:
             result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=2)
             if result.returncode == 0:
-                logger.info("Su dung ADB tu PATH he thong")
+                logger.info("Sử dụng ADB từ PATH hệ thống")
                 return "adb"
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
-        # 3. Uu tien 3: Tu bien moi truong ADB_PATH hoac config
+        # 3. Ưu tiên 3: Từ biến môi trường ADB_PATH hoặc config
         try:
             config_path = CONFIG.adb_path
             if config_path and os.path.exists(config_path):
-                # Check if the configured path is valid for the current platform
+                # Kiểm tra đường dẫn cấu hình có hợp lệ cho nền tảng hiện tại không
                 if os.path.exists(config_path) and (os.name == 'nt' or not config_path.endswith('.exe')):
-                    logger.info(f"Su dung ADB tu config: {config_path}")
+                    logger.info(f"Sử dụng ADB từ config: {config_path}")
                     return config_path
         except Exception:
             pass
 
-        # 4. Fallback: Hardcoded path
+        # 4. Fallback: Đường dẫn cố định
         common_path = r"D:\pythonadb\ADB\adb.exe"
         if os.path.exists(common_path) and os.name == 'nt':
-            logger.info(f"Su dung ADB path mac dinh: {common_path}")
+            logger.info(f"Sử dụng ADB path mặc định: {common_path}")
             return common_path
 
-        # 5. Cuoi cung: Dung system adb
-        logger.warning("Khong tim thay ADB, su dung 'adb' tu system PATH")
+        # 5. Cuối cùng: Dùng system adb
+        logger.warning("Không tìm thấy ADB, sử dụng 'adb' từ system PATH")
         return "adb"
 
     def check_adb(self) -> bool:
-        """Kiem tra ADB co san khong
+        """Kiểm tra ADB có sẵn không
 
         Returns:
-            bool: True neu ADB available, False neu khong
+            bool: True nếu ADB có sẵn, False nếu không
         """
         try:
             result = subprocess.run([self.adb_path, 'version'], capture_output=True, text=True, timeout=5)

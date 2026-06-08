@@ -25,193 +25,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from golike_core.logging import logger
 from golike_core.adb_manager import colored
+from golike_core.utils.stealth import FB_STEALTH_SCRIPT
 
 # ============================================================
 # ANTI-DETECTION JAVASCRIPT
 # ============================================================
 
-PRELOAD_JS = """
-// ═══════════════════════════════════════════════
-// 1. Ẩn navigator.webdriver
-// ═══════════════════════════════════════════════
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-
-// ═══════════════════════════════════════════════
-// 2. Fake plugins (giống real Chrome mobile)
-// ═══════════════════════════════════════════════
-Object.defineProperty(navigator, 'plugins', {
-    get: () => {
-        const plugins = [
-            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
-            { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
-        ];
-        plugins.item = (i) => plugins[i];
-        plugins.namedItem = (name) => plugins.find(p => p.name === name);
-        plugins.refresh = () => {};
-        Object.setPrototypeOf(plugins, PluginArray.prototype);
-        return plugins;
-    }
-});
-
-// ═══════════════════════════════════════════════
-// 3. Ngôn ngữ + platform + vendor + maxTouchPoints
-// ═══════════════════════════════════════════════
-Object.defineProperty(navigator, 'languages', { get: () => ['vi-VN', 'vi', 'en-US', 'en'] });
-Object.defineProperty(navigator, 'platform',  { get: () => 'iPhone' });
-Object.defineProperty(navigator, 'vendor',    { get: () => 'Apple Computer, Inc.' });
-Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 });
-
-// ═══════════════════════════════════════════════
-// 4. Hardware (giữ nhất quán)
-// ═══════════════════════════════════════════════
-Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 6 });
-Object.defineProperty(navigator, 'deviceMemory',        { get: () => 4 });
-
-// ═══════════════════════════════════════════════
-// 5. Chrome runtime (tránh bị detect qua window.chrome)
-// ═══════════════════════════════════════════════
-window.chrome = {
-    runtime: { id: undefined },
-    loadTimes: function() {},
-    csi: function() {},
-    app: {}
-};
-
-// ═══════════════════════════════════════════════
-// 6. Permissions query
-// ═══════════════════════════════════════════════
-try {
-    const _origPermQuery = window.navigator.permissions.query.bind(navigator.permissions);
-    window.navigator.permissions.query = (params) => (
-        params.name === 'notifications'
-            ? Promise.resolve({ state: Notification.permission, onchange: null })
-            : _origPermQuery(params)
-    );
-} catch(e) {}
-
-// ═══════════════════════════════════════════════
-// 7. Canvas fingerprint noise (tinh tế hơn)
-// ═══════════════════════════════════════════════
-(function() {
-    const _origGetCtx = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function(type, ...args) {
-        const ctx = _origGetCtx.apply(this, [type, ...args]);
-        if (type === '2d' && ctx) {
-            const _origFillText     = ctx.fillText.bind(ctx);
-            const _origStrokeText   = ctx.strokeText.bind(ctx);
-            const _origGetImageData = ctx.getImageData.bind(ctx);
-            ctx.fillText   = function(t, x, y, ...r) { return _origFillText(t,   x + 0.05, y + 0.05, ...r); };
-            ctx.strokeText = function(t, x, y, ...r) { return _origStrokeText(t, x + 0.05, y + 0.05, ...r); };
-            ctx.getImageData = function(x, y, w, h) {
-                const data = _origGetImageData(x, y, w, h);
-                for (let i = 0; i < data.data.length; i += 199)
-                    data.data[i] = data.data[i] ^ 1; // flip 1 bit mỗi ~200px
-                return data;
-            };
-        }
-        return ctx;
-    };
-})();
-
-// ═══════════════════════════════════════════════
-// 8. WebGL fingerprint spoof
-// ═══════════════════════════════════════════════
-(function() {
-    const _origGetParam = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(param) {
-        if (param === 37445) return 'Apple Inc.';                      // UNMASKED_VENDOR_WEBGL
-        if (param === 37446) return 'Apple GPU';                       // UNMASKED_RENDERER_WEBGL
-        if (param === 7937)  return 'WebKit WebGL';                    // VENDOR
-        if (param === 7936)  return 'WebKit';                          // RENDERER
-        if (param === 7938)  return 'WebGL 1.0 (OpenGL ES 2.0)';      // VERSION
-        return _origGetParam.call(this, param);
-    };
-    try {
-        const _origGetParam2 = WebGL2RenderingContext.prototype.getParameter;
-        WebGL2RenderingContext.prototype.getParameter = function(param) {
-            if (param === 37445) return 'Apple Inc.';
-            if (param === 37446) return 'Apple GPU';
-            return _origGetParam2.call(this, param);
-        };
-    } catch(e) {}
-})();
-
-// ═══════════════════════════════════════════════
-// 9. AudioContext fingerprint noise
-// ═══════════════════════════════════════════════
-(function() {
-    try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        const _origCreateOscillator = AC.prototype.createOscillator;
-        AC.prototype.createOscillator = function() {
-            const osc = _origCreateOscillator.apply(this, arguments);
-            const _origStart = osc.start.bind(osc);
-            osc.start = function(when) { return _origStart((when || 0) + 0.000001); };
-            return osc;
-        };
-        const _origCreateBuffer = AC.prototype.createBuffer;
-        AC.prototype.createBuffer = function(ch, len, sr) {
-            const buf = _origCreateBuffer.apply(this, arguments);
-            // Thêm noise cực nhỏ vào audio buffer
-            for (let c = 0; c < buf.numberOfChannels; c++) {
-                const data = buf.getChannelData(c);
-                for (let i = 0; i < data.length; i++)
-                    data[i] += (Math.random() - 0.5) * 0.0001;
-            }
-            return buf;
-        };
-    } catch(e) {}
-})();
-
-// ═══════════════════════════════════════════════
-// 10. Screen/window size nhất quán với iPhone
-// ═══════════════════════════════════════════════
-try {
-    Object.defineProperty(screen, 'width',       { get: () => 390 });
-    Object.defineProperty(screen, 'height',      { get: () => 844 });
-    Object.defineProperty(screen, 'availWidth',  { get: () => 390 });
-    Object.defineProperty(screen, 'availHeight', { get: () => 844 });
-    Object.defineProperty(screen, 'colorDepth',  { get: () => 30 });
-    Object.defineProperty(screen, 'pixelDepth',  { get: () => 30 });
-    Object.defineProperty(window, 'devicePixelRatio', { get: () => 3 });
-} catch(e) {}
-
-// ═══════════════════════════════════════════════
-// 11. Ẩn Automation qua toString() (native fn check)
-// ═══════════════════════════════════════════════
-(function() {
-    const nativeFn = Function.prototype.toString;
-    const patches = new WeakSet();
-    function patchToString(fn, str) {
-        try {
-            Object.defineProperty(fn, 'toString', {
-                value: function() { return str; },
-                writable: true, configurable: true,
-            });
-            patches.add(fn);
-        } catch(e) {}
-    }
-    patchToString(navigator.permissions.query, 'function query() { [native code] }');
-    patchToString(HTMLCanvasElement.prototype.getContext,  'function getContext() { [native code] }');
-    patchToString(WebGLRenderingContext.prototype.getParameter, 'function getParameter() { [native code] }');
-})();
-
-// ═══════════════════════════════════════════════
-// 12. Connection info giả (4G)
-// ═══════════════════════════════════════════════
-try {
-    Object.defineProperty(navigator, 'connection', {
-        get: () => ({
-            effectiveType: '4g',
-            downlink: 10,
-            rtt: 50,
-            saveData: false,
-        })
-    });
-} catch(e) {}
-"""
 
 CLICK_SAFE_JS = """
 var el = arguments[0];
@@ -284,7 +103,7 @@ def build_anti_detect_options(
             "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
     else:
-        # iPhone 14 Pro UA (khớp với platform/vendor trong PRELOAD_JS)
+        # iPhone 14 Pro UA (khớp với platform/vendor trong FB_STEALTH_SCRIPT)
         options.add_argument(
             "user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
             "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
@@ -319,7 +138,7 @@ def inject_anti_detection_scripts(driver: selenium_driver.Chrome, use_desktop: b
     """
     # Bơm JS vào mọi document mới (kể cả iframe)
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": PRELOAD_JS
+        "source": FB_STEALTH_SCRIPT
     })
 
     if use_desktop:

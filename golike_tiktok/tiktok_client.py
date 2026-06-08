@@ -120,15 +120,9 @@ class TikTokJobProcessor:
             bool: True nếu thành công, False nếu không
         """
         try:
-            data = job_data.get("data", {})
-            self.api_client.post('/api/report/send', {
-                "description": description,
-                "users_advertising_id": data.get("id"),
-                "type": "ads",
-                "provider": "tiktok",
-                "fb_id": self.account_id,
-                "error_type": 6
-            })
+            data = job_data.get("data", {}).copy()
+            data['account_id'] = self.account_id
+            self.api_client.report_job("tiktok", data)
             return True
         except Exception as e:
             logger.error(f"Lỗi report job: {e}")
@@ -144,13 +138,9 @@ class TikTokJobProcessor:
             bool: True nếu thành công, False nếu không
         """
         try:
-            data = job_data.get("data", {})
-            self.api_client.post('/api/advertising/publishers/tiktok/skip-jobs', {
-                "ads_id": data.get("id"),
-                "object_id": data.get("object_id"),
-                "account_id": self.account_id,
-                "type": data.get("type")
-            })
+            data = job_data.get("data", {}).copy()
+            data['account_id'] = self.account_id
+            self.api_client.skip_job("tiktok", data)
             return True
         except Exception as e:
             logger.error(f"Lỗi skip job: {e}")
@@ -166,19 +156,14 @@ class TikTokJobProcessor:
         Returns:
             Dict[str, Any]: Kết quả hoàn thành job
         """
-        data = job_data.get("data", {})
-        ads_id = data.get("id")
-
+        data = job_data.get("data", {}).copy()
+        data['account_id'] = self.account_id
+        
         max_retries = 2 if retry_on_fail else 1
 
         for attempt in range(1, max_retries + 1):
             try:
-                response = self.api_client.post('/api/advertising/publishers/tiktok/complete-jobs', {
-                    "ads_id": ads_id,
-                    "account_id": self.account_id,
-                    "async": True,
-                    "data": None
-                })
+                response = self.api_client.complete_job("tiktok", data)
 
                 if response and response.get("status") == 200:
                     msg = response.get("message", "Báo cáo thành công!")

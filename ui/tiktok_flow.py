@@ -263,6 +263,7 @@ def _claim_payment(
     Returns:
         Tuple[bool, int, bool]: (ok, reward, not_found_skip) — always False for not_found_skip
     """
+    from golike_core.error_handling import RateLimitError
     ok = False
     reward = 0
     for lan in range(1, 3):
@@ -288,11 +289,25 @@ def _claim_payment(
                 logger.info(f"Nhiệm vụ hoàn thành: {job_type}, +{reward} xu" + (f" - {message}" if message else ""))
                 break
             elif lan == 1:
-                print(colored("⚠️ Lần 1 thất bại - Đang thử lần 2...", "yellow"), end="\r")
+                # Xử lý khi lỗi có trả về cooldown
+                cooldown = nhantien.get("cooldown", 10)
+                msg = nhantien.get("message", "Lỗi không xác định")
+                print(colored(f"⚠️ Lần 1 thất bại: {msg}", "yellow"))
+                for t in range(cooldown, -1, -1):
+                    print(colored(f"⏳ Đang chờ {cooldown}s để thử lại lần 2... {t}s      ", "yellow"), end="\r")
+                    time.sleep(1)
+        except RateLimitError as e:
+            logger.error(f"Lỗi nhận tiền lần {lan}: Rate Limit (429)")
+            if lan == 1:
+                print(colored("⚠️ Báo cáo quá nhanh (429) - Đang chờ 17s để thử lại...", "yellow"))
+                for t in range(17, -1, -1):
+                    print(colored(f"⏳ Đang chờ... {t}s      ", "yellow"), end="\r")
+                    time.sleep(1)
         except Exception as e:
             logger.error(f"Lỗi nhận tiền lần {lan}: {e}")
             if lan == 1:
-                print(colored("⚠️ Lần 1 thất bại - Đang thử lần 2...", "yellow"), end="\r")
+                print(colored("⚠️ Lần 1 thất bại - Đang chờ 5s trước khi thử lần 2...", "yellow"))
+                time.sleep(5)
 
     return ok, reward, False
 
@@ -823,10 +838,18 @@ def tiktok_menu(auth_token: str) -> None:
             continue
 
         if not nhanjob or not nhanjob.get("data"):
-            no_job_wait = random.randint(22, 30)
-            for t in range(no_job_wait, -1, -1):
-                print(colored(f"⏳ Không có nhiệm vụ. Đợi {t}s để thử lại...    ", "yellow"), end="\r")
-                time.sleep(1)
+            # Kiểm tra xem có phải hệ thống đang tính toán job không
+            msg = nhanjob.get("message", "") or nhanjob.get("error", "") if nhanjob else ""
+            if "tính toán jobs" in msg:
+                print(colored(f"💡 {msg}", "cyan"))
+                for t in range(10, -1, -1):
+                    print(colored(f"⏳ Đang chờ 10s để lấy lại job... {t}s        ", "cyan"), end="\r")
+                    time.sleep(1)
+            else:
+                no_job_wait = random.randint(22, 30)
+                for t in range(no_job_wait, -1, -1):
+                    print(colored(f"⏳ Không có nhiệm vụ. Đợi {t}s để thử lại...    ", "yellow"), end="\r")
+                    time.sleep(1)
             continue
 
         # Check job trung

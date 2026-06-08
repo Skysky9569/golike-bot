@@ -79,16 +79,19 @@ class PureADBAutomator:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=15)
 
     def _dump_ui(self) -> Optional[str]:
-        """Dump UI XML từ thiết bị"""
+        """Xuất UI XML từ thiết bị và đọc nội dung"""
         try:
-            # Dump ra file trên thiết bị
+            # Xuất ra file trên thiết bị
             self._run_adb(["shell", "uiautomator", "dump", "/sdcard/view.xml"])
             # Đọc nội dung file
             result = self._run_adb(["shell", "cat", "/sdcard/view.xml"])
             if result.returncode == 0 and "<?xml" in result.stdout:
                 return result.stdout
         except Exception as e:
-            logger.error(f"Error dumping UI: {e}")
+            logger.error(f"Lỗi khi xuất UI: {e}")
+        finally:
+            # Luôn đảm bảo dọn dẹp file tạm trên thiết bị
+            self._run_adb(["shell", "rm", "-f", "/sdcard/view.xml"])
         return None
 
     def _parse_bounds(self, bounds_str: str) -> Optional[Tuple[int, int, int, int]]:

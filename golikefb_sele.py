@@ -37,8 +37,9 @@ from golike_core.adb_manager import colored
 from golike_core.security import CredentialManager, InputValidator
 from golike_facebook.fb_web_api import FacebookSession
 from golike_facebook.selenium_fb import FacebookSeleniumBot
+from golike_core.utils.stealth import FB_STEALTH_SCRIPT
 
-# Import reaction helper from official module
+# Import helper phản hồi từ module chính thức
 try:
     from golike_facebook.dom_handler import perform_fb_reaction, process_dom_job
     HAS_REACTION_MODULE = True
@@ -48,42 +49,12 @@ except ImportError:
 # Impersonation
 from curl_cffi import requests as cffi_requests
 
-# Load environment variables
+# Tải biến môi trường
 load_dotenv()
-
-# ================= ANTI-DETECTION STEALTH SCRIPT =================
-# Script để conceal selenium automation và randomize fingerprint
-STEALTH_INJECTION_SCRIPT = """
-// Landmark: randomize device fingerprint on every run
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-Object.defineProperty(navigator, 'platform', { get: () => { const plats = ['Win32','MacIntel','Linux x86_64']; return plats[Math.floor(Math.random()*plats.length)]; } });
-// Per-run resolution randomization
-const XRES = Math.floor(1280 + Math.random()*800);
-const YRES = Math.floor(720 + Math.random()*480);
-Object.defineProperty(Screen.prototype, 'width', { get: () => XRES });
-Object.defineProperty(Screen.prototype, 'height', { get: () => YRES });
-Object.defineProperty(Screen.prototype, 'availWidth', { get: () => XRES - 16 });
-Object.defineProperty(Screen.prototype, 'availHeight', { get: () => YRES - 64 });
-
-// WebGL & Canvas Spoofing (Anti-detect)
-try {
-  const getParameter = WebGLRenderingContext.prototype.getParameter;
-  WebGLRenderingContext.prototype.getParameter = function(parameter) {
-    if (parameter === 37445) return 'Intel Inc.';
-    if (parameter === 37446) return 'Intel Iris OpenGL Engine';
-    return getParameter(parameter);
-  };
-  const originalFillText = CanvasRenderingContext2D.prototype.fillText;
-  CanvasRenderingContext2D.prototype.fillText = function(text, x, y, maxWidth) {
-    return originalFillText.call(this, text, x + (Math.random() * 0.2 - 0.1), y + (Math.random() * 0.2 - 0.1), maxWidth);
-  };
-} catch(e) {}
-"""
 
 # ================= STATISTICS TRACKER =================
 class SuccessRateTracker:
+    """Lớp theo dõi tỷ lệ thành công của tài khoản"""
     def __init__(self, account_name="Unknown"):
         self.account_name = account_name
         self.total_jobs = 0
@@ -93,19 +64,23 @@ class SuccessRateTracker:
         self.start_time = datetime.now()
 
     def add_success(self, reward):
+        """Thêm một công việc thành công"""
         self.total_jobs += 1
         self.success_jobs += 1
         self.total_reward += reward
 
     def add_failure(self):
+        """Thêm một công việc thất bại"""
         self.total_jobs += 1
         self.failed_jobs += 1
 
     def get_rate(self):
+        """Lấy tỷ lệ thành công (%)"""
         if self.total_jobs == 0: return 0
         return (self.success_jobs / self.total_jobs) * 100
 
     def show_summary(self):
+        """Hiển thị bảng tổng kết phiên làm việc"""
         duration = datetime.now() - self.start_time
         rate = self.get_rate()
         color = "green" if rate >= 90 else ("yellow" if rate >= 70 else "red")
@@ -137,7 +112,7 @@ def smart_random_delay(base_delay: float, variance: float = 0.3) -> float:
     # Clamp để tránh delay quá ngắn hoặc quá dài (0.5x - 1.5x)
     multiplier = max(0.5, min(1.5, multiplier))
     actual = base_delay * multiplier
-    return max(0.1, actual)  # Đảm bảo tối thiểu 0.1s
+    return max(0.1, actual)  # Ensure minimum of 0.1s
 
 def human_click(driver, element):
     """
@@ -148,7 +123,7 @@ def human_click(driver, element):
     Nếu lỗi, fallback sang JS click.
     """
     try:
-        # Cuộn phần tử vào giữa viewport một cách chắc chắn hơn
+        # Scroll the element into the viewport in a reliable manner
         driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", element)
         sleep(0.8) # Đợi lâu hơn một chút để hiệu ứng cuộn hoàn tất
     except Exception as e:
@@ -179,53 +154,53 @@ def human_click(driver, element):
 
 def human_type(element, text, delay_min=0.02, delay_max=0.15):
     """
-    Giả lập gõ phím như người thật bằng cách gõ từng ký tự
-    với khoảng nghỉ ngẫu nhiên giữa các phím.
+    Simulate typing like a real person by typing each character
+    with random pauses between characters.
     """
     try:
-        # Click vào element trước khi gõ để đảm bảo focus
+        # Click into element before typing to ensure focus
         element.click()
         time.sleep(random.uniform(0.2, 0.5))
         
-        # Xóa nội dung cũ nếu có
+        # Clear existing content if any
         element.clear()
         time.sleep(random.uniform(0.1, 0.3))
         
         for char in text:
             element.send_keys(char)
-            # Nghỉ ngẫu nhiên giữa mỗi phím
+            # Random pause between each character
             time.sleep(random.uniform(delay_min, delay_max))
             
-            # Thỉnh thoảng nghỉ lâu hơn một chút (giả lập mỏi tay hoặc suy nghĩ)
+            # Occasionally pause longer (simulate fatigue or thinking)
             if random.random() < 0.05:
                 time.sleep(random.uniform(0.2, 0.5))
     except Exception:
-        # Nếu lỗi (ví dụ element bị stale), thử send_keys trực tiếp một lần cuối
+        # If error (e.g. element stale), try send_keys directly one last time
         try: element.send_keys(text)
         except: pass
 
 def golike_login_human(driver, username, password):
     """
-    Thực hiện đăng nhập GoLike với hành vi giả lập người thật để tránh Captcha.
+    Perform GoLike login with human-like behavior to avoid Captcha.
     """
     try:
-        # Đợi form login xuất hiện
+        # Wait for login form to appear
         username_xpath = '//*[@id="app"]/div/div[1]/div/form/div[1]/input'
         password_xpath = '//*[@id="app"]/div/div[1]/div/form/div[2]/div/input'
         login_btn_xpath = '//*[@id="app"]/div/div[1]/div/form/div[3]/button'
         
         WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, username_xpath)))
-        sleep(random.uniform(1.5, 3.0)) # Nghỉ một lát như người thật nhìn màn hình
+        sleep(random.uniform(1.5, 3.0)) # Pause like a real person looking at the screen
 
-        # Nhập username
+        # Enter username
         tk_el = driver.find_element(By.XPATH, username_xpath)
         human_type(tk_el, username)
-        sleep(random.uniform(0.8, 1.5)) # Nghỉ giữa 2 field
+        sleep(random.uniform(0.8, 1.5)) # Pause between 2 fields
         
-        # Nhập password
+        # Enter password
         mk_el = driver.find_element(By.XPATH, password_xpath)
         human_type(mk_el, password)
-        sleep(random.uniform(1.0, 2.0)) # Nghỉ trước khi click login
+        sleep(random.uniform(1.0, 2.0)) # Pause before clicking login
         
         # Click login
         dn_btn = driver.find_element(By.XPATH, login_btn_xpath)
@@ -236,9 +211,9 @@ def golike_login_human(driver, username, password):
         return False
 # ================= MEMORY CIRCUIT BREAKER =================
 # Progressive thresholds for better memory management
-MEMORY_WARNING_PERCENT = 75  # Cảnh báo khi RAM đạt 75%
-MEMORY_LIMIT_PERCENT = 85    # Ngưỡng RAM % tối đa (giảm từ 90%)
-MEMORY_AVAILABLE_MIN = 2000  # RAM tối thiểu cần giữ (MB) (tăng từ 1000)
+MEMORY_WARNING_PERCENT = 75  # Warning when RAM reaches 75%
+MEMORY_LIMIT_PERCENT = 85    # Maximum RAM % threshold (reduced from 90%)
+MEMORY_AVAILABLE_MIN = 2000  # Minimum RAM to keep available (MB) (increased from 1000)
 
 
 def check_system_memory():
@@ -391,69 +366,68 @@ def detect_recaptcha_v2(driver, timeout=5):
 
 def solve_2captcha_captcha(api_key, sitekey, page_url, timeout=120):
     """
-    Gọi 2Captcha API để solve reCAPTCHA v2.
+    Gọi API 2Captcha để giải quyết reCAPTCHA v2.
 
-    Args:
-        api_key: 2Captcha API key
-        sitekey: reCAPTCHA sitekey
-        page_url: URL của trang có captcha
-        timeout: Thời gian timeout tối đa (giây)
+    Tham số:
+        api_key: Khóa API 2Captcha
+        sitekey: Khóa trang web (sitekey) của reCAPTCHA
+        page_url: URL của trang chứa captcha
+        timeout: Thời gian chờ tối đa (giây)
 
-    Returns:
-        Solution token nếu thành công, None nếu thất bại
+    Trả về:
+        Mã thông báo giải pháp (solution token) nếu thành công, None nếu thất bại
     """
-    session = requests.Session()
-
-    # Bước 1: Submit captcha để solve
-    try:
-        params = {
-            "key": api_key,
-            "method": "userrecaptcha",
-            "googlekey": sitekey,
-            "pageurl": page_url,
-            "json": 1
-        }
-        resp = session.get(f"{_2CAPTCHA_API_BASE}/in.php", params=params, timeout=30)
-        data = resp.json()
-
-        if data.get("status") != 1:
-            print(f"[2Captcha] Lỗi submit: {data.get('request')}")
-            return None
-
-        task_id = data.get("request")
-        print(f"[2Captcha] Đã submit captcha, ID: {task_id}")
-    except Exception as e:
-        print(f"[2Captcha] Lỗi khi submit: {e}")
-        return None
-
-    # Bước 2: Poll kết quả
-    start_time = time.time()
-    last_error = None
-
-    while time.time() - start_time < timeout:
+    with requests.Session() as session:
+        # Bước 1: Gửi captcha để giải quyết
         try:
-            resp = session.get(f"{_2CAPTCHA_API_BASE}/res.php",
-                             params={"key": api_key, "action": "get", "id": task_id, "json": 1},
-                             timeout=30)
+            params = {
+                "key": api_key,
+                "method": "userrecaptcha",
+                "googlekey": sitekey,
+                "pageurl": page_url,
+                "json": 1
+            }
+            resp = session.get(f"{_2CAPTCHA_API_BASE}/in.php", params=params, timeout=30)
             data = resp.json()
 
-            if data.get("status") == 1:
-                token = data.get("request")
-                print(f"[2Captcha] ✓ Đã giải captcha thành công!")
-                return token
+            if data.get("status") != 1:
+                print(f"[2Captcha] Lỗi gửi: {data.get('request')}")
+                return None
 
-            error = data.get("request", "Unknown error")
-            if error != "CAPCHA_NOT_READY":
-                last_error = error
-                print(f"[2Captcha] Polling lần {int(time.time() - start_time)}: {error}")
-
+            task_id = data.get("request")
+            print(f"[2Captcha] Đã gửi captcha, ID: {task_id}")
         except Exception as e:
-            last_error = str(e)
+            print(f"[2Captcha] Lỗi khi gửi: {e}")
+            return None
 
-        time.sleep(_2CAPTCHA_POLL_INTERVAL)
+        # Bước 2: Bỏ phiếu (poll) lấy kết quả
+        start_time = time.time()
+        last_error = None
 
-    print(f"[2Captcha] ✗ Timeout sau {timeout} giây. Lỗi cuối: {last_error}")
-    return None
+        while time.time() - start_time < timeout:
+            try:
+                resp = session.get(f"{_2CAPTCHA_API_BASE}/res.php",
+                                 params={"key": api_key, "action": "get", "id": task_id, "json": 1},
+                                 timeout=30)
+                data = resp.json()
+
+                if data.get("status") == 1:
+                    token = data.get("request")
+                    print(f"[2Captcha] ✓ Đã giải captcha thành công!")
+                    return token
+
+                error = data.get("request", "Lỗi không xác định")
+                if error != "CAPCHA_NOT_READY":
+                    last_error = error
+                    print(f"[2Captcha] Bỏ phiếu lần {int(time.time() - start_time)}: {error}")
+
+            except Exception as e:
+                last_error = str(e)
+
+            time.sleep(_2CAPTCHA_POLL_INTERVAL)
+
+        print(f"[2Captcha] ✗ Hết thời gian chờ sau {timeout} giây. Lỗi cuối: {last_error}")
+        return None
 
 def inject_recaptcha_solution(driver, token):
     """
@@ -1324,11 +1298,11 @@ def send_tg_notify(message: str):
 
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        r = requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"}, timeout=10)
-        if r.status_code == 200:
-            print(colored("🔔 Đã gửi thông báo tới Telegram.", "green"))
-        else:
-            print(colored(f"❌ Lỗi gửi Telegram (HTTP {r.status_code}): {r.text}", "red"))
+        with requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"}, timeout=10) as r:
+            if r.status_code == 200:
+                print(colored("🔔 Đã gửi thông báo tới Telegram.", "green"))
+            else:
+                print(colored(f"❌ Lỗi gửi Telegram (HTTP {r.status_code}): {r.text}", "red"))
     except Exception as e:
         print(colored(f"❌ Lỗi kết nối Telegram: {e}", "red"))
 
@@ -2310,7 +2284,7 @@ def run_single_mode():
 
     # Inject stealth script để conceal automation và randomize navigator properties
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": STEALTH_INJECTION_SCRIPT
+        "source": FB_STEALTH_SCRIPT
     })
 
     # Chỉ set User-Agent mobile cho tab hiện tại (tab dùng để chạy Golike)
@@ -2936,7 +2910,7 @@ def setup_bot_profile(profile_data, idx, global_2captcha_api_key=None):
 
     # Inject stealth script để conceal automation và randomize navigator properties
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": STEALTH_INJECTION_SCRIPT
+        "source": FB_STEALTH_SCRIPT
     })
 
     # Chỉ set User-Agent mobile cho tab hiện tại (tab dùng để chạy Golike)
@@ -4280,7 +4254,7 @@ class WebDriverPool:
                 options=options
             )
             driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-                "source": STEALTH_INJECTION_SCRIPT
+                "source": FB_STEALTH_SCRIPT
             })
             with drivers_lock:
                 active_drivers.append(driver)

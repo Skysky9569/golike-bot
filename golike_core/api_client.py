@@ -1,6 +1,6 @@
 """
-API Client for Golike application
-Supports both TikTok and Facebook platforms
+API Client cho ứng dụng GoLike
+Hỗ trợ cả nền tảng TikTok và Facebook
 """
 import requests
 from typing import Optional, Dict, Any, List
@@ -13,7 +13,7 @@ class GolikeAPIClient:
     """Client cho API Golike
 
     Xử lý tất cả các request đến API server với
-    proper error handling và retry logic.
+    đầy đủ xử lý lỗi và logic thử lại.
     Hỗ trợ cả TikTok và Facebook.
     """
 
@@ -57,13 +57,24 @@ class GolikeAPIClient:
         self.session = requests.Session()
         self.session.timeout = (connect_timeout, timeout)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self) -> None:
+        """Đóng session và giải phóng tài nguyên"""
+        if self.session:
+            self.session.close()
+
     def set_auth(self, auth_token: str, g_auth: Optional[str] = None, g_device_id: Optional[str] = None) -> None:
-        """Set authorization token and g-auth info
+        """Thiết lập mã xác thực (Authorization) và thông tin g-auth
 
         Args:
-            auth_token: Authorization token or JSON string with headers
-            g_auth: GoLike g-auth header
-            g_device_id: GoLike g-device-id header
+            auth_token: Mã Authorization hoặc chuỗi JSON chứa các headers
+            g_auth: Header g-auth của GoLike
+            g_device_id: Header g-device-id của GoLike
         """
         if not auth_token:
             return
@@ -89,10 +100,10 @@ class GolikeAPIClient:
         # Extract t token if passed in JSON data (already handled above)
 
     def set_t_token(self, t_token: str) -> None:
-        """Set t header token (version token from browser)
+        """Thiết lập token header 't' (token phiên bản từ trình duyệt)
 
         Args:
-            t_token: The t header value captured from browser DevTools
+            t_token: Giá trị header 't' lấy từ trình duyệt (DevTools)
         """
         if t_token:
             self._t_token = t_token
