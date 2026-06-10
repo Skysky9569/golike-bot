@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [v1.16.2] - 2026-06-10
+
+### Sửa Lỗi (Bug Fixes)
+- **Fix `UnicodeDecodeError: 'charmap' codec can't decode byte 0x90` trên Windows (TikTok ADB)**:
+  - Nguyên nhân: Windows dùng encoding `cp1252` mặc định khi đọc output từ `subprocess.run(text=True)`. Lệnh `adb uiautomator dump` trả về XML chứa byte UTF-8 (0x90, 0x8D, ...) không hợp lệ trong `cp1252` → crash hoàn toàn thread đọc → `xml_data = None` → bot bỏ qua 100% nhiệm vụ Follow/Like.
+  - Đã sửa trong `tiktok_automation.py`:
+    - Tất cả `subprocess.run(..., text=True)` trong `PureADBAutomator` được thêm `encoding='utf-8', errors='replace'`.
+    - `_dump_ui()` được viết lại để đọc output dạng **binary** thuần (`capture_output` không `text=True`), sau đó decode với `utf-8, errors='replace'` — đảm bảo không bao giờ crash dù XML có ký tự lạ.
+  - Đã sửa trong `golike_core/adb_manager.py`:
+    - Tất cả `subprocess.run()`/`Popen()` có `text=True` được bổ sung `encoding='utf-8', errors='replace'`.
+
 ## [v1.16.1] - 2026-06-10
 
 ### Sửa Lỗi (Bug Fixes)
