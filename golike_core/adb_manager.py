@@ -94,7 +94,8 @@ class ADBManager:
     def _find_system_adb(self):
         """Tìm đường dẫn ADB của hệ thống"""
         try:
-            result = subprocess.run(["which", "adb"], capture_output=True, text=True)
+            result = subprocess.run(["which", "adb"], capture_output=True, text=True,
+                                   encoding='utf-8', errors='replace')
             if result.returncode == 0:
                 return "adb"
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -120,7 +121,8 @@ class ADBManager:
 
         # 2. Ưu tiên 2: Kiểm tra PATH môi trường
         try:
-            result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=2)
+            result = subprocess.run(["adb", "version"], capture_output=True, text=True,
+                                   encoding='utf-8', errors='replace', timeout=2)
             if result.returncode == 0:
                 logger.info("Sử dụng ADB từ PATH hệ thống")
                 return "adb"
@@ -155,7 +157,8 @@ class ADBManager:
             bool: True nếu ADB có sẵn, False nếu không
         """
         try:
-            result = subprocess.run([self.adb_path, 'version'], capture_output=True, text=True, timeout=5)
+            result = subprocess.run([self.adb_path, 'version'], capture_output=True, text=True,
+                                   encoding='utf-8', errors='replace', timeout=5)
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return False
@@ -167,6 +170,8 @@ class ADBManager:
                 [self.adb_path, "devices"],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=10
             )
             output = result.stdout.strip().splitlines()
@@ -249,6 +254,8 @@ class ADBManager:
                 [self.adb_path, 'connect', f'{ip}:{port}'],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=15
             )
             return result.returncode == 0 and 'connected' in result.stdout.lower()
@@ -269,14 +276,14 @@ class ADBManager:
         """
         try:
             logger.info(f"Dang ghep noi ADB voi {ip}:{port} bang ma {pairing_code}...")
-            # ADB pair requires input of pairing code, but we can try to pass it if adb version supports it
-            # Or use a process with stdin
             process = subprocess.Popen(
                 [self.adb_path, 'pair', f'{ip}:{port}'],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                encoding='utf-8',
+                errors='replace'
             )
             stdout, stderr = process.communicate(input=f"{pairing_code}\n", timeout=15)
             
@@ -319,6 +326,8 @@ class ADBManager:
                 [self.adb_path, '-s', device_id, 'shell', 'ip', 'addr', 'show', 'wlan0'],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=5
             )
             if result.returncode == 0:

@@ -59,7 +59,8 @@ class PureADBAutomator:
             if self.device_id:
                 cmd.extend(["-s", self.device_id])
             cmd.extend(["shell", "getprop", "ro.product.model"])
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                   encoding='utf-8', errors='replace', timeout=5)
             if result.returncode == 0:
                 self._connected = True
                 logger.info(f"Pure ADB connected to: {result.stdout.strip()}")
@@ -76,22 +77,33 @@ class PureADBAutomator:
         if self.device_id:
             cmd.extend(["-s", self.device_id])
         cmd.extend(args)
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        return subprocess.run(cmd, capture_output=True, text=True,
+                             encoding='utf-8', errors='replace', timeout=15)
 
     def _dump_ui(self) -> Optional[str]:
-        """Xuất UI XML từ thiết bị và đọc nội dung"""
+        """Xuất UI XML từ thiết bị và đọc nội dung (binary-safe, Windows-friendly)"""
         try:
             # Xuất ra file trên thiết bị
             self._run_adb(["shell", "uiautomator", "dump", "/sdcard/view.xml"])
-            # Đọc nội dung file
-            result = self._run_adb(["shell", "cat", "/sdcard/view.xml"])
-            if result.returncode == 0 and "<?xml" in result.stdout:
-                return result.stdout
+            # Đọc nội dung file dưới dạng bytes để tránh UnicodeDecodeError trên Windows (cp1252)
+            cmd = [self.adb_path]
+            if self.device_id:
+                cmd.extend(["-s", self.device_id])
+            cmd.extend(["shell", "cat", "/sdcard/view.xml"])
+            raw = subprocess.run(cmd, capture_output=True, timeout=15)
+            if raw.returncode == 0 and raw.stdout:
+                # Decode bytes dùng utf-8, thay thế ký tự lỗi thay vì crash
+                xml_text = raw.stdout.decode('utf-8', errors='replace')
+                if "<?xml" in xml_text:
+                    return xml_text
         except Exception as e:
             logger.error(f"Lỗi khi xuất UI: {e}")
         finally:
             # Luôn đảm bảo dọn dẹp file tạm trên thiết bị
-            self._run_adb(["shell", "rm", "-f", "/sdcard/view.xml"])
+            try:
+                self._run_adb(["shell", "rm", "-f", "/sdcard/view.xml"])
+            except Exception:
+                pass
         return None
 
     def _parse_bounds(self, bounds_str: str) -> Optional[Tuple[int, int, int, int]]:
