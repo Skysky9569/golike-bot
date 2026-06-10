@@ -1,6 +1,15 @@
 # CHANGELOG
 
-## [v1.13.3] - 2026-06-03
+## [v1.16.1] - 2026-06-10
+
+### Sửa Lỗi (Bug Fixes)
+- **Fix `NameError: name 'STEALTH_INJECTION_SCRIPT' is not defined` trên Windows**:
+  - Nguyên nhân: Các phiên bản code cũ trên Windows sử dụng tên biến `STEALTH_INJECTION_SCRIPT` nhưng chỉ có `FB_STEALTH_SCRIPT` được import vào `golikefb_sele.py` và `selenium_fb.py`.
+  - Đã sửa: Thêm `STEALTH_INJECTION_SCRIPT` vào lệnh import trong cả hai file — biến này đã được định nghĩa sẵn trong `golike_core/utils/stealth.py` (dòng 206) dưới dạng alias của `FB_STEALTH_SCRIPT`.
+  - Xóa toàn bộ cache `.pyc` cũ để tránh xung đột giữa các phiên bản bytecode.
+
+## [v1.16.0] - 2026-06-08
+
 
 ### Tính Năng Mới & Nâng Cấp (Features & Upgrades)
 - **Chính thức hóa module DOM Handler**:

@@ -37,7 +37,7 @@ from golike_core.adb_manager import colored
 from golike_core.security import CredentialManager, InputValidator
 from golike_facebook.fb_web_api import FacebookSession
 from golike_facebook.selenium_fb import FacebookSeleniumBot
-from golike_core.utils.stealth import FB_STEALTH_SCRIPT
+from golike_core.utils.stealth import FB_STEALTH_SCRIPT, STEALTH_INJECTION_SCRIPT
 
 # Import helper phản hồi từ module chính thức
 try:
@@ -3723,7 +3723,7 @@ def run_selenium_dom_mode():
         active_drivers.append(driver)
 
     # Ẩn automation qua CDP
-    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": STEALTH_INJECTION_SCRIPT})
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": FB_STEALTH_SCRIPT})
     
     try:
         # 4. Đăng nhập GoLike
@@ -3743,9 +3743,17 @@ def run_selenium_dom_mode():
             login_btn = driver.find_element(By.XPATH, '//*[@id="app"]/div/div[1]/div/form/div[3]/button')
             human_click(driver, login_btn)
             
-            if not handle_2captcha_captcha(driver, "https://app.golike.net/login"):
-                print(colored("\n[!] PHÁT HIỆN CAPTCHA: Vui lòng giải tay trên trình duyệt.", "magenta", bold=True))
-                input(colored("👉 Giải xong Captcha (nếu có), hãy ấn [ENTER] tại đây để tool tiếp tục...", "white"))
+            # CHỜ 2S ĐỂ XEM CÓ ĐƯỢC REDIRECT VÀO TRONG LUÔN KHÔNG (NẾU KHÔNG CÓ CAPTCHA)
+            print(colored("[*] Đã ấn Login. Đang kiểm tra trạng thái login (chờ 2s)...", "cyan"))
+            time.sleep(2)
+            
+            if "app.golike.net/home" not in driver.current_url:
+                print(colored("[!] Chưa vào được trang chủ. Tiến hành kiểm tra Captcha...", "yellow"))
+                if not handle_2captcha_captcha(driver, "https://app.golike.net/login"):
+                    print(colored("\n[!] PHÁT HIỆN CAPTCHA: Vui lòng giải tay trên trình duyệt.", "magenta", bold=True))
+                    input(colored("👉 Giải xong Captcha (nếu có), hãy ấn [ENTER] tại đây để tool tiếp tục...", "white"))
+            else:
+                print(colored("[✅] Đã tự động vào trang chủ (không cần giải captcha).", "green"))
             
             # Kiểm tra xem login thành công chưa
             print(colored("[*] Đăng nhập xong. Đang chờ ổn định...", "yellow"))

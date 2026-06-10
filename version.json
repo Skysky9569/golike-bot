@@ -1,6 +1,6 @@
 {
-  "version": "1.16.0",
-  "release_date": "2026-06-08",
-  "changelog": "v1.16.0 - Module stealth chung (anti-detection), cải thiện fingerprint canvas/WebGL/audio, tách FB_STEALTH_SCRIPT vào golike_core/utils/stealth.py, fix session leak (GolikeAPIClient context manager), fix file leak (_dump_ui), gộp API client vào TikTokJobProcessor, dịch docstring sang tiếng Việt.",
-  "previous_version": "1.15.0"
+  "version": "1.16.1",
+  "release_date": "2026-06-10",
+  "changelog": "v1.16.1 - Hotfix: fix NameError STEALTH_INJECTION_SCRIPT trên Windows, thêm backward-compatible import alias vào golikefb_sele.py và selenium_fb.py.",
+  "previous_version": "1.16.0"
 }

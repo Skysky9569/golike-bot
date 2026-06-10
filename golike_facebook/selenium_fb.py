@@ -25,7 +25,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from golike_core.logging import logger
 from golike_core.adb_manager import colored
-from golike_core.utils.stealth import FB_STEALTH_SCRIPT
+from golike_core.utils.stealth import FB_STEALTH_SCRIPT, STEALTH_INJECTION_SCRIPT
 
 # ============================================================
 # ANTI-DETECTION JAVASCRIPT

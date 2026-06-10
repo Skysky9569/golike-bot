@@ -202,3 +202,6 @@ try {
 })();
 """
 
+# Alias for backward compatibility
+STEALTH_INJECTION_SCRIPT = FB_STEALTH_SCRIPT
+
