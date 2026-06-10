@@ -175,7 +175,12 @@ def _call_process_job(ui_automator, job_type: str):
     if len(result) == 3:
         return result
     success, message = result
-    not_found = "khong tim thay" in message.lower() or "khong tim thay" in message.lower()
+    msg_lower = message.lower()
+    not_found = (
+        "không tìm thấy" in msg_lower
+        or "khong tim thay" in msg_lower
+        or "not found" in msg_lower
+    )
     return success, message, not_found
 
 

@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [v1.16.3] - 2026-06-10
+
+### Sửa Lỗi Nghiêm trọng (P0 Critical)
+- **Fix `api_client.py` không tái dùng `self.session`**: Trước đó mỗi request tạo TCP connection mới (`requests.get/post` trực tiếp) dù đã khởi tạo `requests.Session()`. Sửa sang `self.session.get/post` → tái dùng connection pool, giảm latency.
+- **Fix copy-paste bug `_call_process_job()`**: Cả 2 vế check `not_found` giống hệt nhau (`"khong tim thay"` × 2) và không match tiếng Việt có dấu. Sửa: check cả `"không tìm thấy"` (có dấu), `"khong tim thay"` (không dấu), `"not found"`.
+- **Fix regex XML cleanup xóa mất tiếng Việt**: Regex `[^\x09\x0A...\xFF]` xóa toàn bộ Unicode (tiếng Việt "Theo dõi", emoji) khỏi XML dump → bot không bao giờ match nút Follow. Sửa: chỉ xóa null bytes `\x00`.
+
+### Cải thiện (P1 Medium)
+- **Thêm `functools.wraps`** vào `retry_on_error` decorator → bảo toàn `__name__`, `__doc__` trong traceback.
+- **Fix `health_check()` truyền `timeout=5` sai**: Method `get()` không nhận param này. Sửa: tạm đổi `self.timeout` rồi restore.
+- **Cải thiện `_generate_key()`** trong `security.py`: thêm `getpass.getuser()` vào key derivation → user khác nhau trên cùng máy không thể giải mã.
+- **Fix `open_link()`** trong `adb_manager.py` thiếu `encoding='utf-8'`.
+- **Move import** `json`, `time`, `base64` lên top-level trong `api_client.py`.
+
+### Nâng cấp Nhỏ (P2 Minor)
+- **Fix `SecureHeaderBuilder` UA mâu thuẫn**: User-Agent Android mobile nhưng `Sec-Ch-Ua-Platform: Windows`. Thống nhất Windows desktop.
+- **Tạo `_run_adb_binary()`** trong `tiktok_automation.py` để tránh code trùng lặp trong `_dump_ui()`.
+
 ## [v1.16.2] - 2026-06-10
 
 ### Sửa Lỗi (Bug Fixes)

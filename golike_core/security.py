@@ -40,13 +40,14 @@ class CredentialManager:
         self._migrate_old_credential()
 
     def _generate_key(self) -> str:
-        """Tạo khóa mã hóa từ machine ID
+        """Tạo khóa mã hóa từ machine ID và user
 
         Returns:
             str: Khóa mã hóa 32 ký tự
         """
         import platform
-        machine_id = platform.node() + platform.machine()
+        import getpass
+        machine_id = platform.node() + platform.machine() + getpass.getuser()
         return hashlib.sha256(machine_id.encode()).hexdigest()[:32]
 
     def _get_fernet_key(self, key: str) -> bytes:
@@ -400,13 +401,13 @@ class SecureHeaderBuilder:
         headers = {
             'Accept-Language': 'vi,en-US;q=0.9,en;q=0.8',
             'Referer': 'https://app.golike.net/',
-            'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'Sec-Ch-Ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
             'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': "Windows",
+            'Sec-Ch-Ua-Platform': '"Windows"',
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-site',
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
             'Authorization': self.auth_token,
             'Content-Type': 'application/json;charset=utf-8'
         }

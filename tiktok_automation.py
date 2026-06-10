@@ -72,6 +72,14 @@ class PureADBAutomator:
     def disconnect(self) -> None:
         self._connected = False
 
+    def _run_adb_binary(self, args: List[str]) -> subprocess.CompletedProcess:
+        """Chạy ADB và trả về raw bytes (không decode, dùng cho binary output như XML dump)"""
+        cmd = [self.adb_path]
+        if self.device_id:
+            cmd.extend(["-s", self.device_id])
+        cmd.extend(args)
+        return subprocess.run(cmd, capture_output=True, timeout=15)
+
     def _run_adb(self, args: List[str]) -> subprocess.CompletedProcess:
         cmd = [self.adb_path]
         if self.device_id:
@@ -86,11 +94,7 @@ class PureADBAutomator:
             # Xuất ra file trên thiết bị
             self._run_adb(["shell", "uiautomator", "dump", "/sdcard/view.xml"])
             # Đọc nội dung file dưới dạng bytes để tránh UnicodeDecodeError trên Windows (cp1252)
-            cmd = [self.adb_path]
-            if self.device_id:
-                cmd.extend(["-s", self.device_id])
-            cmd.extend(["shell", "cat", "/sdcard/view.xml"])
-            raw = subprocess.run(cmd, capture_output=True, timeout=15)
+            raw = self._run_adb_binary(["shell", "cat", "/sdcard/view.xml"])
             if raw.returncode == 0 and raw.stdout:
                 # Decode bytes dùng utf-8, thay thế ký tự lỗi thay vì crash
                 xml_text = raw.stdout.decode('utf-8', errors='replace')
@@ -123,8 +127,8 @@ class PureADBAutomator:
             return None
 
         try:
-            # Fix potential encoding issues in output
-            xml_data = re.sub(r'[^\x09\x0A\x0D\x20-\x7E\x80-\xFF]', '', xml_data)
+            # Chỉ xóa null bytes, GIỮ LẠI toàn bộ Unicode (tiếng Việt, CJK, emoji)
+            xml_data = xml_data.replace('\x00', '')
             root = ET.fromstring(xml_data)
             
             for node in root.iter('node'):

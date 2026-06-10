@@ -2,6 +2,9 @@
 API Client cho ứng dụng GoLike
 Hỗ trợ cả nền tảng TikTok và Facebook
 """
+import json
+import time
+import base64
 import requests
 from typing import Optional, Dict, Any, List
 from .config import CONFIG
@@ -80,7 +83,6 @@ class GolikeAPIClient:
             return
 
         try:
-            import json
             data = json.loads(auth_token)
             if isinstance(data, dict):
                 self._auth_token = data.get("authorization")
@@ -114,9 +116,6 @@ class GolikeAPIClient:
         Returns:
             Dict[str, str]: Headers dictionary
         """
-        import time
-        import base64
-
         headers = {
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -163,7 +162,7 @@ class GolikeAPIClient:
         try:
             url = f"{self.base_url}{endpoint}"
             headers = self._build_headers()
-            response = requests.get(
+            response = self.session.get(
                 url,
                 params=params,
                 headers=headers,
@@ -212,7 +211,7 @@ class GolikeAPIClient:
         try:
             url = f"{self.base_url}{endpoint}"
             headers = self._build_headers()
-            response = requests.post(
+            response = self.session.post(
                 url,
                 json=data,
                 headers=headers,
@@ -418,11 +417,16 @@ class GolikeAPIClient:
         Returns:
             Dict với status, latency_ms, message
         """
-        import time
         start = time.time()
         try:
-            # Test endpoint cơ bản
-            response = self.get('/health', timeout=5)
+            # Save original timeout and temporarily reduce it
+            orig_timeout = self.timeout
+            self.timeout = 5
+            try:
+                response = self.get('/health')
+            finally:
+                self.timeout = orig_timeout
+
             latency = int((time.time() - start) * 1000)
             if response.get('status') == 200:
                 return {

@@ -1,6 +1,6 @@
 {
-  "version": "1.16.2",
+  "version": "1.16.3",
   "release_date": "2026-06-10",
-  "changelog": "v1.16.2 - Hotfix: fix UnicodeDecodeError trên Windows khi đọc ADB output (cp1252 vs UTF-8), thêm encoding='utf-8' errors='replace' cho tất cả subprocess call trong tiktok_automation.py và adb_manager.py.",
-  "previous_version": "1.16.1"
+  "changelog": "v1.16.3 - Code review fixes: session reuse, Unicode regex, copy-paste bug, functools.wraps, security key, UA mismatch.",
+  "previous_version": "1.16.2"
 }

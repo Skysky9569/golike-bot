@@ -234,7 +234,8 @@ class ADBManager:
             if target_device:
                 cmd.extend(['-s', target_device])
             cmd.extend(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', link])
-            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                   encoding='utf-8', errors='replace', timeout=10)
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False

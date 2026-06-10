@@ -2,6 +2,7 @@
 Error handling module for Golike application
 """
 import time
+import functools
 import traceback
 import json
 from typing import Optional, Dict, Any, List, Tuple
@@ -107,6 +108,7 @@ def retry_on_error(
         Decorator function
     """
     def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             policy = RetryPolicy(max_retries, backoff_factor)
             last_exception = None
