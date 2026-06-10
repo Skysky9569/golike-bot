@@ -666,38 +666,57 @@ def tiktok_menu(auth_token: str) -> None:
 
     print(colored("════════════════════════════════════════════════", "white"))
     print(colored("⏳ CẤU HÌNH GIẢ LẬP HÀNH VI (CHỐNG BAN):", "cyan", bold=True))
-    
+
+    # Tải giá trị delay đã lưu (hoặc mặc định)
+    saved_delay_action = adb_config.get("delay_action", "18-28")
+    saved_delay_job    = adb_config.get("delay_job",    "25-45")
+    saved_break_jobs   = adb_config.get("break_jobs",   40)
+    saved_break_delay  = adb_config.get("break_delay",  "300-600")
+
     # Delay giữa các thao tác
     try:
-        v = input(colored("⏱️  Delay giữa các thao tác (giây, nhập '18-28' hoặc Enter để dùng mặc định): ", "green")).strip()
-        if not v: v = "18-28"
+        v = input(colored(f"⏱️  Delay giữa các thao tác (giây, nhập 'min-max' hoặc Enter để dùng [{saved_delay_action}]): ", "green")).strip()
+        if not v:
+            v = saved_delay_action
         delay_action_min, delay_action_max = map(int, v.split("-"))
+        adb_config["delay_action"] = f"{delay_action_min}-{delay_action_max}"
     except Exception:
-        delay_action_min, delay_action_max = 18, 28
-        
-    # Delay giua 2 nhiem vu
+        delay_action_min, delay_action_max = map(int, saved_delay_action.split("-"))
+        adb_config["delay_action"] = saved_delay_action
+
+    # Delay giữa 2 nhiệm vụ
     try:
-        v = input(colored("⏱️  Delay giữa 2 nhiệm vụ (giây, nhập '25-45' hoặc Enter để dùng mặc định): ", "green")).strip()
-        if not v: v = "25-45"
+        v = input(colored(f"⏱️  Delay giữa 2 nhiệm vụ (giây, nhập 'min-max' hoặc Enter để dùng [{saved_delay_job}]): ", "green")).strip()
+        if not v:
+            v = saved_delay_job
         delay_job_min, delay_job_max = map(int, v.split("-"))
+        adb_config["delay_job"] = f"{delay_job_min}-{delay_job_max}"
     except Exception:
-        delay_job_min, delay_job_max = 25, 45
+        delay_job_min, delay_job_max = map(int, saved_delay_job.split("-"))
+        adb_config["delay_job"] = saved_delay_job
 
-    # So job de nghi
+    # Số job để nghỉ
     try:
-        v = input(colored("📆 Sau bao nhiêu nhiệm vụ thì nghỉ (nhập '40' hoặc Enter để dùng mặc định): ", "green")).strip()
-        if not v: v = "40"
-        break_jobs = int(v)
+        v = input(colored(f"📆 Sau bao nhiêu nhiệm vụ thì nghỉ (nhập số hoặc Enter để dùng [{saved_break_jobs}]): ", "green")).strip()
+        break_jobs = int(v) if v else saved_break_jobs
+        adb_config["break_jobs"] = break_jobs
     except Exception:
-        break_jobs = 40
+        break_jobs = saved_break_jobs
+        adb_config["break_jobs"] = break_jobs
 
-    # Thoi gian nghi tu min-max
+    # Thời gian nghỉ
     try:
-        v = input(colored("⏱️  Thời gian nghỉ (giây, nhập '300-600' hoặc Enter để dùng mặc định): ", "green")).strip()
-        if not v: v = "300-600"
+        v = input(colored(f"⏱️  Thời gian nghỉ (giây, nhập 'min-max' hoặc Enter để dùng [{saved_break_delay}]): ", "green")).strip()
+        if not v:
+            v = saved_break_delay
         break_delay_min, break_delay_max = map(int, v.split("-"))
+        adb_config["break_delay"] = f"{break_delay_min}-{break_delay_max}"
     except Exception:
-        break_delay_min, break_delay_max = 300, 600
+        break_delay_min, break_delay_max = map(int, saved_break_delay.split("-"))
+        adb_config["break_delay"] = saved_break_delay
+
+    # Lưu toàn bộ config (kể cả delay) vào adb_config.json
+    save_adb_config(adb_config)
 
     logger.info(f"Cấu hình delay: Action ({delay_action_min}-{delay_action_max}s), Job ({delay_job_min}-{delay_job_max}s), Break after {break_jobs} jobs ({break_delay_min}-{break_delay_max}s)")
     print(colored("════════════════════════════════════════════════", "white"))
