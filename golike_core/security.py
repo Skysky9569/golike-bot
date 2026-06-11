@@ -40,14 +40,13 @@ class CredentialManager:
         self._migrate_old_credential()
 
     def _generate_key(self) -> str:
-        """Tạo khóa mã hóa từ machine ID và user
+        """Tạo khóa mã hóa từ machine ID
 
         Returns:
             str: Khóa mã hóa 32 ký tự
         """
         import platform
-        import getpass
-        machine_id = platform.node() + platform.machine() + getpass.getuser()
+        machine_id = platform.node() + platform.machine()
         return hashlib.sha256(machine_id.encode()).hexdigest()[:32]
 
     def _get_fernet_key(self, key: str) -> bytes:
