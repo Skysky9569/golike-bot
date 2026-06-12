@@ -30,7 +30,34 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
-from webdriver_manager.chrome import ChromeDriverManager
+# webdriver-manager: dùng làm fallback nếu Selenium Manager không tự tìm được driver
+try:
+    from webdriver_manager.chrome import ChromeDriverManager as _ChromeDriverManager
+    _HAS_WDM = True
+except ImportError:
+    _HAS_WDM = False
+
+def _get_chrome_service():
+    """Tạo Chrome Service thông minh:
+    - Ưu tiên Selenium 4.6+ Manager tích hợp (không cần .wdm lock file).
+    - Fallback về webdriver-manager nếu cần.
+    - Tránh hoàn toàn lỗi 'Timed out waiting for webdriver-manager lock'.
+    """
+    # Selenium 4.6+ có Selenium Manager tích hợp: Service() không cần tham số
+    # nó tự tìm/tải ChromeDriver phù hợp mà không dùng lock file bên ngoài
+    try:
+        svc = Service()
+        # Thử tạo service để kiểm tra Selenium Manager có hoạt động không
+        return svc
+    except Exception:
+        pass
+    # Fallback: dùng webdriver-manager nếu Selenium Manager không khả dụng
+    if _HAS_WDM:
+        try:
+            return Service(_ChromeDriverManager().install())
+        except Exception as wdm_err:
+            print(f"[!] webdriver-manager lỗi: {wdm_err}. Thử dùng Service() mặc định...")
+    return Service()
 
 # Local modules
 from golike_core.adb_manager import colored
@@ -2276,7 +2303,7 @@ def run_single_mode():
             options.add_argument("--load-extension=%s" % proxy_auth_ext)
             print("[*] Proxy co auth: da cai extension tu dong")
 
-    driver = selenium_driver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver = selenium_driver.Chrome(service=_get_chrome_service(), options=options)
     with drivers_lock:
         active_drivers.append(driver)
     driver.set_window_position(100, 100)
@@ -2895,7 +2922,7 @@ def setup_bot_profile(profile_data, idx, global_2captcha_api_key=None):
             proxy_auth_ext = _build_proxy_auth_extension(proxy_info)
             options.add_argument("--load-extension=%s" % proxy_auth_ext)
 
-    driver = selenium_driver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver = selenium_driver.Chrome(service=_get_chrome_service(), options=options)
     with drivers_lock:
         active_drivers.append(driver)
         
@@ -3714,7 +3741,7 @@ def run_selenium_dom_mode():
     if proxy_auth_ext: options.add_argument("--load-extension=%s" % proxy_auth_ext)
 
     print("[*] Đang mở trình duyệt...")
-    driver = selenium_driver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver = selenium_driver.Chrome(service=_get_chrome_service(), options=options)
     
     # Ép kích thước cửa sổ nhỏ gọn (Mobile style) để không bị quá to
     driver.set_window_size(450, 850)
@@ -4258,7 +4285,7 @@ class WebDriverPool:
                 "webrtc.nonproxied_udp_enabled": False
             })
             driver = selenium_driver.Chrome(
-                service=Service(ChromeDriverManager().install()),
+                service=_get_chrome_service(),
                 options=options
             )
             driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {

@@ -1,6 +1,6 @@
 {
-  "version": "1.16.3",
-  "release_date": "2026-06-10",
-  "changelog": "v1.16.3 - Code review fixes: session reuse, Unicode regex, copy-paste bug, functools.wraps, security key, UA mismatch.",
-  "previous_version": "1.16.2"
+  "version": "1.16.4",
+  "release_date": "2026-06-12",
+  "changelog": "v1.16.4 - Fix lỗi wdm lock timeout trên Windows: Selenium Manager tích hợp thay webdriver-manager.",
+  "previous_version": "1.16.3"
 }

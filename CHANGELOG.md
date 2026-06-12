@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v1.16.4] - 2026-06-12
+
+### Sửa Lỗi Nghiêm Trọng trên Windows (Critical Bug Fix)
+- **Fix lỗi `Timed out waiting for webdriver-manager lock: .wdm-lock-chromedriver-win64`**:
+  - Nguyên nhân: `webdriver-manager` tạo file lock ở `%USERPROFILE%\.wdm\` để tránh race condition khi nhiều tiến trình tải ChromeDriver cùng lúc. Trên Windows, file lock này bị **timeout** khi tiến trình trước đó crash mà không giải phóng lock, hoặc do vấn đề quyền truy cập file.
+  - Đã sửa trong `golikefb_sele.py`: Thêm hàm helper `_get_chrome_service()` thay thế toàn bộ 4 lần gọi `ChromeDriverManager().install()`.
+  - **Giải pháp**: Ưu tiên dùng **Selenium 4.6+ Manager tích hợp sẵn** (`Service()` không cần tham số) — Selenium tự tìm và tải ChromeDriver phù hợp mà **không dùng file lock bên ngoài** → loại bỏ hoàn toàn lỗi wdm lock.
+  - Fallback thông minh về `webdriver-manager` nếu phiên bản Selenium cũ không hỗ trợ, và fallback cuối về `Service()` mặc định nếu cả hai đều thất bại.
+
 ## [v1.16.3] - 2026-06-10
 
 ### Sửa Lỗi Nghiêm trọng (P0 Critical)

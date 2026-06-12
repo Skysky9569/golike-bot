@@ -195,14 +195,26 @@ def ios_tiktok_menu():
                     continue
 
                 if jobs_resp.get('status') != 200:
-                    print(colored("Hết Job hoặc lỗi mạng. Đợi 15s...", "yellow"))
-                    time.sleep(15)
+                    msg = jobs_resp.get("message", "") or jobs_resp.get("error", "")
+                    if "tính toán jobs" in msg:
+                        print(colored(f"💡 {msg}", "cyan"))
+                        print(colored("⏳ Đang chờ 10s để lấy lại job...", "cyan"))
+                        time.sleep(10)
+                    else:
+                        print(colored("Hết Job hoặc lỗi mạng. Đợi 15s...", "yellow"))
+                        time.sleep(15)
                     continue
                 
                 raw_data = jobs_resp.get('data')
                 if not raw_data:
-                    print(colored("Hết Job. Đợi 15s...", "yellow"))
-                    time.sleep(15)
+                    msg = jobs_resp.get("message", "") or jobs_resp.get("error", "")
+                    if "tính toán jobs" in msg:
+                        print(colored(f"💡 {msg}", "cyan"))
+                        print(colored("⏳ Đang chờ 10s để lấy lại job...", "cyan"))
+                        time.sleep(10)
+                    else:
+                        print(colored("Hết Job. Đợi 15s...", "yellow"))
+                        time.sleep(15)
                     continue
 
                 # Xử lý: GoLike có thể trả về 1 Object hoặc 1 List
