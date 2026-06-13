@@ -1,6 +1,6 @@
 {
-  "version": "1.16.4",
-  "release_date": "2026-06-12",
-  "changelog": "v1.16.4 - Fix lỗi wdm lock timeout trên Windows: Selenium Manager tích hợp thay webdriver-manager.",
-  "previous_version": "1.16.3"
+  "version": "1.16.5",
+  "release_date": "2026-06-13",
+  "changelog": "v1.16.5 - Sửa lỗi: khi phát hiện job đã like/reaction/follow/like_page, đóng tab và skip job thay vì đánh dấu thành công.",
+  "previous_version": "1.16.4"
 }

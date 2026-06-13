@@ -842,7 +842,7 @@ class FacebookSeleniumBot:
                    btn.get_attribute("aria-pressed") == "true":
                     print(colored("   [!] Đã LIKE từ trước.", "yellow"))
                     if not current_tab_only: self._close_job_tab(main_tab)
-                    return {"success": True}
+                    return {"success": False}
             except Exception:
                 pass
 
@@ -894,7 +894,7 @@ class FacebookSeleniumBot:
                        btn.get_attribute("aria-pressed") == "true":
                         print(colored("   [!] Đã LIKE từ trước.", "yellow"))
                         if not current_tab_only: self._close_job_tab(main_tab)
-                        return {"success": True}
+                        return {"success": False}
                 except Exception:
                     pass
 
@@ -1037,7 +1037,7 @@ class FacebookSeleniumBot:
                 if any(x in btn_text for x in ["đang theo dõi", "following", "hủy theo dõi", "unfollow"]):
                     print(colored("   [!] Đã theo dõi từ trước.", "yellow"))
                     if not current_tab_only: self._close_job_tab(main_tab)
-                    return {"success": True}
+                    return {"success": False}
             except Exception:
                 pass
 
@@ -1091,7 +1091,7 @@ class FacebookSeleniumBot:
                 if any(x in btn_text for x in ["đang theo dõi", "following", "đã thích", "liked"]):
                     print(colored("   [!] Đã LIKE/FOLLOW trang từ trước.", "yellow"))
                     if not current_tab_only: self._close_job_tab(main_tab)
-                    return {"success": True}
+                    return {"success": False}
             except Exception:
                 pass
 
